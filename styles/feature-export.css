@@ -1,0 +1,192 @@
+@layer features {
+  .export-split {
+    position: relative;
+    display: inline-flex;
+    align-items: stretch;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    overflow: visible;
+  }
+
+  .export-split .btn {
+    border: 0;
+    border-radius: 0;
+  }
+
+  .export-split #btn-export {
+    border-right: 1px solid var(--border-color);
+  }
+
+  .btn-export-menu {
+    position: relative;
+    width: 30px;
+    min-width: 30px;
+    min-height: 30px;
+    padding: 0;
+    justify-content: center;
+    letter-spacing: 1px;
+  }
+
+  .btn-export-menu[aria-expanded="true"] {
+    background-color: #30363d;
+    border-color: #8b949e;
+  }
+
+  .export-options-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    width: min(280px, 92vw);
+    background: var(--pane-bg);
+    border: 1px solid var(--border-muted);
+    border-radius: 8px;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+    padding: 8px;
+    display: none;
+    z-index: 200;
+  }
+
+  .export-options-menu.is-open {
+    display: block;
+  }
+
+  .export-options-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .export-radio-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  .export-radio-option:hover {
+    background: rgba(56, 139, 253, 0.12);
+  }
+
+  .export-radio-option input[type="radio"] {
+    margin: 0;
+    accent-color: var(--accent-primary);
+  }
+
+  .export-custom-options {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-muted);
+  }
+
+  .export-custom-options.is-hidden {
+    display: none;
+  }
+
+  .export-custom-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .export-field-search {
+    width: 100%;
+    min-height: 28px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--editor-bg);
+    color: var(--text-primary);
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+
+  .export-custom-actions {
+    display: inline-flex;
+    gap: 6px;
+  }
+
+  .export-field-count {
+    margin-top: 8px;
+    margin-bottom: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  .export-field-list {
+    max-height: 220px;
+    overflow-y: auto;
+    overflow-x: auto;
+    border: 1px solid var(--border-muted);
+    border-radius: 6px;
+    padding: 4px;
+    background: var(--editor-bg);
+  }
+
+  .export-field-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    min-width: max-content;
+  }
+
+  .export-field-option:hover {
+    background: rgba(56, 139, 253, 0.12);
+  }
+
+  .export-field-option input[type="checkbox"] {
+    margin: 0;
+    accent-color: var(--accent-primary);
+  }
+
+  .export-field-option.is-required {
+    background: rgba(56, 139, 253, 0.08);
+    cursor: default;
+  }
+
+  .export-field-option.is-required:hover {
+    background: rgba(56, 139, 253, 0.08);
+  }
+
+  .export-field-option.is-required input[type="checkbox"] {
+    opacity: 0.85;
+    cursor: not-allowed;
+  }
+
+  .export-field-name {
+    font-family: var(--font-code);
+    font-size: 11px;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+
+  .export-required-badge {
+    margin-left: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
+    border-radius: 999px;
+    border: 1px solid rgba(56, 139, 253, 0.45);
+    background: rgba(56, 139, 253, 0.16);
+    color: #79c0ff;
+    font-size: 10px;
+    line-height: 16px;
+    font-weight: 600;
+    text-transform: lowercase;
+  }
+
+  .export-field-empty {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .export-field-empty.is-hidden {
+    display: none;
+  }
+}

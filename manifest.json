@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "QA Scenario Checker",
+  "version": "1.0.0",
+  "description": "QA scenario checklist manager with JSON editor",
+  "action": {},
+  "background": {
+    "service_worker": "background.js"
+  }
+}

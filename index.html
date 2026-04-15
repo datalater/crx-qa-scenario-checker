@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QA Scenario Checker</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="logo">
+                <span class="icon">📋</span>
+                <h1 title="QA Scenario Checker">QA Scenario Checker</h1>
+                <span id="app-version" class="app-version" title="Current version">v-</span>
+            </div>
+            <div class="header-controls">
+                <div class="actions">
+                    <div class="bound-file-group">
+                        <span id="bound-file-status" class="bound-file-status" aria-live="polite">No file bound</span>
+                        <input
+                            id="bound-file-path"
+                            class="bound-file-path-input"
+                            type="text"
+                            readonly
+                            placeholder="No file bound"
+                            aria-label="Bound file path"
+                            title="No file bound"
+                        >
+                        <button id="btn-import" class="btn btn-secondary" type="button" title="Open folder (Shift+Click: file)">
+                            <span class="btn-icon">📂</span> Open...
+                        </button>
+                        <button id="btn-request-write" class="btn btn-secondary" type="button" title="디스크 동기화가 꺼져 있습니다. 클릭하면 폴더 쓰기 권한을 다시 요청해 자동 동기화를 켭니다." hidden>
+                            Enable Sync
+                        </button>
+                    </div>
+                    <div id="export-split" class="export-split">
+                        <button id="btn-export" class="btn btn-secondary" type="button">
+                            <span class="btn-icon">📤</span> Export
+                        </button>
+                        <button
+                            id="btn-export-menu"
+                            class="btn btn-secondary btn-export-menu"
+                            type="button"
+                            aria-label="Export options"
+                            aria-haspopup="dialog"
+                            aria-controls="export-options-menu"
+                            aria-expanded="false"
+                            title="Export options"
+                        >
+                            •••
+                        </button>
+                        <div id="export-options-menu" class="export-options-menu" role="dialog" aria-label="Export options">
+                            <div class="export-options-group" role="radiogroup" aria-label="Export field mode">
+                                <label class="export-radio-option" for="export-mode-all">
+                                    <input id="export-mode-all" type="radio" name="export-mode" value="all">
+                                    <span>전체 필드</span>
+                                </label>
+                                <label class="export-radio-option" for="export-mode-custom">
+                                    <input id="export-mode-custom" type="radio" name="export-mode" value="custom">
+                                    <span>직접 선택하기</span>
+                                </label>
+                            </div>
+
+                            <div id="export-custom-options" class="export-custom-options is-hidden">
+                                <div class="export-custom-toolbar">
+                                    <input id="export-field-search" class="export-field-search" type="search" placeholder="필드 검색..." aria-label="Search export fields">
+                                    <div class="export-custom-actions">
+                                        <button id="btn-export-select-all" class="tree-row-action" type="button">전체 선택</button>
+                                        <button id="btn-export-clear-all" class="tree-row-action" type="button">전체 해제</button>
+                                    </div>
+                                </div>
+                                <div id="export-field-count" class="export-field-count" aria-live="polite"></div>
+                                <div id="export-field-list" class="export-field-list" role="group" aria-label="Custom export fields"></div>
+                                <div id="export-field-empty" class="export-field-empty is-hidden">검색 결과가 없습니다.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <input type="file" id="file-input" style="display: none;" accept=".json">
+                </div>
+            </div>
+        </header>
+
+        <main class="app-content">
+            <button id="btn-fold-editor" class="btn-fold-toggle" type="button" title="Toggle Editor">
+                <svg class="fold-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <title>Toggle editor</title>
+                    <path d="M10 12L6 8L10 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+            <section class="pane editor-pane" id="editor-pane">
+                <div class="pane-header">
+                    <h2>JSON Editor</h2>
+                    <button id="btn-keyboard-shortcuts" class="btn-help" type="button" title="Keyboard shortcuts">?</button>
+                    <div class="editor-header-controls">
+                        <div id="save-indicator" class="save-indicator is-saved" role="status" aria-live="polite">
+                            <span id="save-indicator-time" class="save-indicator-time">0000-00-00 00:00:00</span>
+                            <span class="save-indicator-dot" aria-hidden="true"></span>
+                            <span id="save-indicator-label">Saved</span>
+                        </div>
+                        <label class="line-numbers-toggle">
+                            <input type="checkbox" id="toggle-line-numbers" checked>
+                            <span>Line numbers</span>
+                        </label>
+                        <button id="btn-format" class="btn btn-primary btn-editor-action" type="button" title="Format (Cmd+S / Ctrl+S in JSON editor)">
+                            <span class="btn-icon">✨</span> Format
+                        </button>
+                        <div class="status-badge" id="json-status">Valid</div>
+                        <div class="json-error-position is-hidden" id="json-error-position" aria-live="polite"></div>
+                        <div class="json-error-message is-hidden" id="json-error-message" aria-live="polite"></div>
+                    </div>
+                </div>
+                <div class="editor-workspace">
+                    <aside class="file-tree-panel">
+                        <div class="tree-toolbar">
+                            <div class="tree-toolbar-left">
+                                <button id="btn-new-folder" class="tree-btn" type="button">New Folder</button>
+                                <button id="btn-new-file" class="tree-btn" type="button">New File</button>
+                            </div>
+                            <div class="tree-toolbar-right">
+                                <button id="btn-show-tree" class="tree-btn tree-btn-ghost" type="button" title="Show File Tree" aria-label="Show File Tree">Show</button>
+                                <button id="btn-tree-menu" class="tree-btn tree-btn-ghost tree-btn-more" type="button" aria-haspopup="menu" aria-expanded="false" title="More">•••</button>
+                                <div id="tree-menu" class="tree-menu" role="menu" aria-label="File tree menu">
+                                    <button id="btn-toggle-tree" class="tree-menu-item" type="button" role="menuitem">
+                                        <span class="menu-label menu-label-hide">Hide File Tree</span>
+                                        <span class="menu-label menu-label-show">Show File Tree</span>
+                                    </button>
+                                    <button id="btn-toggle-folders" class="tree-menu-item" type="button" role="menuitem">
+                                        <span class="menu-label menu-label-collapse">Collapse Folders</span>
+                                        <span class="menu-label menu-label-expand">Expand Folders</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tree-search" id="tree-search">
+                            <div class="tree-search-row">
+                                <input
+                                    id="tree-search-input"
+                                    class="tree-search-input"
+                                    type="search"
+                                    placeholder="Search files and contents"
+                                    aria-label="Search files and contents"
+                                >
+                                <button id="btn-tree-search-clear" class="tree-search-clear" type="button" hidden>Clear</button>
+                            </div>
+                            <div id="tree-search-meta" class="tree-search-meta" aria-live="polite"></div>
+                        </div>
+                        <div class="tree-view" id="file-tree"></div>
+                    </aside>
+                    <div class="file-tree-resizer" id="file-tree-resizer" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Resize file tree" aria-valuemin="180" aria-valuemax="640" aria-valuenow="260"></div>
+                        <div class="editor-container">
+                            <div class="code-editor" id="editor-wrapper">
+                                <div id="editor-find-widget" class="editor-find-widget is-hidden" role="dialog" aria-label="Find and replace">
+                                    <div class="editor-find-row">
+                                        <input id="editor-find-input" class="editor-find-input" type="text" placeholder="Find" aria-label="Find text">
+                                        <span id="editor-find-count" class="editor-find-count" aria-live="polite">0 / 0</span>
+                                        <button id="btn-editor-find-prev" class="editor-find-btn" type="button" title="Previous match">Prev</button>
+                                        <button id="btn-editor-find-next" class="editor-find-btn" type="button" title="Next match">Next</button>
+                                        <button id="btn-editor-find-close" class="editor-find-btn" type="button" title="Close">Close</button>
+                                    </div>
+                                    <div id="editor-replace-row" class="editor-find-row editor-replace-row is-hidden">
+                                        <input id="editor-replace-input" class="editor-find-input" type="text" placeholder="Replace" aria-label="Replace text">
+                                        <button id="btn-editor-replace-one" class="editor-find-btn" type="button">Replace</button>
+                                        <button id="btn-editor-replace-all" class="editor-find-btn" type="button">Replace All</button>
+                                    </div>
+                                </div>
+                                <div class="line-numbers" id="line-numbers" aria-hidden="true"></div>
+                                <div id="highlight-overlay"></div>
+                                <pre id="highlighting" aria-hidden="true"><code id="highlighting-content"></code></pre>
+                                <textarea id="editing" spellcheck="false" placeholder="Paste your QA scenario JSON here..."></textarea>
+                            </div>
+                    </div>
+                </div>
+            </section>
+
+            <div class="pane-resizer" id="pane-resizer"></div>
+
+            <section class="pane checklist-pane">
+                <div class="pane-header">
+                    <h2>Checklist UI</h2>
+                    <div class="scenario-meta" id="scenario-title" title="No scenario loaded">No scenario loaded</div>
+                </div>
+                <div class="checklist-container">
+                    <div class="spreadsheet-view" id="checklist-view">
+                        <table id="checklist-table">
+                            <thead>
+                                <tr>
+                                    <th class="col-num">#</th>
+                                    <th class="col-given">Given</th>
+                                    <th class="col-when">When</th>
+                                    <th class="col-then">Then</th>
+                                    <th class="col-pass" id="col-pass-toggle" title="Toggle all pass">Pass</th>
+                                </tr>
+                            </thead>
+                            <tbody id="checklist-body">
+                                <!-- Steps will be rendered here -->
+                                <tr class="empty-state">
+                                    <td colspan="5">Please enter a valid JSON scenario to generate the checklist.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    <div id="tree-context-menu" class="tree-context-menu" role="menu" hidden>
+        <button id="tree-context-copy" class="tree-context-menu-item" type="button" role="menuitem">파일 복사</button>
+        <button id="tree-context-rename" class="tree-context-menu-item" type="button" role="menuitem">이름 변경</button>
+        <button id="tree-context-delete" class="tree-context-menu-item danger" type="button" role="menuitem">삭제</button>
+        <div id="tree-context-readonly" class="tree-context-readonly" hidden>현재 폴더 모드는 읽기 전용입니다.</div>
+    </div>
+    <div id="checklist-context-menu" class="tree-context-menu" role="menu" hidden>
+        <div id="checklist-context-color" class="context-submenu-wrap" hidden>
+            <button class="tree-context-menu-item context-submenu-trigger" type="button" role="menuitem">색상 변경</button>
+            <div class="context-submenu" role="menu">
+                <button class="context-color-item" type="button" role="menuitem" data-color="#3fb950"><span class="context-color-swatch" style="background:#3fb950"></span>#3fb950</button>
+                <button class="context-color-item" type="button" role="menuitem" data-color="#a371f7"><span class="context-color-swatch" style="background:#a371f7"></span>#a371f7</button>
+                <button class="context-color-item" type="button" role="menuitem" data-color="#d29922"><span class="context-color-swatch" style="background:#d29922"></span>#d29922</button>
+                <button class="context-color-item context-color-item--reset" type="button" role="menuitem" data-color="">기본</button>
+            </div>
+        </div>
+        <button id="checklist-context-delete" class="tree-context-menu-item danger" type="button" role="menuitem">행 삭제</button>
+    </div>
+    <div id="keyboard-shortcuts-backdrop" class="shortcuts-backdrop is-hidden" aria-hidden="true"></div>
+    <div id="keyboard-shortcuts-modal" class="shortcuts-modal is-hidden" role="dialog" aria-label="Keyboard shortcuts" aria-modal="true">
+        <div class="shortcuts-modal-header">
+            <h3>Keyboard Shortcuts</h3>
+            <button id="btn-shortcuts-close" class="shortcuts-modal-close" type="button" aria-label="Close">&times;</button>
+        </div>
+        <div class="shortcuts-modal-body">
+            <table class="shortcuts-table">
+                <thead><tr><th>Action</th><th>Shortcut</th></tr></thead>
+                <tbody>
+                    <tr><td>Save / Format</td><td><kbd>⌘</kbd> <kbd>S</kbd></td></tr>
+                    <tr><td>Undo</td><td><kbd>⌘</kbd> <kbd>Z</kbd></td></tr>
+                    <tr><td>Redo</td><td><kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>Z</kbd></td></tr>
+                    <tr><td>Find</td><td><kbd>⌘</kbd> <kbd>F</kbd></td></tr>
+                    <tr><td>Find &amp; Replace</td><td><kbd>⌘</kbd> <kbd>⌥</kbd> <kbd>F</kbd></td></tr>
+                    <tr><td>Next match</td><td><kbd>Enter</kbd></td></tr>
+                    <tr><td>Previous match</td><td><kbd>⇧</kbd> <kbd>Enter</kbd></td></tr>
+                    <tr><td>Close find</td><td><kbd>Esc</kbd></td></tr>
+                    <tr><td>Cursor back</td><td><kbd>⌘</kbd> <kbd>-</kbd></td></tr>
+                    <tr><td>Cursor forward</td><td><kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>-</kbd></td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div id="loading-overlay" class="loading-overlay is-hidden" aria-hidden="true">
+        <div class="loading-spinner"></div>
+        <span class="loading-label">Syncing folder…</span>
+    </div>
+    <script type="module" src="script.js"></script>
+</body>
+</html>
