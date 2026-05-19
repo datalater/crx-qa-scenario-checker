@@ -17,3 +17,16 @@
   };
   img.src = url;
 })();
+
+const colors = {
+  blue: "#2e76da",
+  indigo: "#6366f1",
+  violet: "#895de2",
+  magenta: "#c826d7",
+  raspberry: "#da2f84",
+  red: "#dc3939",
+  copper: "#b86020",
+  olive: "#91731a",
+  green: "#4f8518",
+  teal: "#19848d",
+};
