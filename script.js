@@ -60,6 +60,7 @@ const EL = {
     lineNumbers: document.getElementById('line-numbers'),
     toggleLineNumbers: document.getElementById('toggle-line-numbers'),
     editorWrapper: document.getElementById('editor-wrapper'),
+    editorScrollMarkers: document.getElementById('editor-scroll-markers'),
     editorFindWidget: document.getElementById('editor-find-widget'),
     editorFindInput: document.getElementById('editor-find-input'),
     editorFindCount: document.getElementById('editor-find-count'),
@@ -940,6 +941,39 @@ function applyEditorSearchHighlightForFile(fileId) {
     const match = searchState.matchesByFileId.get(fileId) || null;
     editorSearchHighlightQuery = match ? searchState.query : '';
     return match;
+}
+
+function getEditorSearchMatchLineNumbers() {
+    const query = String(editorSearchHighlightQuery || '').trim();
+    if (!query) return new Set();
+
+    const queryLower = query.toLowerCase();
+    const lines = String(EL.editing?.value || '').split('\n');
+    const matchedLineNumbers = new Set();
+    lines.forEach((line, index) => {
+        if (line.toLowerCase().includes(queryLower)) {
+            matchedLineNumbers.add(index + 1);
+        }
+    });
+    return matchedLineNumbers;
+}
+
+function renderEditorSearchScrollMarkers(matchLineNumbers = getEditorSearchMatchLineNumbers()) {
+    if (!EL.editorScrollMarkers || !EL.editing) return;
+
+    const lineCount = Math.max(1, String(EL.editing.value || '').split('\n').length);
+    const matchLines = [...matchLineNumbers]
+        .filter((lineNumber) => Number.isFinite(lineNumber) && lineNumber >= 1 && lineNumber <= lineCount)
+        .sort((left, right) => left - right);
+
+    EL.editorScrollMarkers.replaceChildren(...matchLines.map((lineNumber) => {
+        const marker = document.createElement('span');
+        marker.className = 'editor-scroll-marker is-search-match';
+        const topPercent = lineCount <= 1 ? 0 : ((lineNumber - 1) / (lineCount - 1)) * 100;
+        marker.style.top = `calc(${topPercent}% - 1px)`;
+        marker.title = `Search match on line ${lineNumber}`;
+        return marker;
+    }));
 }
 
 function updateTreeSearchMeta(searchState) {
@@ -2629,7 +2663,9 @@ function isFileTreeVisible() {
 }
 
 function updateLineNumbers() {
-    updateLineNumbersView(EL.editing, EL.lineNumbers);
+    const searchMatchLineNumbers = getEditorSearchMatchLineNumbers();
+    updateLineNumbersView(EL.editing, EL.lineNumbers, searchMatchLineNumbers);
+    renderEditorSearchScrollMarkers(searchMatchLineNumbers);
 }
 
 function renderEditorFromCurrentData() {

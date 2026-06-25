@@ -29,10 +29,22 @@ export function applyLineNumberPreferenceFromWorkspace(workspace, toggleLineNumb
     toggleLineNumbers.checked = workspace.uiState.showLineNumbers !== false;
 }
 
-export function updateLineNumbersView(editing, lineNumbers) {
+export function updateLineNumbersView(editing, lineNumbers, highlightedLineNumbers = new Set()) {
     const lineCount = Math.max(1, editing.value.split('\n').length);
-    const lines = Array.from({ length: lineCount }, (_, i) => i + 1);
-    lineNumbers.textContent = lines.join('\n');
+    const highlightedSet = highlightedLineNumbers instanceof Set
+        ? highlightedLineNumbers
+        : new Set(Array.isArray(highlightedLineNumbers) ? highlightedLineNumbers : []);
+    const doc = lineNumbers.ownerDocument;
+    lineNumbers.replaceChildren(...Array.from({ length: lineCount }, (_, i) => {
+        const lineNumber = i + 1;
+        const line = doc.createElement('div');
+        line.className = 'line-number';
+        line.textContent = String(lineNumber);
+        if (highlightedSet.has(lineNumber)) {
+            line.classList.add('is-search-match');
+        }
+        return line;
+    }));
 }
 
 export function setJsonValidationValidView(jsonStatus, onResetErrorPosition, onUpdateErrorMessage) {

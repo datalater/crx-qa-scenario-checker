@@ -467,7 +467,8 @@ export function renderFileTree(container, workspace, options = {}) {
                     if (hasSearchQuery && Number(matchInfo?.contentMatchCount) > 0) {
                         const contentBadge = document.createElement('span');
                         contentBadge.className = 'tree-search-badge';
-                        contentBadge.textContent = `Content ${matchInfo.contentMatchCount}`;
+                        contentBadge.textContent = `${matchInfo.contentMatchCount} matches`;
+                        contentBadge.title = 'Content matches';
                         searchBadges.appendChild(contentBadge);
                     }
 

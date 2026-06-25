@@ -1039,8 +1039,43 @@
     z-index: 3;
   }
 
+  .line-number {
+    min-height: calc(var(--editor-font-size) * var(--editor-line-height));
+    padding: 0 3px;
+    border-radius: 4px;
+  }
+
+  .line-number.is-search-match {
+    color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary) 18%, transparent);
+    font-weight: 600;
+  }
+
   .code-editor:not(.has-line-numbers) .line-numbers {
     display: none;
+  }
+
+  .editor-scroll-markers {
+    position: absolute;
+    top: var(--editor-padding);
+    right: 3px;
+    bottom: var(--editor-padding);
+    width: 6px;
+    z-index: 4;
+    pointer-events: none;
+  }
+
+  .editor-scroll-marker {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    min-height: 3px;
+    border-radius: 999px;
+  }
+
+  .editor-scroll-marker.is-search-match {
+    background: var(--accent-primary);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--editor-bg) 80%, transparent);
   }
 
   #editing,
