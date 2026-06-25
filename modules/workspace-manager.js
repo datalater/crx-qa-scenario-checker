@@ -207,6 +207,7 @@ export function buildWorkspaceExportPayload(workspace) {
             selectedFolderId: workspace?.uiState?.selectedFolderId || null,
             selectedFileId: workspace?.uiState?.selectedFileId || null,
             lastSelectionType: workspace?.uiState?.lastSelectionType || null,
+            lastActiveFileLocation: workspace?.uiState?.lastActiveFileLocation || null,
             showLineNumbers: workspace?.uiState?.showLineNumbers ?? true,
             showFileTree: workspace?.uiState?.showFileTree ?? true,
             fileTreeWidth: Number.isFinite(workspace?.uiState?.fileTreeWidth) ? workspace.uiState.fileTreeWidth : null

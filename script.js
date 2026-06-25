@@ -496,6 +496,7 @@ function renderLoadingSteps() {
 }
 
 function persist() {
+    updateLastActiveFileLocation();
     Workspace.persistWorkspace(workspace);
     activeFileDirty = false;
     updateSaveIndicator('saved');
@@ -507,6 +508,7 @@ function persist() {
 function loadActiveFile() {
     clearStepHighlight();
     const activeFile = resolveActiveFileOrFallback();
+    updateLastActiveFileLocation();
     if (!activeFile) {
         editorSearchHighlightQuery = '';
         renderNoFileSelectedState();
@@ -524,6 +526,61 @@ function loadActiveFile() {
     activeFileDirty = false;
     editorCursorHistoryManager.reset();
     editorFindReplaceManager.syncFromEditorInput();
+}
+
+function buildFileLocation(file) {
+    if (!file) return null;
+    const folder = Workspace.getFolderById(workspace, file.folderId);
+    const folderPath = String(folder?.path || '').trim();
+    const fileName = String(file.name || '').trim();
+    if (!fileName) return null;
+    return {
+        folderPath,
+        fileName,
+        path: folderPath ? `${folderPath}/${fileName}` : fileName
+    };
+}
+
+function updateLastActiveFileLocation() {
+    if (!workspace?.uiState) return;
+    const activeFile = Workspace.getActiveFile(workspace);
+    const location = buildFileLocation(activeFile);
+    if (!location) return;
+    workspace.uiState.lastActiveFileLocation = location;
+}
+
+function getLastActiveFileLocation() {
+    return workspace?.uiState?.lastActiveFileLocation || null;
+}
+
+function restoreActiveFileFromLocation(targetWorkspace, location) {
+    if (!targetWorkspace?.uiState || !location) return false;
+    const targetPath = String(location.path || '').trim();
+    const targetFolderPath = String(location.folderPath || '').trim();
+    const targetFileName = String(location.fileName || '').trim();
+    if (!targetPath && !targetFileName) return false;
+
+    const folderById = new Map((targetWorkspace.folders || []).map((folder) => [folder.id, folder]));
+    const matchedFile = (targetWorkspace.files || []).find((file) => {
+        const folder = folderById.get(file.folderId);
+        const folderPath = String(folder?.path || '').trim();
+        const fileName = String(file.name || '').trim();
+        const fullPath = folderPath ? `${folderPath}/${fileName}` : fileName;
+        if (targetPath) return fullPath === targetPath;
+        return folderPath === targetFolderPath && fileName === targetFileName;
+    });
+
+    if (!matchedFile) return false;
+    targetWorkspace.uiState.activeFileId = matchedFile.id;
+    targetWorkspace.uiState.selectedFileId = matchedFile.id;
+    targetWorkspace.uiState.selectedFolderId = matchedFile.folderId;
+    targetWorkspace.uiState.lastSelectionType = 'file';
+    targetWorkspace.uiState.lastActiveFileLocation = {
+        folderPath: targetFolderPath,
+        fileName: targetFileName,
+        path: targetPath || targetFileName
+    };
+    return true;
 }
 
 function resolveActiveFileOrFallback() {
@@ -2063,8 +2120,9 @@ function flushAutosaveAndPersist() {
     persist();
 }
 
-function applyImportedWorkspace(data) {
+function applyImportedWorkspace(data, options = {}) {
     workspace = Workspace.normalizeWorkspace(data);
+    restoreActiveFileFromLocation(workspace, options.lastActiveFileLocation);
     persist();
     loadActiveFile();
     syncExportOptionUiFromWorkspace();
@@ -2207,6 +2265,7 @@ async function bindAndLoadFromDirectoryHandle(handle, options = {}) {
         return false;
     }
 
+    const lastActiveFileLocation = getLastActiveFileLocation();
     reportProgress('read', 'done');
     reportProgress('apply', 'active');
     clearBoundFile({ clearPersistedDirectoryHandle: false });
@@ -2220,7 +2279,7 @@ async function bindAndLoadFromDirectoryHandle(handle, options = {}) {
     setDirectDiskSyncAvailable(writeGranted);
     updateFolderWritePermissionUi();
 
-    applyImportedWorkspace(loaded.workspace);
+    applyImportedWorkspace(loaded.workspace, { lastActiveFileLocation });
     setWorkspaceBoundFileMeta(loaded.rootName, 'directory');
     try {
         await setBoundDirectoryHandleInDb(handle, loaded.rootName);
