@@ -161,6 +161,7 @@ let diskFlushInFlight = false;
 let diskFlushQueued = false;
 let directoryFlushInFlight = false;
 let directoryFlushQueued = false;
+let folderWritePermissionRequestInFlight = false;
 let treeContextTarget = null;
 let checklistContextTarget = null;
 const pendingCopyFileIds = new Set();
@@ -2307,6 +2308,8 @@ function updateFolderWritePermissionUi() {
     if (!EL.btnRequestWrite) return;
     const shouldShow = Boolean(boundDirectoryHandle && !boundDirectoryWriteEnabled);
     EL.btnRequestWrite.hidden = !shouldShow;
+    EL.btnRequestWrite.disabled = Boolean(shouldShow && folderWritePermissionRequestInFlight);
+    EL.btnRequestWrite.textContent = folderWritePermissionRequestInFlight ? 'Granting...' : 'Grant Access';
     EL.btnRequestWrite.title = shouldShow
         ? 'Click to grant folder write access.'
         : 'Folder write access granted.';
@@ -2325,33 +2328,50 @@ function isSameFileFingerprint(left, right) {
 }
 
 async function handleRequestFolderWritePermission() {
+    if (folderWritePermissionRequestInFlight) return;
+
     if (!boundDirectoryHandle) {
         updateBoundFilePathInput('Not connected: re-open folder to grant access', 'warning');
+        return;
+    }
+
+    if (boundDirectoryWriteEnabled) {
+        updateFolderWritePermissionUi();
         return;
     }
 
     const handle = boundDirectoryHandle;
     const wasDirectoryLoaded = workspace?.uiState?.sourceMode === 'directory'
         && directoryHandleByFolderId.size > 0;
-    const granted = await ensureDirectoryReadWritePermission(boundDirectoryHandle);
-    boundDirectoryWriteEnabled = granted;
-    setDirectDiskSyncAvailable(granted);
+
+    folderWritePermissionRequestInFlight = true;
     updateFolderWritePermissionUi();
 
-    if (!granted) {
-        setTreeMutationsEnabled(false);
-        updateBoundFilePathInput(buildFolderStatusMessage('read-only'), 'warning');
-        return;
-    }
+    try {
+        const granted = await ensureDirectoryReadWritePermission(boundDirectoryHandle);
+        boundDirectoryWriteEnabled = granted;
+        setDirectDiskSyncAvailable(granted);
 
-    if (!wasDirectoryLoaded) {
-        await bindAndLoadFromDirectoryHandle(handle);
-        return;
-    }
+        if (!granted) {
+            setTreeMutationsEnabled(false);
+            updateBoundFilePathInput(buildFolderStatusMessage('read-only'), 'warning');
+            return;
+        }
 
-    setTreeMutationsEnabled(true);
-    updateBoundFilePathInput(buildFolderStatusMessage('direct-save'), 'bound');
-    scheduleDirectoryFileFlush();
+        updateFolderWritePermissionUi();
+
+        if (!wasDirectoryLoaded) {
+            await bindAndLoadFromDirectoryHandle(handle);
+            return;
+        }
+
+        setTreeMutationsEnabled(true);
+        updateBoundFilePathInput(buildFolderStatusMessage('direct-save'), 'bound');
+        scheduleDirectoryFileFlush();
+    } finally {
+        folderWritePermissionRequestInFlight = false;
+        updateFolderWritePermissionUi();
+    }
 }
 
 async function bindAndLoadFromFileHandle(handle) {
