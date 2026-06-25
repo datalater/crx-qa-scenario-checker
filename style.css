@@ -1051,6 +1051,12 @@
     font-weight: 600;
   }
 
+  .line-number.is-json-error {
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 18%, transparent);
+    font-weight: 700;
+  }
+
   .code-editor:not(.has-line-numbers) .line-numbers {
     display: none;
   }
@@ -1076,6 +1082,13 @@
   .editor-scroll-marker.is-search-match {
     background: var(--accent-primary);
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--editor-bg) 80%, transparent);
+  }
+
+  .editor-scroll-marker.is-json-error {
+    min-height: 4px;
+    background: var(--danger);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--editor-bg) 80%, transparent);
+    z-index: 1;
   }
 
   #editing,

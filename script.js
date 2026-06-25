@@ -169,6 +169,7 @@ const pendingCopyFileIds = new Set();
 let fileTreeSearchQuery = '';
 let currentFileTreeSearchState = null;
 let editorSearchHighlightQuery = '';
+let currentJsonErrorPosition = -1;
 
 const BOUND_FILE_PATH_DEFAULT_LABEL = '';
 const BOUND_FILE_PATH_DEFAULT_TOOLTIP = 'No file bound';
@@ -958,22 +959,38 @@ function getEditorSearchMatchLineNumbers() {
     return matchedLineNumbers;
 }
 
-function renderEditorSearchScrollMarkers(matchLineNumbers = getEditorSearchMatchLineNumbers()) {
+function getCurrentJsonErrorLineNumber() {
+    if (!Number.isFinite(currentJsonErrorPosition) || currentJsonErrorPosition < 0) return null;
+    return getLineColumn(String(EL.editing?.value || ''), currentJsonErrorPosition).line;
+}
+
+function renderEditorScrollMarkers(matchLineNumbers = getEditorSearchMatchLineNumbers()) {
     if (!EL.editorScrollMarkers || !EL.editing) return;
 
     const lineCount = Math.max(1, String(EL.editing.value || '').split('\n').length);
     const matchLines = [...matchLineNumbers]
         .filter((lineNumber) => Number.isFinite(lineNumber) && lineNumber >= 1 && lineNumber <= lineCount)
         .sort((left, right) => left - right);
+    const errorLineNumber = getCurrentJsonErrorLineNumber();
 
-    EL.editorScrollMarkers.replaceChildren(...matchLines.map((lineNumber) => {
+    const createMarker = (lineNumber, className, title) => {
         const marker = document.createElement('span');
-        marker.className = 'editor-scroll-marker is-search-match';
+        marker.className = `editor-scroll-marker ${className}`;
         const topPercent = lineCount <= 1 ? 0 : ((lineNumber - 1) / (lineCount - 1)) * 100;
         marker.style.top = `calc(${topPercent}% - 1px)`;
-        marker.title = `Search match on line ${lineNumber}`;
+        marker.title = title;
         return marker;
-    }));
+    };
+
+    const markers = matchLines.map((lineNumber) => (
+        createMarker(lineNumber, 'is-search-match', `Search match on line ${lineNumber}`)
+    ));
+
+    if (Number.isFinite(errorLineNumber) && errorLineNumber >= 1 && errorLineNumber <= lineCount) {
+        markers.push(createMarker(errorLineNumber, 'is-json-error', `JSON error on line ${errorLineNumber}`));
+    }
+
+    EL.editorScrollMarkers.replaceChildren(...markers);
 }
 
 function updateTreeSearchMeta(searchState) {
@@ -2664,8 +2681,12 @@ function isFileTreeVisible() {
 
 function updateLineNumbers() {
     const searchMatchLineNumbers = getEditorSearchMatchLineNumbers();
-    updateLineNumbersView(EL.editing, EL.lineNumbers, searchMatchLineNumbers);
-    renderEditorSearchScrollMarkers(searchMatchLineNumbers);
+    const errorLineNumber = getCurrentJsonErrorLineNumber();
+    updateLineNumbersView(EL.editing, EL.lineNumbers, {
+        searchMatchLineNumbers,
+        errorLineNumber
+    });
+    renderEditorScrollMarkers(searchMatchLineNumbers);
 }
 
 function renderEditorFromCurrentData() {
@@ -2728,7 +2749,9 @@ function scrollToLine(position) {
 }
 
 function updateErrorPosition(position) {
+    currentJsonErrorPosition = Number.isFinite(position) ? position : -1;
     editorHighlightManager.updateErrorPosition(position);
+    updateLineNumbers();
 }
 
 function getEditorMetrics() {

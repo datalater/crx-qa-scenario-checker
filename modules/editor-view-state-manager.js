@@ -29,11 +29,17 @@ export function applyLineNumberPreferenceFromWorkspace(workspace, toggleLineNumb
     toggleLineNumbers.checked = workspace.uiState.showLineNumbers !== false;
 }
 
-export function updateLineNumbersView(editing, lineNumbers, highlightedLineNumbers = new Set()) {
+export function updateLineNumbersView(editing, lineNumbers, highlights = {}) {
     const lineCount = Math.max(1, editing.value.split('\n').length);
-    const highlightedSet = highlightedLineNumbers instanceof Set
-        ? highlightedLineNumbers
-        : new Set(Array.isArray(highlightedLineNumbers) ? highlightedLineNumbers : []);
+    const searchLineNumbers = highlights instanceof Set || Array.isArray(highlights)
+        ? highlights
+        : highlights?.searchMatchLineNumbers;
+    const highlightedSet = searchLineNumbers instanceof Set
+        ? searchLineNumbers
+        : new Set(Array.isArray(searchLineNumbers) ? searchLineNumbers : []);
+    const errorLineNumber = Number.isFinite(highlights?.errorLineNumber)
+        ? highlights.errorLineNumber
+        : null;
     const doc = lineNumbers.ownerDocument;
     lineNumbers.replaceChildren(...Array.from({ length: lineCount }, (_, i) => {
         const lineNumber = i + 1;
@@ -42,6 +48,9 @@ export function updateLineNumbersView(editing, lineNumbers, highlightedLineNumbe
         line.textContent = String(lineNumber);
         if (highlightedSet.has(lineNumber)) {
             line.classList.add('is-search-match');
+        }
+        if (lineNumber === errorLineNumber) {
+            line.classList.add('is-json-error');
         }
         return line;
     }));
