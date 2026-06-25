@@ -106,6 +106,8 @@ const EL = {
     fileTreeResizer: document.getElementById('file-tree-resizer'),
     appContent: document.querySelector('.app-content'),
     editorPane: document.getElementById('editor-pane'),
+    loadingLabel: document.getElementById('loading-label'),
+    loadingSteps: document.getElementById('loading-steps'),
     btnImport: document.getElementById('btn-import'),
     btnRequestWrite: document.getElementById('btn-request-write'),
     boundFilePathInput: document.getElementById('bound-file-path'),
@@ -170,6 +172,7 @@ const BOUND_FILE_PATH_DEFAULT_LABEL = '';
 const BOUND_FILE_PATH_DEFAULT_TOOLTIP = 'No file bound';
 const LOCAL_SAVE_ONLY_TOOLTIP = '로컬 저장소(localStorage)에 저장되었습니다. 현재 디스크 파일에 직접 저장할 수 없어 이 상태를 표시합니다.';
 const DIRECTORY_LOCAL_SAVE_TOOLTIP = '폴더 기반 모드에서는 현재 로컬 저장 후 필요 시 디스크 동기화를 확장할 예정입니다. 지금은 로컬 저장을 기준으로 동작합니다.';
+const STARTUP_LOADING_MIN_VISIBLE_MS = 900;
 const HANDLE_DB_NAME = 'qa-scenario-handles';
 const HANDLE_DB_VERSION = 1;
 const HANDLE_STORE_NAME = 'handles';
@@ -189,6 +192,8 @@ const REQUIRED_EXPORT_FIELDS = [
     'steps.then',
     'steps.pass'
 ];
+let loadingStepState = [];
+let loadingOverlayShownAt = 0;
 
 // --- Initialization ---
 
@@ -408,33 +413,99 @@ async function attemptRestoreBoundDirectoryConnection() {
     if (!boundMeta || boundMeta.kind !== 'directory') return;
     if (boundDirectoryHandle) return;
 
+    showLoadingOverlay('Restoring folder connection…');
+    setLoadingSteps([
+        { id: 'workspace', label: 'Load saved workspace', status: 'done' },
+        { id: 'handle', label: 'Find saved folder access', status: 'active' },
+        { id: 'permission', label: 'Check folder permission', status: 'pending' },
+        { id: 'read', label: 'Read folder contents', status: 'pending' },
+        { id: 'apply', label: 'Open workspace', status: 'pending' }
+    ]);
+
     let persisted = null;
     try {
         persisted = await getBoundDirectoryHandleFromDb();
     } catch (error) {
+        updateLoadingStep('handle', 'warning');
         console.warn('[qa-scenario] failed to restore bound directory handle', error);
+        await hideLoadingOverlayAfterMinimum();
         return;
     }
 
     const handle = persisted?.handle;
-    if (!handle) return;
+    if (!handle) {
+        updateLoadingStep('handle', 'warning');
+        await hideLoadingOverlayAfterMinimum();
+        return;
+    }
 
-    showLoadingOverlay();
+    updateLoadingStep('handle', 'done');
+    updateLoadingStep('permission', 'active');
     try {
-        await bindAndLoadFromDirectoryHandle(handle, { isRestore: true });
+        const restored = await bindAndLoadFromDirectoryHandle(handle, {
+            isRestore: true,
+            onProgress: updateLoadingStep
+        });
+        if (!restored) {
+            updateLoadingStep('permission', 'warning');
+        }
     } catch (error) {
+        updateLoadingStep('apply', 'warning');
         console.warn('[qa-scenario] auto-reconnect for directory failed', error);
     } finally {
-        hideLoadingOverlay();
+        await hideLoadingOverlayAfterMinimum();
     }
 }
 
-function showLoadingOverlay() {
-    if (EL.loadingOverlay) EL.loadingOverlay.classList.remove('is-hidden');
+function showLoadingOverlay(label = 'Loading…') {
+    loadingOverlayShownAt = Date.now();
+    if (EL.loadingLabel) EL.loadingLabel.textContent = label;
+    if (EL.loadingOverlay) {
+        EL.loadingOverlay.classList.remove('is-hidden');
+        EL.loadingOverlay.setAttribute('aria-hidden', 'false');
+    }
+}
+
+async function hideLoadingOverlayAfterMinimum() {
+    const elapsed = Date.now() - loadingOverlayShownAt;
+    const remaining = STARTUP_LOADING_MIN_VISIBLE_MS - elapsed;
+    if (remaining > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remaining));
+    }
+    hideLoadingOverlay();
 }
 
 function hideLoadingOverlay() {
-    if (EL.loadingOverlay) EL.loadingOverlay.classList.add('is-hidden');
+    if (EL.loadingOverlay) {
+        EL.loadingOverlay.classList.add('is-hidden');
+        EL.loadingOverlay.setAttribute('aria-hidden', 'true');
+    }
+    loadingStepState = [];
+    renderLoadingSteps();
+}
+
+function setLoadingSteps(steps) {
+    loadingStepState = Array.isArray(steps) ? steps.map((step) => ({ ...step })) : [];
+    renderLoadingSteps();
+}
+
+function updateLoadingStep(id, status) {
+    loadingStepState = loadingStepState.map((step) => {
+        if (step.id !== id) return step;
+        return { ...step, status };
+    });
+    renderLoadingSteps();
+}
+
+function renderLoadingSteps() {
+    if (!EL.loadingSteps) return;
+    EL.loadingSteps.replaceChildren(...loadingStepState.map((step) => {
+        const item = document.createElement('li');
+        const status = step.status || 'pending';
+        item.className = `loading-step is-${status}`;
+        item.textContent = step.label || '';
+        return item;
+    }));
 }
 
 function persist() {
@@ -1988,6 +2059,9 @@ async function handleBindOpenFileClick() {
 
 async function bindAndLoadFromDirectoryHandle(handle, options = {}) {
     const isRestore = options?.isRestore === true;
+    const reportProgress = typeof options?.onProgress === 'function'
+        ? options.onProgress
+        : () => {};
     let writeGranted = false;
     let readGranted = false;
 
@@ -2029,20 +2103,26 @@ async function bindAndLoadFromDirectoryHandle(handle, options = {}) {
         return false;
     }
 
+    reportProgress('permission', 'done');
+    reportProgress('read', 'active');
     let loaded = null;
     try {
         loaded = await loadWorkspaceFromDirectoryHandle(handle, { silentErrors: isRestore });
     } catch (error) {
+        reportProgress('read', 'warning');
         console.error('[qa-scenario] load workspace from directory failed', error);
         alert('Open folder failed while reading directory contents');
         return false;
     }
 
     if (!loaded?.workspace) {
+        reportProgress('read', 'warning');
         alert('Unsupported or invalid directory contents');
         return false;
     }
 
+    reportProgress('read', 'done');
+    reportProgress('apply', 'active');
     clearBoundFile({ clearPersistedDirectoryHandle: false });
     boundDirectoryHandle = handle;
     boundDirectoryWriteEnabled = writeGranted;
@@ -2069,6 +2149,7 @@ async function bindAndLoadFromDirectoryHandle(handle, options = {}) {
         updateBoundFilePathInput(isRestore ? `Folder reconnected: ${loaded.loadedJsonFileCount} JSON files (read-only: click Grant Access)` : buildFolderStatusMessage('read-only'), 'warning');
     }
 
+    reportProgress('apply', 'done');
     return true;
 }
 

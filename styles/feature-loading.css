@@ -26,7 +26,61 @@
 
   .loading-label {
     font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .loading-steps {
+    display: grid;
+    gap: 8px;
+    width: min(280px, calc(100vw - 48px));
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .loading-step {
+    display: grid;
+    grid-template-columns: 18px 1fr;
+    align-items: center;
+    gap: 8px;
+    min-height: 20px;
+    font-size: 12px;
     color: var(--text-secondary);
+  }
+
+  .loading-step::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    margin: 0 auto;
+    border-radius: 999px;
+    background: var(--border-color);
+  }
+
+  .loading-step.is-active {
+    color: var(--text-primary);
+  }
+
+  .loading-step.is-active::before {
+    background: var(--accent-primary);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-primary) 16%, transparent);
+  }
+
+  .loading-step.is-done::before {
+    content: "✓";
+    display: grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    color: var(--accent-primary);
+    background: transparent;
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .loading-step.is-warning::before {
+    background: var(--warning);
   }
 
   @keyframes loading-spin {
