@@ -275,6 +275,41 @@
     color: #8b949e;
   }
 
+  .top-save-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: min(18vw, 120px);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .top-save-status.is-hidden {
+    display: none;
+  }
+
+  .top-save-status.is-saved {
+    color: #56d364;
+  }
+
+  .top-save-status.is-saved::before {
+    content: "✓";
+    font-weight: 700;
+  }
+
+  .top-save-status.is-dirty {
+    color: #d29922;
+  }
+
+  .top-save-status.is-saving {
+    color: #79c0ff;
+  }
+
   .btn-warning {
     background-color: var(--warning);
     border-color: #bb8009;

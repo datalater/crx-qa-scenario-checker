@@ -75,6 +75,7 @@ const EL = {
     saveIndicator: document.getElementById('save-indicator'),
     saveIndicatorTime: document.getElementById('save-indicator-time'),
     saveIndicatorLabel: document.getElementById('save-indicator-label'),
+    topSaveStatus: document.getElementById('top-save-status'),
     paneResizer: document.getElementById('pane-resizer'),
     passHeaderToggle: document.getElementById('col-pass-toggle'),
     btnNewFolder: document.getElementById('btn-new-folder'),
@@ -139,6 +140,8 @@ let currentData = null;
 let workspace = null;
 let autosaveTimer = null;
 let activeFileDirty = false;
+let topSaveStatusActivated = false;
+let topSaveStatusHideTimer = null;
 let lastTreeSelectionType = 'file';
 const MIN_EDITOR_WIDTH = 0;
 const DEFAULT_FILE_TREE_WIDTH = 260;
@@ -1418,7 +1421,7 @@ async function renameFolderById(id) {
                 workspace.uiState.lastSelectionType = 'folder';
                 persist();
             }
-            updateBoundFilePathInput(`Folder renamed: ${normalizedName} (direct save enabled)`, 'bound');
+            updateBoundFilePathInput('', 'bound');
             return;
         } catch (error) {
             console.error('[qa-scenario] failed to rename folder on disk', error);
@@ -2026,7 +2029,7 @@ async function flushBoundFileIfNeeded() {
     if (typeof content !== 'string') {
         diskFlushQueued = false;
         setDirectDiskSyncAvailable(false);
-        updateBoundFilePathInput('Sync skipped: no active file content', 'warning');
+        updateBoundFilePathInput('No active file', 'warning');
         return;
     }
 
@@ -2037,7 +2040,7 @@ async function flushBoundFileIfNeeded() {
         await writable.write(content);
         await writable.close();
         setDirectDiskSyncAvailable(true);
-        updateBoundFilePathInput(`Synced ${formatSavedTime(nowIso())}`, 'bound');
+        updateBoundFilePathInput('', 'bound');
     } catch (error) {
         console.error('[qa-scenario] bound file flush failed', error);
         setDirectDiskSyncAvailable(false);
@@ -2076,7 +2079,7 @@ async function flushDirectoryFileIfNeeded() {
     if (!target) {
         directoryFlushQueued = false;
         setDirectDiskSyncAvailable(false);
-        updateBoundFilePathInput('Folder sync skipped: no active disk file', 'warning');
+        updateBoundFilePathInput('No active file', 'warning');
         return;
     }
 
@@ -2088,7 +2091,7 @@ async function flushDirectoryFileIfNeeded() {
         const previousFingerprint = directoryFileFingerprintById.get(target.activeFile.id);
         if (previousFingerprint && !isSameFileFingerprint(previousFingerprint, currentFingerprint)) {
             setDirectDiskSyncAvailable(false);
-            updateBoundFilePathInput('Conflict: disk file changed externally (re-open folder)', 'warning');
+            updateBoundFilePathInput('Conflict: re-open folder', 'warning');
             return;
         }
 
@@ -2099,11 +2102,11 @@ async function flushDirectoryFileIfNeeded() {
         const syncedFile = await target.fileHandle.getFile();
         directoryFileFingerprintById.set(target.activeFile.id, buildFileFingerprint(syncedFile));
         setDirectDiskSyncAvailable(true);
-        updateBoundFilePathInput(`Folder synced ${formatSavedTime(nowIso())}`, 'bound');
+        updateBoundFilePathInput('', 'bound');
     } catch (error) {
         console.error('[qa-scenario] directory file flush failed', error);
         setDirectDiskSyncAvailable(false);
-        updateBoundFilePathInput('Folder sync failed', 'warning');
+        updateBoundFilePathInput('Sync failed', 'warning');
     } finally {
         directoryFlushInFlight = false;
         if (directoryFlushQueued) {
@@ -2153,7 +2156,7 @@ async function handleImportFile(file) {
     setTreeMutationsEnabled(true);
     updateFolderWritePermissionUi();
     applyImportedWorkspace(importedWorkspace);
-    updateBoundFilePathInput('Imported only: not bound to disk', 'warning');
+    updateBoundFilePathInput('Not bound', 'warning');
 }
 
 async function handleBindOpenClick(event) {
@@ -2240,7 +2243,7 @@ async function bindAndLoadFromDirectoryHandle(handle, options = {}) {
             boundDirectoryWriteEnabled = false;
             setDirectDiskSyncAvailable(false);
             updateFolderWritePermissionUi();
-            updateBoundFilePathInput('Not connected: click Grant Access to continue', 'warning');
+            updateBoundFilePathInput('Click Grant Access', 'warning');
             return false;
         }
         alert('Open folder failed: read permission denied');
@@ -2288,10 +2291,10 @@ async function bindAndLoadFromDirectoryHandle(handle, options = {}) {
     }
     applyBoundFilePath(loaded.rootName);
     if (writeGranted) {
-        updateBoundFilePathInput(isRestore ? `Folder reconnected: ${loaded.loadedJsonFileCount} JSON files (direct save enabled)` : buildFolderStatusMessage('direct-save'), 'bound');
+        updateBoundFilePathInput(buildFolderStatusMessage('direct-save'), 'bound');
         scheduleDirectoryFileFlush();
     } else {
-        updateBoundFilePathInput(isRestore ? `Folder reconnected: ${loaded.loadedJsonFileCount} JSON files (read-only: click Grant Access)` : buildFolderStatusMessage('read-only'), 'warning');
+        updateBoundFilePathInput(buildFolderStatusMessage('read-only'), 'warning');
     }
 
     reportProgress('apply', 'done');
@@ -2438,14 +2441,13 @@ async function ensureDirectoryReadWritePermission(handle, options = {}) {
 }
 
 function buildFolderStatusMessage(mode) {
-    const count = Number.isFinite(boundDirectoryJsonFileCount) ? boundDirectoryJsonFileCount : 0;
     if (mode === 'direct-save') {
-        return `Folder loaded: ${count} JSON files (direct save enabled)`;
+        return '';
     }
     if (mode === 'read-only') {
-        return `Folder loaded: ${count} JSON files (read-only: click Grant Access)`;
+        return 'Click Grant Access';
     }
-    return `Folder loaded: ${count} JSON files`;
+    return '';
 }
 
 function updateFolderWritePermissionUi() {
@@ -2475,7 +2477,7 @@ async function handleRequestFolderWritePermission() {
     if (folderWritePermissionRequestInFlight) return;
 
     if (!boundDirectoryHandle) {
-        updateBoundFilePathInput('Not connected: re-open folder to grant access', 'warning');
+        updateBoundFilePathInput('Re-open folder', 'warning');
         return;
     }
 
@@ -2545,10 +2547,10 @@ async function bindAndLoadFromFileHandle(handle) {
     applyBoundFilePath(boundFileName);
     if (boundFileReadonly) {
         setDirectDiskSyncAvailable(false);
-        updateBoundFilePathInput('Bound read-only: write permission denied', 'warning');
+        updateBoundFilePathInput('Write access denied', 'warning');
     } else {
         setDirectDiskSyncAvailable(true);
-        updateBoundFilePathInput('Bound: saving writes directly to file', 'bound');
+        updateBoundFilePathInput('', 'bound');
         scheduleBoundFileFlush();
     }
 }
@@ -2626,10 +2628,10 @@ function updateStorageTargetFromWorkspaceMeta() {
     updateFolderWritePermissionUi();
     applyBoundFilePath(name);
     if (kind === 'directory') {
-        updateBoundFilePathInput('Not connected: re-open folder to load disk tree', 'warning');
+        updateBoundFilePathInput('Re-open folder', 'warning');
         return;
     }
-    updateBoundFilePathInput('Not connected: re-open file to resume direct save', 'warning');
+    updateBoundFilePathInput('Re-open file', 'warning');
 }
 
 function applyBoundFilePath(path) {
@@ -2659,12 +2661,48 @@ function updateBoundFilePathInput(label, tone = 'default') {
 
 function updateSaveIndicator(state) {
     lastSaveIndicatorState = state;
+    if (state === 'dirty' || state === 'saving') {
+        topSaveStatusActivated = true;
+    }
     updateSaveIndicatorView({
         saveIndicator: EL.saveIndicator,
         saveIndicatorTime: EL.saveIndicatorTime,
         saveIndicatorLabel: EL.saveIndicatorLabel
     }, state, workspace?.updatedAt);
+    updateTopSaveStatus(state);
     refreshSaveIndicatorPresentation();
+}
+
+function updateTopSaveStatus(state) {
+    if (!EL.topSaveStatus) return;
+    if (topSaveStatusHideTimer) {
+        clearTimeout(topSaveStatusHideTimer);
+        topSaveStatusHideTimer = null;
+    }
+    EL.topSaveStatus.classList.remove('is-dirty', 'is-saving', 'is-saved');
+    if (!topSaveStatusActivated) {
+        EL.topSaveStatus.textContent = '';
+        EL.topSaveStatus.title = '';
+        EL.topSaveStatus.classList.add('is-hidden');
+        return;
+    }
+
+    const label = state === 'dirty' ? 'Unsaved' : (state === 'saving' ? 'Saving...' : 'Saved!');
+    EL.topSaveStatus.textContent = label;
+    EL.topSaveStatus.title = label;
+    EL.topSaveStatus.classList.add(`is-${state}`);
+    EL.topSaveStatus.classList.toggle('is-hidden', !label);
+
+    if (state === 'saved') {
+        topSaveStatusHideTimer = setTimeout(() => {
+            topSaveStatusActivated = false;
+            EL.topSaveStatus.textContent = '';
+            EL.topSaveStatus.title = '';
+            EL.topSaveStatus.classList.remove('is-dirty', 'is-saving', 'is-saved');
+            EL.topSaveStatus.classList.add('is-hidden');
+            topSaveStatusHideTimer = null;
+        }, 3000);
+    }
 }
 
 function setTreeMutationsEnabled(isEnabled) {
