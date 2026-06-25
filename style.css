@@ -25,13 +25,13 @@
 
   /* Header */
   .app-header {
-    height: 56px;
+    min-height: 40px;
     background: var(--header-bg);
     border-bottom: 1px solid var(--border-muted);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 16px;
+    padding: 5px 12px;
     position: relative;
     z-index: 40;
   }
@@ -39,19 +39,19 @@
   .logo {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     min-width: 0;
     flex-shrink: 1;
   }
 
   .logo .icon {
-    font-size: 16px;
+    font-size: 13px;
     line-height: 1;
   }
 
   .logo h1 {
     font-family: var(--font-heading);
-    font-size: 14px;
+    font-size: 12px;
     font-weight: 600;
     letter-spacing: 0;
     overflow: hidden;
@@ -62,7 +62,7 @@
 
   .app-version {
     font-family: var(--font-code);
-    font-size: 11px;
+    font-size: 10px;
     color: var(--text-secondary);
     line-height: 1;
   }
@@ -70,20 +70,20 @@
   .actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
   }
 
   .header-controls {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
     flex-shrink: 0;
   }
 
   .bound-file-group {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     min-width: 0;
   }
 
@@ -93,7 +93,7 @@
 
   .bound-file-status {
     max-width: min(24vw, 280px);
-    font-size: 11px;
+    font-size: 10px;
     line-height: 1.2;
     color: var(--text-secondary);
     white-space: nowrap;
@@ -111,16 +111,16 @@
 
   .bound-file-path-input {
     width: min(28vw, 320px);
-    min-width: 170px;
-    min-height: 30px;
-    padding: 4px 10px;
-    border-radius: 6px;
+    min-width: 150px;
+    min-height: 26px;
+    padding: 3px 8px;
+    border-radius: 5px;
     border: 1px solid var(--border-color);
     background: var(--editor-bg);
     color: #c9d1d9;
     font-family: var(--font-code);
-    font-size: 12px;
-    line-height: 20px;
+    font-size: 11px;
+    line-height: 18px;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -152,13 +152,13 @@
   .btn {
     display: flex;
     align-items: center;
-    gap: 6px;
-    min-height: 30px;
-    padding: 4px 12px;
-    border-radius: 6px;
+    gap: 5px;
+    min-height: 26px;
+    padding: 3px 9px;
+    border-radius: 5px;
     font-family: var(--font-ui);
-    font-size: 12px;
-    line-height: 20px;
+    font-size: 11px;
+    line-height: 18px;
     font-weight: 500;
     cursor: pointer;
     transition:
@@ -171,6 +171,13 @@
   .btn-icon {
     font-size: 13px;
     line-height: 1;
+  }
+
+  .btn-icon-only {
+    width: 28px;
+    min-width: 28px;
+    padding: 0;
+    justify-content: center;
   }
 
   .btn-primary {

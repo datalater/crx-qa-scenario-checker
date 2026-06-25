@@ -27,16 +27,16 @@
                             aria-label="Bound file path"
                             title="No file bound"
                         >
-                        <button id="btn-import" class="btn btn-secondary" type="button" title="Open folder (Shift+Click: file)">
-                            <span class="btn-icon">📂</span> Open...
+                        <button id="btn-import" class="btn btn-secondary btn-icon-only" type="button" title="Open folder (Shift+Click: file)" aria-label="Open folder">
+                            <span class="btn-icon" aria-hidden="true">📂</span>
                         </button>
                         <button id="btn-request-write" class="btn btn-secondary" type="button" title="Click to grant folder write access." hidden>
                             Grant Access
                         </button>
                     </div>
                     <div id="export-split" class="export-split">
-                        <button id="btn-export" class="btn btn-secondary" type="button">
-                            <span class="btn-icon">📤</span> Export
+                        <button id="btn-export" class="btn btn-secondary btn-icon-only" type="button" title="Export" aria-label="Export">
+                            <span class="btn-icon" aria-hidden="true">📤</span>
                         </button>
                         <button
                             id="btn-export-menu"
