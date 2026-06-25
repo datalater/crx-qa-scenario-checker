@@ -44,11 +44,6 @@
     flex-shrink: 1;
   }
 
-  .logo .icon {
-    font-size: 13px;
-    line-height: 1;
-  }
-
   .logo h1 {
     font-family: var(--font-heading);
     font-size: 12px;
@@ -58,13 +53,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
-  }
-
-  .app-version {
-    font-family: var(--font-code);
-    font-size: 10px;
-    color: var(--text-secondary);
-    line-height: 1;
   }
 
   .actions {
@@ -85,6 +73,43 @@
     align-items: center;
     gap: 6px;
     min-width: 0;
+  }
+
+  .panel-view-toggle {
+    display: inline-flex;
+    align-items: center;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    background: var(--accent-secondary);
+  }
+
+  .panel-toggle-btn {
+    height: 26px;
+    padding: 0 8px;
+    border: 0;
+    border-right: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .panel-toggle-btn:last-child {
+    border-right: 0;
+  }
+
+  .panel-toggle-btn:hover {
+    color: var(--text-primary);
+    background: #30363d;
+  }
+
+  .panel-toggle-btn.is-active {
+    color: #ffffff;
+    background: var(--accent-primary);
   }
 
   #btn-request-write {
@@ -277,7 +302,7 @@
   .pane-header {
     height: var(--pane-header-height);
     flex: 0 0 var(--pane-header-height);
-    padding: 0 16px 0 44px; /* Extra left padding for the floating button */
+    padding: 0 16px;
     border-bottom: 1px solid var(--border-muted);
     display: flex;
     align-items: center;
@@ -285,9 +310,12 @@
     white-space: nowrap;
   }
 
-  /* Removed old .header-left and .btn-icon-only styles as they are replaced by .btn-fold-toggle */
-
-  /* Removed redundant .fold-icon styles */
+  .pane-title-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
 
   .pane-header h2 {
     font-family: var(--font-heading);
@@ -358,6 +386,32 @@
     min-width: 0;
     display: flex;
     overflow: hidden;
+  }
+
+  .panel-empty-state {
+    display: none;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    text-align: center;
+  }
+
+  .app-content.is-panel-empty .panel-empty-state {
+    display: flex;
+  }
+
+  .app-content.is-editor-pane-hidden .editor-pane,
+  .app-content.is-panel-table-editor-hidden .checklist-pane,
+  .app-content.is-panel-file-tree-hidden .file-tree-panel,
+  .app-content.is-panel-json-editor-hidden .editor-container {
+    display: none;
+  }
+
+  .app-content.is-panel-json-editor-hidden .editor-pane > .pane-header {
+    display: none;
   }
 
   .file-tree-panel {

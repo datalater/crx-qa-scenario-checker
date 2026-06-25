@@ -56,7 +56,6 @@ const EL = {
     jsonStatus: document.getElementById('json-status'),
     jsonErrorPosition: document.getElementById('json-error-position'),
     jsonErrorMessage: document.getElementById('json-error-message'),
-    appVersion: document.getElementById('app-version'),
     lineNumbers: document.getElementById('line-numbers'),
     toggleLineNumbers: document.getElementById('toggle-line-numbers'),
     editorWrapper: document.getElementById('editor-wrapper'),
@@ -76,7 +75,6 @@ const EL = {
     saveIndicator: document.getElementById('save-indicator'),
     saveIndicatorTime: document.getElementById('save-indicator-time'),
     saveIndicatorLabel: document.getElementById('save-indicator-label'),
-    btnFoldEditor: document.getElementById('btn-fold-editor'),
     paneResizer: document.getElementById('pane-resizer'),
     passHeaderToggle: document.getElementById('col-pass-toggle'),
     btnNewFolder: document.getElementById('btn-new-folder'),
@@ -85,6 +83,9 @@ const EL = {
     btnToggleTree: document.getElementById('btn-toggle-tree'),
     btnTreeMenu: document.getElementById('btn-tree-menu'),
     btnShowTree: document.getElementById('btn-show-tree'),
+    btnPanelFileTree: document.getElementById('btn-panel-file-tree'),
+    btnPanelJsonEditor: document.getElementById('btn-panel-json-editor'),
+    btnPanelTableEditor: document.getElementById('btn-panel-table-editor'),
     treeMenu: document.getElementById('tree-menu'),
     treeSearchInput: document.getElementById('tree-search-input'),
     treeSearchMeta: document.getElementById('tree-search-meta'),
@@ -107,6 +108,9 @@ const EL = {
     fileTreeResizer: document.getElementById('file-tree-resizer'),
     appContent: document.querySelector('.app-content'),
     editorPane: document.getElementById('editor-pane'),
+    editorContainer: document.querySelector('.editor-container'),
+    checklistPane: document.querySelector('.checklist-pane'),
+    panelEmptyState: document.getElementById('panel-empty-state'),
     loadingLabel: document.getElementById('loading-label'),
     loadingSteps: document.getElementById('loading-steps'),
     btnImport: document.getElementById('btn-import'),
@@ -195,13 +199,17 @@ const REQUIRED_EXPORT_FIELDS = [
     'steps.then',
     'steps.pass'
 ];
+const DEFAULT_PANEL_VISIBILITY = {
+    fileTree: true,
+    jsonEditor: true,
+    tableEditor: true
+};
 let loadingStepState = [];
 let loadingOverlayShownAt = 0;
 
 // --- Initialization ---
 
 function init() {
-    loadAppVersionLabel();
     setupResizerLayout();
     setupExportMenuManager();
     setupTreeMenuManager();
@@ -218,32 +226,6 @@ function init() {
     applyFileTreePreference();
     setupTreeMenu();
     setupExportMenu();
-}
-
-async function loadAppVersionLabel() {
-    if (!EL.appVersion) return;
-
-    const applyVersion = (value) => {
-        const version = String(value || '').trim();
-        if (!version) return;
-        EL.appVersion.textContent = `v${version}`;
-        EL.appVersion.title = `Current version: v${version}`;
-    };
-
-    if (typeof chrome !== 'undefined'
-        && chrome.runtime
-        && typeof chrome.runtime.getManifest === 'function') {
-        const manifest = chrome.runtime.getManifest();
-        applyVersion(manifest?.version);
-        return;
-    }
-
-    try {
-        const response = await fetch('./manifest.json', { cache: 'no-store' });
-        if (!response.ok) return;
-        const manifest = await response.json();
-        applyVersion(manifest?.version);
-    } catch {}
 }
 
 function openHandleDb() {
@@ -2630,8 +2612,7 @@ function persistLineNumberPreference(shouldShow) {
 
 function applyFileTreePreference() {
     if (!workspace?.uiState || !EL.fileTreePanel) return;
-    const shouldShow = workspace.uiState.showFileTree !== false;
-    setFileTreeVisibility(shouldShow, { persist: false });
+    applyPanelVisibility({ persist: false });
 }
 
 function applyFileTreeWidthPreference() {
@@ -2640,7 +2621,7 @@ function applyFileTreeWidthPreference() {
     if (Number.isFinite(preferred) && preferred > 0) {
         resizerLayout.setManualFileTreeWidth(preferred);
     }
-    if (isFileTreeVisible()) {
+    if (isFileTreeVisible() && isJsonEditorPanelVisible()) {
         const nextWidth = resizerLayout.getManualFileTreeWidth() ?? DEFAULT_FILE_TREE_WIDTH;
         resizerLayout.setManualFileTreeWidth(resizerLayout.applyFileTreeWidth(nextWidth, { persist: false }));
     }
@@ -2652,31 +2633,127 @@ function persistFileTreeWidthPreference(width) {
     Workspace.persistWorkspace(workspace);
 }
 
-function setFileTreeVisibility(shouldShow, options = {}) {
-    if (!EL.fileTreePanel || !EL.btnToggleTree) return;
-    const persist = options.persist !== false;
+function getPanelVisibilityState() {
+    const saved = workspace?.uiState?.panelVisibility || {};
+    return {
+        fileTree: typeof saved.fileTree === 'boolean'
+            ? saved.fileTree
+            : workspace?.uiState?.showFileTree !== false,
+        jsonEditor: typeof saved.jsonEditor === 'boolean'
+            ? saved.jsonEditor
+            : DEFAULT_PANEL_VISIBILITY.jsonEditor,
+        tableEditor: typeof saved.tableEditor === 'boolean'
+            ? saved.tableEditor
+            : DEFAULT_PANEL_VISIBILITY.tableEditor
+    };
+}
 
-    if (!shouldShow) {
+function persistPanelVisibilityState(state) {
+    if (!workspace?.uiState) return;
+    workspace.uiState.panelVisibility = { ...state };
+    workspace.uiState.showFileTree = state.fileTree;
+    Workspace.persistWorkspace(workspace);
+}
+
+function updatePanelToggleButton(button, isActive) {
+    if (!button) return;
+    button.classList.toggle('is-active', isActive);
+    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+}
+
+function getPreferredFileTreeWidth() {
+    return resizerLayout.getManualFileTreeWidth() ?? DEFAULT_FILE_TREE_WIDTH;
+}
+
+function resetFileTreePanelWidthForFill() {
+    if (!EL.fileTreePanel) return;
+    EL.fileTreePanel.style.flex = '1 1 auto';
+    EL.fileTreePanel.style.width = '';
+}
+
+function applyPanelVisibility(options = {}) {
+    if (!EL.appContent || !EL.editorPane) return;
+    const persist = options.persist !== false;
+    const state = options.state || getPanelVisibilityState();
+    const editorPaneVisible = state.fileTree || state.jsonEditor;
+    const allHidden = !state.fileTree && !state.jsonEditor && !state.tableEditor;
+    const showPaneResizer = editorPaneVisible && state.tableEditor && !allHidden;
+    const showFileTreeResizer = state.fileTree && state.jsonEditor && editorPaneVisible;
+
+    if (!state.fileTree || !state.jsonEditor) {
         resizerLayout.stopFileTreeResizing();
     }
+    if (!showPaneResizer) {
+        resizerLayout.stopPaneResizing();
+    }
 
-    EL.fileTreePanel.classList.toggle('is-collapsed', !shouldShow);
-    EL.fileTreePanel.dataset.treeVisible = shouldShow ? 'true' : 'false';
+    EL.appContent.classList.toggle('is-panel-file-tree-hidden', !state.fileTree);
+    EL.appContent.classList.toggle('is-panel-json-editor-hidden', !state.jsonEditor);
+    EL.appContent.classList.toggle('is-panel-table-editor-hidden', !state.tableEditor);
+    EL.appContent.classList.toggle('is-editor-pane-hidden', !editorPaneVisible);
+    EL.appContent.classList.toggle('is-panel-empty', allHidden);
+    EL.appContent.classList.toggle('has-pane-resizer', showPaneResizer);
+    EL.appContent.classList.toggle('has-file-tree-resizer', showFileTreeResizer);
 
-    if (shouldShow) {
-        const nextWidth = resizerLayout.getManualFileTreeWidth() ?? DEFAULT_FILE_TREE_WIDTH;
-        resizerLayout.setManualFileTreeWidth(resizerLayout.applyFileTreeWidth(nextWidth, { persist: false }));
+    updatePanelToggleButton(EL.btnPanelFileTree, state.fileTree);
+    updatePanelToggleButton(EL.btnPanelJsonEditor, state.jsonEditor);
+    updatePanelToggleButton(EL.btnPanelTableEditor, state.tableEditor);
+
+    if (EL.fileTreePanel) {
+        EL.fileTreePanel.classList.toggle('is-collapsed', !state.fileTree);
+        EL.fileTreePanel.dataset.treeVisible = state.fileTree ? 'true' : 'false';
+    }
+
+    EL.editorPane.style.width = '';
+    EL.editorPane.style.flex = '';
+
+    if (editorPaneVisible && !state.tableEditor) {
+        EL.editorPane.style.flex = '1 1 auto';
+    } else if (state.fileTree && !state.jsonEditor && state.tableEditor) {
+        const width = getPreferredFileTreeWidth();
+        EL.editorPane.style.flex = `0 0 ${width}px`;
+        EL.editorPane.style.width = `${width}px`;
+    } else if (editorPaneVisible && state.tableEditor) {
+        const manualEditorWidth = resizerLayout.getManualEditorWidth();
+        if (Number.isFinite(manualEditorWidth)) {
+            resizerLayout.applyEditorWidth(manualEditorWidth, { persist: false });
+        }
+    }
+
+    if (state.fileTree && state.jsonEditor) {
+        resizerLayout.applyFileTreeWidth(getPreferredFileTreeWidth(), { persist: false });
+    } else if (state.fileTree) {
+        resetFileTreePanelWidthForFill();
     }
 
     closeTreeMenu();
-    if (persist && workspace?.uiState) {
-        workspace.uiState.showFileTree = shouldShow;
-        Workspace.persistWorkspace(workspace);
+    if (persist) {
+        persistPanelVisibilityState(state);
     }
 }
 
+function setPanelVisibility(panelKey, shouldShow, options = {}) {
+    const state = getPanelVisibilityState();
+    state[panelKey] = Boolean(shouldShow);
+    applyPanelVisibility({ ...options, state });
+}
+
+function togglePanelVisibility(panelKey) {
+    const state = getPanelVisibilityState();
+    state[panelKey] = !state[panelKey];
+    applyPanelVisibility({ state });
+}
+
+function setFileTreeVisibility(shouldShow, options = {}) {
+    setPanelVisibility('fileTree', shouldShow, options);
+}
+
 function isFileTreeVisible() {
-    return Boolean(EL.fileTreePanel && !EL.fileTreePanel.classList.contains('is-collapsed'));
+    return getPanelVisibilityState().fileTree;
+}
+
+function isJsonEditorPanelVisible() {
+    return getPanelVisibilityState().jsonEditor;
 }
 
 function updateLineNumbers() {
@@ -2764,8 +2841,8 @@ function getEditorMetrics() {
 }
 
 function handleWindowResize() {
-    const isFolded = EL.appContent.classList.contains('folded');
-    resizerLayout.handleWindowResize(isFolded);
+    resizerLayout.handleWindowResize(false);
+    applyPanelVisibility({ persist: false });
 }
 
 function setupWindowListeners() {
@@ -2841,34 +2918,6 @@ function setupEventListeners() {
         onFindClose: closeFindWidget,
         onReplaceOne: handleReplaceOne,
         onReplaceAll: handleReplaceAll,
-        onFoldEditor: () => {
-            const willFold = !EL.appContent.classList.contains('folded');
-            if (willFold) {
-                resizerLayout.stopPaneResizing();
-                resizerLayout.stopFileTreeResizing();
-                EL.appContent.classList.add('folded');
-                EL.editorPane.style.flex = '0 0 0px';
-                EL.editorPane.style.width = '0px';
-                return;
-            }
-
-            EL.appContent.classList.remove('folded');
-            EL.editorPane.style.width = '';
-            const manualEditorWidth = resizerLayout.getManualEditorWidth();
-            const manualFileTreeWidth = resizerLayout.getManualFileTreeWidth();
-            if (Number.isFinite(manualEditorWidth)) {
-                resizerLayout.applyEditorWidth(manualEditorWidth, { persist: false });
-                if (Number.isFinite(manualFileTreeWidth) && isFileTreeVisible()) {
-                    resizerLayout.applyFileTreeWidth(manualFileTreeWidth, { persist: false });
-                }
-                return;
-            }
-
-            EL.editorPane.style.flex = '';
-            if (isFileTreeVisible()) {
-                resizerLayout.applyFileTreeWidth(manualFileTreeWidth ?? DEFAULT_FILE_TREE_WIDTH, { persist: false });
-            }
-        },
         onFormat: runFormatAndSave,
         onToggleLineNumbers: applyLineNumberVisibility,
         onToggleFolders: () => {
@@ -2904,6 +2953,15 @@ function setupEventListeners() {
     }
     if (EL.btnTreeSearchClear) {
         EL.btnTreeSearchClear.addEventListener('click', clearTreeSearch);
+    }
+    if (EL.btnPanelFileTree) {
+        EL.btnPanelFileTree.addEventListener('click', () => togglePanelVisibility('fileTree'));
+    }
+    if (EL.btnPanelJsonEditor) {
+        EL.btnPanelJsonEditor.addEventListener('click', () => togglePanelVisibility('jsonEditor'));
+    }
+    if (EL.btnPanelTableEditor) {
+        EL.btnPanelTableEditor.addEventListener('click', () => togglePanelVisibility('tableEditor'));
     }
 }
 

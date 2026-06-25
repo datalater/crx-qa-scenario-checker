@@ -18,7 +18,6 @@ export function setupMainEventListeners(config) {
         onFindClose,
         onReplaceOne,
         onReplaceAll,
-        onFoldEditor,
         onFormat,
         onToggleLineNumbers,
         onToggleFolders,
@@ -70,7 +69,6 @@ export function setupMainEventListeners(config) {
         el.btnEditorReplaceAll.addEventListener('click', onReplaceAll);
     }
 
-    el.btnFoldEditor.addEventListener('click', onFoldEditor);
     el.btnFormat.addEventListener('click', onFormat);
     el.toggleLineNumbers.addEventListener('change', onToggleLineNumbers);
     el.btnToggleFolders.addEventListener('click', onToggleFolders);

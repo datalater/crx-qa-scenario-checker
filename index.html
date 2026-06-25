@@ -10,12 +10,15 @@
     <div class="app-container">
         <header class="app-header">
             <div class="logo">
-                <span class="icon">📋</span>
                 <h1 title="QA Scenario Checker">QA Scenario Checker</h1>
-                <span id="app-version" class="app-version" title="Current version">v-</span>
             </div>
             <div class="header-controls">
                 <div class="actions">
+                    <div class="panel-view-toggle" role="group" aria-label="Panel visibility">
+                        <button id="btn-panel-file-tree" class="panel-toggle-btn" type="button" title="Toggle File tree" aria-label="Toggle File tree" aria-pressed="true">File tree</button>
+                        <button id="btn-panel-json-editor" class="panel-toggle-btn" type="button" title="Toggle JSON Editor" aria-label="Toggle JSON Editor" aria-pressed="true">JSON Editor</button>
+                        <button id="btn-panel-table-editor" class="panel-toggle-btn" type="button" title="Toggle Table Editor" aria-label="Toggle Table Editor" aria-pressed="true">Table Editor</button>
+                    </div>
                     <div class="bound-file-group">
                         <span id="bound-file-status" class="bound-file-status" aria-live="polite">No file bound</span>
                         <input
@@ -82,16 +85,12 @@
         </header>
 
         <main class="app-content">
-            <button id="btn-fold-editor" class="btn-fold-toggle" type="button" title="Toggle Editor">
-                <svg class="fold-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <title>Toggle editor</title>
-                    <path d="M10 12L6 8L10 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-            </button>
             <section class="pane editor-pane" id="editor-pane">
                 <div class="pane-header">
-                    <h2>JSON Editor</h2>
-                    <button id="btn-keyboard-shortcuts" class="btn-help" type="button" title="Keyboard shortcuts">?</button>
+                    <div class="pane-title-group">
+                        <h2>JSON Editor</h2>
+                        <button id="btn-keyboard-shortcuts" class="btn-help" type="button" title="Keyboard shortcuts">?</button>
+                    </div>
                     <div class="editor-header-controls">
                         <div id="save-indicator" class="save-indicator is-saved" role="status" aria-live="polite">
                             <span id="save-indicator-time" class="save-indicator-time">0000-00-00 00:00:00</span>
@@ -203,6 +202,9 @@
                     </div>
                 </div>
             </section>
+            <div id="panel-empty-state" class="panel-empty-state" role="status" aria-live="polite">
+                File tree, JSON Editor, Table Editor 중 하나 이상을 선택하면 내용이 표시됩니다.
+            </div>
         </main>
     </div>
     <div id="tree-context-menu" class="tree-context-menu" role="menu" hidden>

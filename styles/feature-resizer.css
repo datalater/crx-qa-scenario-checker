@@ -17,68 +17,13 @@
     position: relative;
   }
 
-  .btn-fold-toggle {
-    position: absolute;
-    left: 10px;
-    top: 8px;
-    z-index: 50;
-    background: transparent;
-    border: 1px solid transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
-    padding: 0;
-    border-radius: 6px;
-  }
-
-  .btn-fold-toggle:hover {
-    color: var(--text-primary);
-    background: var(--accent-secondary);
-    border-color: var(--border-color);
-  }
-
-  .fold-icon {
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    transform-origin: center;
-  }
-
-  .app-content.folded .btn-fold-toggle .fold-icon {
-    transform: rotate(180deg);
-  }
-
   .editor-pane,
   .checklist-pane {
     min-width: 0;
   }
 
-  .editor-pane.folded,
-  .app-content.folded .editor-pane {
-    flex: 0 0 0px;
-    width: 0;
-    min-width: 0;
-    margin-right: -1px;
-  }
-
-  .app-content.folded .editor-pane + .pane-divider {
-    display: none;
-  }
-
-  .app-content.folded .editor-pane > * {
-    visibility: hidden;
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .app-content.folded .pane-resizer {
-    display: none;
-  }
-
   .pane-resizer {
+    display: none;
     width: var(--pane-resizer-width);
     background-color: var(--bg-secondary);
     border-left: 1px solid var(--border-color);
@@ -90,6 +35,10 @@
     position: relative;
   }
 
+  .app-content.has-pane-resizer .pane-resizer {
+    display: block;
+  }
+
   .pane-resizer:hover,
   .pane-resizer.resizing {
     background-color: var(--accent-primary);
@@ -97,12 +46,17 @@
   }
 
   .file-tree-resizer {
+    display: none;
     flex: 0 0 var(--tree-resizer-width);
     width: var(--tree-resizer-width);
     touch-action: none;
     cursor: col-resize;
     position: relative;
     background: transparent;
+  }
+
+  .app-content.has-file-tree-resizer .file-tree-resizer {
+    display: block;
   }
 
   .file-tree-resizer::before {
