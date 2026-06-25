@@ -179,6 +179,19 @@ export function renderFileTree(container, workspace, options = {}) {
 
     if (!container || !workspace) return;
     container.innerHTML = '';
+    if (typeof onOpenContextMenu === 'function') {
+        container.oncontextmenu = (event) => {
+            event.preventDefault();
+            onOpenContextMenu({
+                type: 'empty',
+                id: null,
+                x: event.clientX,
+                y: event.clientY
+            });
+        };
+    } else {
+        container.oncontextmenu = null;
+    }
 
     const activeFile = getActiveFile(workspace);
     const activeFolderId = activeFile ? activeFile.folderId : null;

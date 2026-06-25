@@ -92,6 +92,8 @@ const EL = {
     btnTreeSearchClear: document.getElementById('btn-tree-search-clear'),
     fileTree: document.getElementById('file-tree'),
     treeContextMenu: document.getElementById('tree-context-menu'),
+    treeContextNewFolder: document.getElementById('tree-context-new-folder'),
+    treeContextNewFile: document.getElementById('tree-context-new-file'),
     treeContextCopy: document.getElementById('tree-context-copy'),
     treeContextRename: document.getElementById('tree-context-rename'),
     treeContextDelete: document.getElementById('tree-context-delete'),
@@ -1084,8 +1086,18 @@ function openTreeContextMenu(target) {
 
     treeContextTarget = target;
     const canMutate = treeMutationsEnabled;
+    const isEmptyTarget = target.type === 'empty';
 
+    if (EL.treeContextNewFolder) {
+        EL.treeContextNewFolder.hidden = false;
+        EL.treeContextNewFolder.disabled = !canMutate;
+    }
+    if (EL.treeContextNewFile) {
+        EL.treeContextNewFile.hidden = false;
+        EL.treeContextNewFile.disabled = !canMutate;
+    }
     if (EL.treeContextRename) {
+        EL.treeContextRename.hidden = isEmptyTarget;
         EL.treeContextRename.disabled = !canMutate;
         EL.treeContextRename.textContent = target.type === 'folder' ? '폴더 이름 변경' : '파일 이름 변경';
     }
@@ -1096,6 +1108,7 @@ function openTreeContextMenu(target) {
         EL.treeContextCopy.textContent = '파일 복사';
     }
     if (EL.treeContextDelete) {
+        EL.treeContextDelete.hidden = isEmptyTarget;
         EL.treeContextDelete.disabled = !canMutate;
         EL.treeContextDelete.textContent = target.type === 'folder' ? '폴더 삭제' : '파일 삭제';
     }
@@ -1104,9 +1117,7 @@ function openTreeContextMenu(target) {
     }
 
     const menuWidth = 180;
-    const menuHeight = canMutate
-        ? (target.type === 'file' ? 126 : 90)
-        : (target.type === 'file' ? 156 : 120);
+    const menuHeight = 220;
     const maxLeft = Math.max(8, window.innerWidth - menuWidth - 8);
     const maxTop = Math.max(8, window.innerHeight - menuHeight - 8);
     const left = Math.min(Math.max(8, target.x), maxLeft);
@@ -1115,6 +1126,10 @@ function openTreeContextMenu(target) {
     EL.treeContextMenu.style.left = `${left}px`;
     EL.treeContextMenu.style.top = `${top}px`;
     EL.treeContextMenu.hidden = false;
+
+    const actualMenuHeight = EL.treeContextMenu.offsetHeight || menuHeight;
+    const adjustedTop = Math.min(Math.max(8, target.y), Math.max(8, window.innerHeight - actualMenuHeight - 8));
+    EL.treeContextMenu.style.top = `${adjustedTop}px`;
 }
 
 function isDirectoryWritableMode() {
@@ -1183,6 +1198,19 @@ function closeTreeContextMenu() {
     treeContextTarget = null;
 }
 
+function getRootFolderId() {
+    return workspace?.folders?.[0]?.id || null;
+}
+
+function getContextTargetFolderId() {
+    if (!treeContextTarget) return getRootFolderId();
+    if (treeContextTarget.type === 'folder') return treeContextTarget.id;
+    if (treeContextTarget.type === 'file') {
+        return Workspace.getFileById(workspace, treeContextTarget.id)?.folderId || getRootFolderId();
+    }
+    return getRootFolderId();
+}
+
 function openChecklistContextMenu(target) {
     if (!EL.checklistContextMenu || target == null) return;
     checklistContextTarget = target;
@@ -1248,6 +1276,7 @@ function handleChecklistContextColorClick(event) {
 
 async function handleTreeContextRename() {
     if (!treeContextTarget || !treeMutationsEnabled) return;
+    if (treeContextTarget.type === 'empty') return;
     if (treeContextTarget.type === 'folder') {
         await renameFolderById(treeContextTarget.id);
     } else {
@@ -1258,6 +1287,7 @@ async function handleTreeContextRename() {
 
 async function handleTreeContextDelete() {
     if (!treeContextTarget || !treeMutationsEnabled) return;
+    if (treeContextTarget.type === 'empty') return;
     if (treeContextTarget.type === 'folder') {
         await deleteFolderById(treeContextTarget.id);
     } else {
@@ -1273,6 +1303,20 @@ function handleTreeContextCopy() {
     const targetFileId = treeContextTarget.id;
     closeTreeContextMenu();
     void duplicateFileById(targetFileId);
+}
+
+function handleTreeContextNewFolder() {
+    if (!treeContextTarget || !treeMutationsEnabled) return;
+    const parentFolderId = getContextTargetFolderId();
+    closeTreeContextMenu();
+    void createFolderFromUi({ parentFolderId });
+}
+
+function handleTreeContextNewFile() {
+    if (!treeContextTarget || !treeMutationsEnabled) return;
+    const parentFolderId = getContextTargetFolderId();
+    closeTreeContextMenu();
+    void createFileFromUi({ folderId: parentFolderId });
 }
 
 async function renameFolderById(id) {
@@ -1650,13 +1694,13 @@ async function duplicateFileById(id) {
     }
 }
 
-async function createFolderFromUi() {
+async function createFolderFromUi(options = {}) {
     if (!treeMutationsEnabled) {
         alert('Folder mode is read-only in this version.');
         return;
     }
 
-    const selectedFolderId = workspace.uiState.selectedFolderId || workspace.folders[0]?.id || null;
+    const selectedFolderId = options.parentFolderId || workspace.uiState.selectedFolderId || getRootFolderId();
     const name = window.prompt('Folder name', 'new-folder');
     if (!name) return;
     const trimmedName = name.trim();
@@ -1692,18 +1736,26 @@ async function createFolderFromUi() {
         }
     }
 
-    const folder = Workspace.createFolderRecord(trimmedName);
+    const parentFolder = Workspace.getFolderById(workspace, selectedFolderId);
+    const nextName = Workspace.getNextAvailableFolderName(workspace, trimmedName);
+    const nextPath = parentFolder?.path ? `${parentFolder.path}/${nextName}` : nextName;
+    const folder = Workspace.createFolderRecord(nextName, selectedFolderId || null, nextPath);
     workspace.folders.push(folder);
+    workspace.uiState.selectedFolderId = folder.id;
+    workspace.uiState.lastSelectionType = 'folder';
+    if (selectedFolderId && !workspace.uiState.expandedFolderIds.includes(selectedFolderId)) {
+        workspace.uiState.expandedFolderIds.push(selectedFolderId);
+    }
     persist();
 }
 
-async function createFileFromUi() {
+async function createFileFromUi(options = {}) {
     if (!treeMutationsEnabled) {
         alert('Folder mode is read-only in this version.');
         return;
     }
 
-    const folderId = workspace.uiState.selectedFolderId || workspace.folders[0]?.id;
+    const folderId = options.folderId || workspace.uiState.selectedFolderId || getRootFolderId();
     if (!folderId) return;
     const defaultName = Workspace.getNextAvailableFileName(workspace, folderId, 'scenario.json');
     const name = window.prompt('File name', defaultName);
@@ -2866,6 +2918,12 @@ function setupWindowListeners() {
     });
     if (EL.treeContextRename) {
         EL.treeContextRename.addEventListener('click', handleTreeContextRename);
+    }
+    if (EL.treeContextNewFolder) {
+        EL.treeContextNewFolder.addEventListener('click', handleTreeContextNewFolder);
+    }
+    if (EL.treeContextNewFile) {
+        EL.treeContextNewFile.addEventListener('click', handleTreeContextNewFile);
     }
     if (EL.treeContextCopy) {
         EL.treeContextCopy.addEventListener('click', handleTreeContextCopy);
