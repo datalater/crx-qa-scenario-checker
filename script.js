@@ -2018,7 +2018,11 @@ async function bindAndLoadFromDirectoryHandle(handle, options = {}) {
 
     if (!readGranted) {
         if (isRestore) {
-            updateBoundFilePathInput('Not connected: re-open folder to load disk tree', 'warning');
+            boundDirectoryHandle = handle;
+            boundDirectoryWriteEnabled = false;
+            setDirectDiskSyncAvailable(false);
+            updateFolderWritePermissionUi();
+            updateBoundFilePathInput('Not connected: click Grant Access to continue', 'warning');
             return false;
         }
         alert('Open folder failed: read permission denied');
@@ -2062,7 +2066,7 @@ async function bindAndLoadFromDirectoryHandle(handle, options = {}) {
         updateBoundFilePathInput(isRestore ? `Folder reconnected: ${loaded.loadedJsonFileCount} JSON files (direct save enabled)` : buildFolderStatusMessage('direct-save'), 'bound');
         scheduleDirectoryFileFlush();
     } else {
-        updateBoundFilePathInput(isRestore ? `Folder reconnected: ${loaded.loadedJsonFileCount} JSON files (read-only: click Enable Sync)` : buildFolderStatusMessage('read-only'), 'warning');
+        updateBoundFilePathInput(isRestore ? `Folder reconnected: ${loaded.loadedJsonFileCount} JSON files (read-only: click Grant Access)` : buildFolderStatusMessage('read-only'), 'warning');
     }
 
     return true;
@@ -2213,7 +2217,7 @@ function buildFolderStatusMessage(mode) {
         return `Folder loaded: ${count} JSON files (direct save enabled)`;
     }
     if (mode === 'read-only') {
-        return `Folder loaded: ${count} JSON files (read-only: click Enable Sync)`;
+        return `Folder loaded: ${count} JSON files (read-only: click Grant Access)`;
     }
     return `Folder loaded: ${count} JSON files`;
 }
@@ -2223,8 +2227,8 @@ function updateFolderWritePermissionUi() {
     const shouldShow = Boolean(boundDirectoryHandle && !boundDirectoryWriteEnabled);
     EL.btnRequestWrite.hidden = !shouldShow;
     EL.btnRequestWrite.title = shouldShow
-        ? '디스크 동기화가 꺼져 있습니다. 클릭하면 폴더 쓰기 권한을 다시 요청해 자동 동기화를 켭니다.'
-        : '폴더 쓰기 권한이 허용되어 자동 동기화가 켜져 있습니다.';
+        ? 'Click to grant folder write access.'
+        : 'Folder write access granted.';
 }
 
 function buildFileFingerprint(file) {
@@ -2240,8 +2244,14 @@ function isSameFileFingerprint(left, right) {
 }
 
 async function handleRequestFolderWritePermission() {
-    if (!boundDirectoryHandle) return;
+    if (!boundDirectoryHandle) {
+        updateBoundFilePathInput('Not connected: re-open folder to grant access', 'warning');
+        return;
+    }
 
+    const handle = boundDirectoryHandle;
+    const wasDirectoryLoaded = workspace?.uiState?.sourceMode === 'directory'
+        && directoryHandleByFolderId.size > 0;
     const granted = await ensureDirectoryReadWritePermission(boundDirectoryHandle);
     boundDirectoryWriteEnabled = granted;
     setDirectDiskSyncAvailable(granted);
@@ -2250,6 +2260,11 @@ async function handleRequestFolderWritePermission() {
     if (!granted) {
         setTreeMutationsEnabled(false);
         updateBoundFilePathInput(buildFolderStatusMessage('read-only'), 'warning');
+        return;
+    }
+
+    if (!wasDirectoryLoaded) {
+        await bindAndLoadFromDirectoryHandle(handle);
         return;
     }
 
