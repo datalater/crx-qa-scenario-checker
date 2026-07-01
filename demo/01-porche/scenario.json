@@ -1,0 +1,345 @@
+{
+  "scenario": "scenario.json",
+  "prd": "https://example.com/docs/luxury-car-configurator-prd",
+  "figma": {
+    "차량 옵션 구성 화면": "https://www.figma.com/design/example/car-configurator?node-id=100-100&m=dev",
+    "공통 컴포넌트": "https://www.figma.com/design/example/car-configurator?node-id=200-200&m=dev",
+    "가격 요약 패널": "https://www.figma.com/design/example/car-configurator?node-id=300-300&m=dev",
+    "옵션 충돌 모달": "https://www.figma.com/design/example/car-configurator?node-id=400-400&m=dev"
+  },
+  "dev": [
+    "pnpm --filter ./apps/car-configurator dev"
+  ],
+  "branch": "feature/car-configurator-option-flow",
+  "steps": [
+    {
+      "divider": "#1 차량 기본 모델을 선택한다"
+    },
+    {
+      "given": [
+        "사용자가 차량 옵션 구성 페이지에 진입한 경우"
+      ],
+      "when": [],
+      "then": [
+        "기본 모델 선택 영역을 표시한다",
+        "`\\n`",
+        "- {section} 모델 선택",
+        "- {option} Coupe",
+        "- {option} Cabriolet",
+        "- {option} Track Edition",
+        "`\\n`",
+        "우측 가격 요약 패널을 표시한다",
+        "- 기본 차량 가격",
+        "- 선택된 옵션 가격",
+        "- 예상 총액"
+      ],
+      "pass": true
+    },
+    {
+      "given": [
+        "사용자가 아직 모델을 선택하지 않은 경우"
+      ],
+      "when": [
+        "다음 단계 버튼을 클릭한다"
+      ],
+      "then": [
+        "모델 선택 필요 메시지를 표시한다",
+        "- {message} 먼저 차량 모델을 선택해주세요.",
+        "`\\n`",
+        "다음 단계로 이동하지 않는다"
+      ],
+      "pass": true
+    },
+    {
+      "given": [
+        "사용자가 Coupe 모델을 선택한 경우"
+      ],
+      "when": [],
+      "then": [
+        "Coupe 모델을 선택 상태로 표시한다",
+        "- 선택 카드에 강조 스타일을 적용한다",
+        "- 우측 가격 요약 패널에 Coupe 기본 가격을 반영한다",
+        "- 외장 색상 선택 단계가 활성화된다"
+      ],
+      "pass": true
+    },
+    {
+      "divider": "#2 외장 색상과 휠 옵션을 선택한다"
+    },
+    {
+      "given": [
+        "사용자가 Coupe 모델을 선택한 상태"
+      ],
+      "when": [
+        "외장 색상으로 Racing Yellow를 선택한다"
+      ],
+      "then": [
+        "차량 미리보기 이미지를 Racing Yellow 색상으로 변경한다",
+        "- 선택된 색상 카드에 강조 스타일을 적용한다",
+        "- 가격 요약 패널에 색상 옵션 가격을 반영한다"
+      ],
+      "pass": true
+    },
+    {
+      "given": [
+        "사용자가 Track Edition 모델을 선택한 상태"
+      ],
+      "when": [
+        "Comfort Wheel 옵션을 선택한다"
+      ],
+      "then": [
+        "옵션 충돌 모달을 표시한다",
+        "- {title} 선택할 수 없는 옵션입니다",
+        "- {description} Track Edition 모델에는 Performance Wheel만 선택할 수 있습니다.",
+        "- {cta} 확인",
+        "`\\n`",
+        "Comfort Wheel 옵션은 선택되지 않는다"
+      ],
+      "pass": true
+    },
+    {
+      "given": [
+        "사용자가 Coupe 모델을 선택한 상태",
+        "외장 색상으로 Racing Yellow를 선택한 상태"
+      ],
+      "when": [
+        "21-inch Sport Wheel 옵션을 선택한다"
+      ],
+      "then": [
+        "21-inch Sport Wheel 옵션을 선택 상태로 표시한다",
+        "- 차량 미리보기 이미지에 선택한 휠을 반영한다",
+        "- 가격 요약 패널에 휠 옵션 가격을 추가한다",
+        "- 예상 총액을 다시 계산한다"
+      ],
+      "pass": true
+    },
+    {
+      "divider": "#3 실내 옵션을 선택한다"
+    },
+    {
+      "given": [
+        "사용자가 차량 모델과 외장 옵션을 선택한 상태"
+      ],
+      "when": [
+        "실내 색상으로 Black Leather를 선택한다"
+      ],
+      "then": [
+        "실내 미리보기 이미지를 Black Leather로 변경한다",
+        "- 선택된 실내 색상 카드에 강조 스타일을 적용한다",
+        "- 가격 요약 패널에 실내 옵션 가격을 반영한다"
+      ],
+      "pass": true
+    },
+    {
+      "given": [
+        "사용자가 Cabriolet 모델을 선택한 상태"
+      ],
+      "when": [
+        "Carbon Bucket Seat 옵션을 선택한다"
+      ],
+      "then": [
+        "주의 안내 모달을 표시한다",
+        "- {title} 장거리 주행에 적합하지 않을 수 있습니다",
+        "- {description} Carbon Bucket Seat는 스포츠 주행에 최적화된 옵션입니다.",
+        "- {cta} 그래도 선택하기",
+        "- {cta} 취소"
+      ],
+      "pass": true
+    },
+    {
+      "given": [
+        "Carbon Bucket Seat 주의 안내 모달이 표시된 상태"
+      ],
+      "when": [
+        "사용자가 그래도 선택하기 버튼을 클릭한다"
+      ],
+      "then": [
+        "Carbon Bucket Seat 옵션을 선택 상태로 표시한다",
+        "- 가격 요약 패널에 시트 옵션 가격을 반영한다",
+        "- 모달을 닫는다"
+      ],
+      "pass": true
+    },
+    {
+      "divider": "#4 드라이빙 패키지를 선택한다"
+    },
+    {
+      "given": [
+        "사용자가 Coupe 모델을 선택한 상태"
+      ],
+      "when": [
+        "Sport Chrono Package를 선택한다"
+      ],
+      "then": [
+        "Sport Chrono Package를 선택 상태로 표시한다",
+        "- 가격 요약 패널에 패키지 가격을 반영한다",
+        "- 차량 상세 설명 영역에 패키지 설명을 표시한다"
+      ],
+      "pass": true
+    },
+    {
+      "given": [
+        "사용자가 Track Edition 모델을 선택한 상태"
+      ],
+      "when": [
+        "Adaptive Comfort Suspension 옵션을 선택한다"
+      ],
+      "then": [
+        "옵션 충돌 모달을 표시한다",
+        "- {title} Track Edition과 함께 선택할 수 없습니다",
+        "- {description} Track Edition에는 전용 스포츠 서스펜션이 기본 적용됩니다.",
+        "- {cta} 확인",
+        "`\\n`",
+        "Adaptive Comfort Suspension 옵션은 선택되지 않는다"
+      ],
+      "pass": true
+    },
+    {
+      "given": [
+        "사용자가 Sport Chrono Package를 선택한 상태"
+      ],
+      "when": [
+        "Sport Chrono Package 선택을 해제한다"
+      ],
+      "then": [
+        "Sport Chrono Package 선택 상태를 해제한다",
+        "- 가격 요약 패널에서 패키지 가격을 제거한다",
+        "- 예상 총액을 다시 계산한다"
+      ],
+      "pass": true
+    },
+    {
+      "divider": "#5 가격 요약과 선택 옵션을 검증한다"
+    },
+    {
+      "given": [
+        "사용자가 모델, 외장 색상, 휠, 실내 옵션, 드라이빙 패키지를 선택한 상태"
+      ],
+      "when": [],
+      "then": [
+        "우측 가격 요약 패널에 선택한 옵션 목록을 표시한다",
+        "`\\n`",
+        "- 기본 모델",
+        "- 외장 색상",
+        "- 휠",
+        "- 실내 색상",
+        "- 시트",
+        "- 드라이빙 패키지",
+        "`\\n`",
+        "각 항목의 가격을 표시한다",
+        "예상 총액을 표시한다"
+      ],
+      "pass": true
+    },
+    {
+      "given": [
+        "사용자가 선택한 옵션 중 유료 옵션이 없는 경우"
+      ],
+      "when": [],
+      "then": [
+        "가격 요약 패널에 기본 차량 가격만 표시한다",
+        "- 선택 옵션 가격은 0원으로 표시한다",
+        "- 예상 총액은 기본 차량 가격과 동일하게 표시한다"
+      ],
+      "pass": true
+    },
+    {
+      "given": [
+        "사용자가 여러 유료 옵션을 선택한 경우"
+      ],
+      "when": [
+        "선택한 옵션 중 하나를 해제한다"
+      ],
+      "then": [
+        "해제한 옵션을 가격 요약 패널에서 제거한다",
+        "- 예상 총액을 즉시 다시 계산한다",
+        "- 차량 미리보기에서 해제한 옵션을 제거한다"
+      ],
+      "pass": true
+    },
+    {
+      "divider": "#6 구성 완료 및 상담 요청을 처리한다"
+    },
+    {
+      "given": [
+        "사용자가 필수 옵션을 모두 선택한 상태"
+      ],
+      "when": [
+        "구성 완료 버튼을 클릭한다"
+      ],
+      "then": [
+        "구성 완료 페이지로 이동한다",
+        "- 선택한 차량 이미지 미리보기를 표시한다",
+        "- 최종 옵션 목록을 표시한다",
+        "- 예상 총액을 표시한다",
+        "- 상담 요청 버튼을 표시한다"
+      ],
+      "pass": true
+    },
+    {
+      "given": [
+        "사용자가 구성 완료 페이지에 진입한 상태"
+      ],
+      "when": [
+        "상담 요청 버튼을 클릭한다"
+      ],
+      "then": [
+        "상담 요청 폼을 표시한다",
+        "- 이름 입력 필드",
+        "- 이메일 입력 필드",
+        "- 연락처 입력 필드",
+        "- 희망 전시장 선택 필드",
+        "- 개인정보 동의 체크박스",
+        "- 제출 버튼"
+      ],
+      "pass": true
+    },
+    {
+      "given": [
+        "상담 요청 폼이 표시된 상태",
+        "사용자가 필수 입력값을 모두 입력하지 않은 상태"
+      ],
+      "when": [
+        "제출 버튼을 클릭한다"
+      ],
+      "then": [
+        "입력 오류 메시지를 표시한다",
+        "- 이름을 입력해주세요.",
+        "- 이메일을 입력해주세요.",
+        "- 연락처를 입력해주세요.",
+        "- 개인정보 수집 및 이용에 동의해주세요.",
+        "`\\n`",
+        "상담 요청을 제출하지 않는다"
+      ],
+      "pass": true
+    },
+    {
+      "given": [
+        "상담 요청 폼이 표시된 상태",
+        "사용자가 필수 입력값을 모두 입력한 상태"
+      ],
+      "when": [
+        "제출 버튼을 클릭한다"
+      ],
+      "then": [
+        "상담 요청 완료 메시지를 표시한다",
+        "- {title} 상담 요청이 접수되었습니다",
+        "- {description} 담당자가 입력하신 연락처로 안내드릴 예정입니다.",
+        "- {cta} 확인"
+      ],
+      "pass": true
+    },
+    {
+      "divider": {
+        "value": "todo\n- 옵션 충돌 모달에서 대체 옵션을 바로 추천할지 확인한다.\n- 모바일 화면에서 가격 요약 패널을 하단 고정 영역으로 표시할지 확인한다.\n- 상담 요청 완료 후 구성 내역을 이메일로 발송할지 확인한다.",
+        "color": "#d29922"
+      }
+    },
+    {
+      "given": [],
+      "when": [],
+      "then": [],
+      "pass": false
+    }
+  ]
+}
