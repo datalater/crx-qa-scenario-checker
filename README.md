@@ -9,6 +9,7 @@ QA Scenario Checker는 QA 시나리오 JSON을 편집하고, Given/When/Then 체
 - [주요 기능](#주요-기능)
 - [설치](#설치)
 - [개발](#개발)
+- [데모 폴더](#데모-폴더)
 - [사용 방법](#사용-방법)
   - [시나리오 작성](#시나리오-작성)
   - [노트 (notes)](#노트-notes)
@@ -50,6 +51,28 @@ npm install
 npm run build   # src/codemirror-entry.js -> vendor/codemirror/codemirror.bundle.js
 npm test
 ```
+
+## 데모 폴더
+
+| 폴더 | 커밋 | 용도 |
+| --- | --- | --- |
+| `demo/` | 포함 | 가상 데이터로 만든 공개 예제 |
+| `demo-private/` | 제외 | 실제 제품 문서로 만든 시나리오 |
+
+이 저장소는 공개되어 있습니다. 실제 기획 문서에서 만든 시나리오는 URL과 요구사항 원문이 그대로 남으므로 `demo-private/` 아래에 두세요. `.gitignore` 가 폴더 전체를 제외하므로 프로젝트를 추가할 때 설정을 바꿀 필요가 없습니다.
+
+```
+demo/
+  01-porche/
+    scenario.json      가상 예제 (커밋됨)
+
+demo-private/          전체 제외
+  amr-001-002/
+    prd.md             원문 덤프
+    scenario.json      원문에서 만든 시나리오
+```
+
+원문과 시나리오를 같은 폴더에 두면 대조하기 쉽고, 프로젝트가 끝나면 폴더 하나만 지우면 됩니다. 폴더를 가져올 때 `.json` 만 읽으므로 `prd.md` 가 함께 있어도 문제가 없습니다.
 
 ## 사용 방법
 

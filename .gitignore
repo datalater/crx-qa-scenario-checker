@@ -3,9 +3,7 @@ node_modules/
 *.crx
 *.pem
 
-# Fetched source documents (PRD dumps and similar) stay local.
-.cache/
-
-# Scenarios built from real internal documents. This repository is public, so
-# only fictional demos (see demo/01-porche) belong in it.
-demo/02-amr/
+# Scenarios built from real product documents, plus the source documents they
+# came from. This repository is public, so anything derived from internal specs
+# stays here and only fictional demos live in demo/.
+demo-private/
