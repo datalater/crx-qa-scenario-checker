@@ -213,6 +213,8 @@
                                     <span class="checklist-filter-swatch checklist-filter-swatch--none"></span>Dividers only
                                 </button>
                                 <div class="checklist-filter-separator" role="separator"></div>
+                                <div role="group" aria-labelledby="checklist-notes-group-label">
+                                <div id="checklist-notes-group-label" class="checklist-filter-group-label">Notes</div>
                                 <button class="checklist-filter-item" type="button" role="option" data-filter="note">
                                     <span class="checklist-filter-swatch is-tone-note"></span>Note
                                 </button>
@@ -228,6 +230,7 @@
                                 <button class="checklist-filter-item" type="button" role="option" data-filter="caution">
                                     <span class="checklist-filter-swatch is-tone-caution"></span>Caution
                                 </button>
+                                </div>
                             </div>
                         </div>
                         <span
@@ -312,10 +315,11 @@
         <div class="step-detail-body">
             <div class="step-detail-section-head">
                 <h4>Notes</h4>
-                <button id="step-detail-add-note" class="step-detail-add-btn" type="button">+ Add note</button>
+                <button id="shared-notes-library" type="button" class="step-detail-add-btn">공유 노트 목록</button>
+                <button id="step-detail-add-note" class="step-detail-add-btn" type="button">+ Add</button>
             </div>
             <div id="step-detail-notes" class="step-detail-notes"></div>
-            <p id="step-detail-notes-empty" class="step-detail-empty">아직 노트가 없습니다. Add note로 추가하세요.</p>
+            <p id="step-detail-notes-empty" class="step-detail-empty">아직 노트가 없습니다. + Add로 추가하세요.</p>
         </div>
     </aside>
     <div id="keyboard-shortcuts-backdrop" class="shortcuts-backdrop is-hidden" aria-hidden="true"></div>

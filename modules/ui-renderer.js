@@ -170,6 +170,7 @@ export function normalizeNoteEntry(value, options = {}) {
     }
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
 
+    if (typeof value.ref === 'string') return { ref: value.ref };
     const label = typeof value.label === 'string' ? value.label.trim() : '';
     const source = Array.isArray(value.blocks) ? value.blocks : [];
     const blocks = [];
@@ -214,7 +215,7 @@ function convertLegacyRefToNotes(legacyRef) {
  *   note: [{ type, value }]          -> flat block list, wrapped in one note
  *   ref:  [{ slug, link, text }]     -> one note per ref
  */
-export function getChecklistNotes(step) {
+export function getChecklistNotes(step, scenario = {}) {
     const notes = [];
 
     if (step?.ref !== undefined && step?.ref !== null) {
@@ -246,7 +247,13 @@ export function getChecklistNotes(step) {
         // to type into it, so dropping it would make the card disappear.
         step.notes.forEach((item) => {
             const note = normalizeNoteEntry(item, { keepEmpty: true });
-            if (note) notes.push(note);
+            if (note?.ref !== undefined) {
+                const source = Object.hasOwn(scenario.sharedNotes || {}, note.ref)
+                    ? scenario.sharedNotes[note.ref] : null;
+                const resolved = source && !source.ref
+                    ? normalizeNoteEntry(source, { keepEmpty: true }) : null;
+                notes.push({ ...(resolved || { label: `Missing: ${note.ref}`, blocks: [], tone: 'caution' }), ref: note.ref, missing: !resolved });
+            } else if (note) notes.push(note);
         });
     }
 
@@ -255,6 +262,7 @@ export function getChecklistNotes(step) {
 
 export function serializeNotes(notes) {
     return notes.map((note) => {
+        if (typeof note.ref === 'string') return { ref: note.ref };
         const serialized = { label: note.label || '' };
         const tone = normalizeNoteTone(note.tone);
         if (tone) serialized.tone = tone;
@@ -273,6 +281,48 @@ export function hasLegacyChecklistNoteShape(step) {
     return false;
 }
 
+export function mergeSharedNotes(scenario, sourceId, targetId) {
+    const registry = scenario?.sharedNotes;
+    if (!registry || sourceId === targetId
+        || !Object.hasOwn(registry, sourceId) || !Object.hasOwn(registry, targetId)) return false;
+    const source = registry[sourceId];
+    const target = registry[targetId];
+    if (!source || !target || source.ref !== undefined || target.ref !== undefined) return false;
+    const blocks = [...(target.blocks || []), ...structuredClone(source.blocks || [])];
+    // Only rewrite rows using the source; preserve unrelated notes and ordering.
+    const updates = (scenario.steps || []).filter(step => step?.notes?.some(note => note?.ref === sourceId))
+        .map(step => {
+            let linked = false;
+            const notes = step.notes.flatMap(note => {
+                if (note?.ref !== sourceId && note?.ref !== targetId) return [note];
+                if (linked) return [];
+                linked = true;
+                return [{ ref: targetId }];
+            });
+            return { step, notes };
+        });
+    target.blocks = blocks;
+    updates.forEach(({ step, notes }) => { step.notes = notes; });
+    delete registry[sourceId];
+    return true;
+}
+
+export function mergeLocalNoteIntoShared(step, scenario, noteIndex, id) {
+    const notes = getChecklistNotes(step, scenario);
+    const source = notes[noteIndex];
+    const target = Object.hasOwn(scenario.sharedNotes || {}, id) ? scenario.sharedNotes[id] : null;
+    if (!source || source.ref !== undefined || !target || target.ref !== undefined) return false;
+    target.blocks = [...(target.blocks || []), ...structuredClone(source.blocks || [])];
+    // Preserve the shared title/tone and avoid duplicate references on this row.
+    const alreadyLinked = notes.some(note => note.ref === id);
+    if (alreadyLinked) notes.splice(noteIndex, 1);
+    else notes[noteIndex] = { ref: id };
+    step.notes = serializeNotes(notes);
+    delete step.note;
+    delete step.ref;
+    return true;
+}
+
 export function createEmptyNoteEntry() {
     return { label: '', blocks: [] };
 }
@@ -281,8 +331,8 @@ export function createEmptyNoteEntry() {
  * Builds one chip per note for the table. The label is what the user typed;
  * without one, fall back to a link label, its host, then a generic index.
  */
-export function getChecklistNoteChips(step) {
-    return getChecklistNotes(step).map((note, noteIndex) => {
+export function getChecklistNoteChips(step, scenario) {
+    return getChecklistNotes(step, scenario).map((note, noteIndex) => {
         const linkBlock = note.blocks.find(block => block.type === 'link');
         let label = note.label;
         if (!label && linkBlock) {
@@ -296,7 +346,7 @@ export function getChecklistNoteChips(step) {
 
         return {
             noteIndex,
-            label,
+            label: note.ref ? `🔗 ${label}` : label,
             link,
             hasLink: Boolean(link),
             tone: normalizeNoteTone(note.tone),
@@ -308,6 +358,7 @@ export function getChecklistNoteChips(step) {
 export const CHECKLIST_FILTERS = ['all', 'outline', ...NOTE_TONES];
 
 export function normalizeChecklistFilter(value) {
+    if (typeof value === 'string' && value.startsWith('shared:')) return value;
     const filter = typeof value === 'string' ? value.trim().toLowerCase() : '';
     return CHECKLIST_FILTERS.includes(filter) ? filter : 'all';
 }
@@ -316,20 +367,21 @@ export function normalizeChecklistFilter(value) {
  * `outline` hides every step, leaving the dividers as a table of contents.
  * A tone keeps the steps carrying a note of that tone.
  */
-export function stepMatchesChecklistFilter(step, filter) {
+export function stepMatchesChecklistFilter(step, filter, scenario) {
+    if (filter.startsWith('shared:')) return step?.notes?.some(n => n.ref === filter.slice(7)) || false;
     if (filter === 'all') return true;
     if (filter === 'outline') return false;
-    return getChecklistNotes(step).some(note => normalizeNoteTone(note.tone) === filter);
+    return getChecklistNotes(step, scenario).some(note => normalizeNoteTone(note.tone) === filter);
 }
 
 /**
  * A divider is kept only when the section it opens still has a visible step,
  * so filtering never leaves a heading with nothing under it.
  */
-export function buildChecklistVisibility(steps, filter) {
+export function buildChecklistVisibility(steps, filter, scenario) {
     const list = Array.isArray(steps) ? steps : [];
     const visible = list.map(step => (
-        isChecklistDividerStep(step) ? false : stepMatchesChecklistFilter(step, filter)
+        isChecklistDividerStep(step) ? false : stepMatchesChecklistFilter(step, filter, scenario)
     ));
 
     if (filter === 'outline') return list.map(step => isChecklistDividerStep(step));
@@ -1011,7 +1063,7 @@ export function renderChecklist(container, data, options = {}) {
 
     container.innerHTML = '';
     const filter = normalizeChecklistFilter(activeFilter);
-    const visibility = buildChecklistVisibility(data.steps, filter);
+    const visibility = buildChecklistVisibility(data.steps, filter, data);
 
     if (!visibility.some(Boolean)) {
         const emptyRow = document.createElement('tr');
@@ -1130,7 +1182,7 @@ export function renderChecklist(container, data, options = {}) {
             <td class="col-note"></td>
         `;
 
-        const noteChips = getChecklistNoteChips(step);
+        const noteChips = getChecklistNoteChips(step, data);
         const isActiveStep = activeNoteIndex === index;
         renderChecklistNoteCell(tr.querySelector('.col-note'), {
             index,

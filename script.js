@@ -543,6 +543,13 @@ function persist() {
 }
 
 function loadActiveFile() {
+    // Input handlers already save drafts. Never flush old editors into a new file.
+    destroyStepDetailCodeEditors();
+    sharedNoteTarget = null;
+    stepDetailIndex = null;
+    EL.stepDetailPanel?.classList.add('is-hidden');
+    EL.stepDetailBackdrop?.classList.add('is-hidden');
+    document.querySelectorAll('.shared-notes-dialog').forEach(dialog => dialog.close());
     clearStepHighlight();
     const activeFile = resolveActiveFileOrFallback();
     updateLastActiveFileLocation();
@@ -2026,6 +2033,10 @@ function setChecklistDensity(showRef, options = {}) {
 }
 
 function applyChecklistFilterToControl() {
+    if (checklistFilter.startsWith('shared:') && EL.checklistFilterLabel) {
+        const id = checklistFilter.slice(7);
+        EL.checklistFilterLabel.textContent = `🔗 ${currentData?.sharedNotes?.[id]?.label || id}`;
+    }
     const items = EL.checklistFilterMenu?.querySelectorAll('[data-filter]');
     const selected = [...(items || [])].find(item => item.dataset.filter === checklistFilter);
 
@@ -2050,6 +2061,41 @@ function applyChecklistFilterToControl() {
 
 function openChecklistFilterMenu() {
     if (!EL.checklistFilterMenu) return;
+    EL.checklistFilterMenu.querySelectorAll('[data-shared-filter]').forEach(el => el.remove());
+    const sharedEntries = Object.entries(currentData?.sharedNotes || {});
+    const sharedGroup = document.createElement('div');
+    sharedGroup.dataset.sharedFilter = 'true';
+    sharedGroup.setAttribute('role', 'group');
+    sharedGroup.setAttribute('aria-labelledby', 'checklist-shared-group-label');
+    const sharedTitle = document.createElement('div');
+    sharedTitle.id = 'checklist-shared-group-label';
+    sharedTitle.className = 'checklist-filter-group-label';
+    sharedTitle.textContent = 'Shared Notes';
+    sharedGroup.append(sharedTitle);
+    if (sharedEntries.length) {
+        const separator = document.createElement('div');
+        separator.className = 'checklist-filter-separator';
+        separator.dataset.sharedFilter = 'true';
+        separator.setAttribute('role', 'separator');
+        EL.checklistFilterMenu.append(separator, sharedGroup);
+    }
+    sharedEntries.forEach(([id, note]) => {
+        const item = document.createElement('button');
+        item.type = 'button'; item.className = 'checklist-filter-item';
+        item.dataset.sharedFilter = 'true'; item.dataset.filter = `shared:${id}`;
+        item.setAttribute('role', 'option');
+        item.textContent = `🔗 ${note.label || id} (${sharedNoteUsage(id)})`;
+        item.addEventListener('click', () => {
+            setChecklistFilter(item.dataset.filter); closeChecklistFilterMenu({ restoreFocus: true });
+        });
+        item.addEventListener('keydown', event => {
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault(); moveChecklistFilterFocus(item, event.key === 'ArrowDown' ? 1 : -1);
+            }
+        });
+        sharedGroup.append(item);
+    });
+    applyChecklistFilterToControl();
     EL.checklistFilterMenu.hidden = false;
     EL.checklistFilterToggle?.setAttribute('aria-expanded', 'true');
     const selected = EL.checklistFilterMenu.querySelector('.is-selected');
@@ -2147,7 +2193,11 @@ function setupChecklistDensityToggle() {
     }
 }
 
+let sharedNoteTarget = null;
+
 function getStepDetailTarget() {
+    if (!currentData) return null;
+    if (sharedNoteTarget) return sharedNoteTarget;
     if (stepDetailIndex === null) return null;
     const step = currentData?.steps?.[stepDetailIndex];
     if (!step || UI.isChecklistDividerStep(step)) return null;
@@ -2155,6 +2205,8 @@ function getStepDetailTarget() {
 }
 
 function openStepDetailPanel(index, target = { type: 'panel' }) {
+    closeStepDetailPanel();
+    sharedNoteTarget = null;
     stepDetailIndex = index;
     const step = getStepDetailTarget();
     if (!step) {
@@ -2167,7 +2219,7 @@ function openStepDetailPanel(index, target = { type: 'panel' }) {
 
     if (requested.type === 'new') {
         // Append an empty note and focus its label so the user can name it.
-        const notes = UI.getChecklistNotes(step);
+        const notes = UI.getChecklistNotes(step, currentData);
         notes.push(UI.createEmptyNoteEntry());
         focusNoteIndex = notes.length - 1;
         stepDetailActiveNote = focusNoteIndex;
@@ -2214,6 +2266,7 @@ function closeStepDetailPanel() {
     // drop them so they do not linger in the saved JSON.
     pruneEmptyStepDetailEntries();
     stepDetailIndex = null;
+    sharedNoteTarget = null;
     stepDetailActiveNote = null;
     destroyStepDetailCodeEditors();
     closeNoteBlockAddMenu();
@@ -2224,7 +2277,7 @@ function closeStepDetailPanel() {
 }
 
 function refreshStepDetailPanel() {
-    if (stepDetailIndex === null) return;
+    if (stepDetailIndex === null && !sharedNoteTarget) return;
     if (!getStepDetailTarget()) {
         closeStepDetailPanel();
         return;
@@ -2272,6 +2325,10 @@ function commitStepDetailNotes(notes, options = {}) {
 
     const normalized = [];
     notes.forEach((note) => {
+        if (note.ref && !note.missing && note.blocks && Object.hasOwn(currentData.sharedNotes || {}, note.ref)) {
+            const { ref, missing, ...content } = note;
+            currentData.sharedNotes[ref] = UI.normalizeNoteEntry(content, { keepEmpty: true });
+        }
         const entry = UI.normalizeNoteEntry(note, { keepEmpty });
         if (entry) normalized.push(entry);
     });
@@ -2295,12 +2352,13 @@ function renderStepDetailContents() {
     if (!step || !EL.stepDetailNotes) return;
 
     if (EL.stepDetailTitle) {
-        EL.stepDetailTitle.textContent = `Step ${countVisibleStepNumber(stepDetailIndex)}`;
+        EL.stepDetailTitle.textContent = sharedNoteTarget ? '공유 노트' : `Step ${countVisibleStepNumber(stepDetailIndex)}`;
     }
 
     destroyStepDetailCodeEditors();
 
-    const notes = UI.getChecklistNotes(step);
+    EL.stepDetailAddNote.hidden = false;
+    const notes = UI.getChecklistNotes(step, currentData);
     EL.stepDetailNotes.innerHTML = '';
     if (EL.stepDetailNotesEmpty) {
         EL.stepDetailNotesEmpty.hidden = notes.length > 0;
@@ -2326,46 +2384,54 @@ const NOTE_TONE_LABELS = {
 };
 
 function buildNoteTonePicker(note, patchNote) {
-    const picker = document.createElement('div');
-    picker.className = 'step-detail-tone-picker';
-    picker.setAttribute('role', 'group');
-    picker.setAttribute('aria-label', 'Note tone');
-
     const current = UI.normalizeNoteTone(note.tone);
-
-    const addButton = (tone, title, extraClass) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = `step-detail-tone-btn ${extraClass}`.trim();
-        btn.title = title;
-        btn.setAttribute('aria-label', title);
-        btn.setAttribute('aria-pressed', current === tone ? 'true' : 'false');
-        if (current === tone) btn.classList.add('is-selected');
-        btn.addEventListener('click', () => {
-            // Clicking the selected tone clears it, so the picker needs no
-            // separate toggle.
-            const next = current === tone ? '' : tone;
-            patchNote({ tone: next }, { refreshPanel: true });
+    const dropdown = createNoteDropdown(current || '색상');
+    if (current) dropdown.toggle.classList.add('is-filtered', `is-tone-${current}`);
+    ['', ...UI.NOTE_TONES].forEach(tone => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'checklist-filter-item';
+        item.setAttribute('role', 'menuitemradio');
+        item.setAttribute('aria-checked', String(current === tone));
+        item.classList.toggle('is-selected', current === tone);
+        const swatch = document.createElement('span');
+        swatch.className = tone ? `checklist-filter-swatch is-tone-${tone}`
+            : 'checklist-filter-swatch checklist-filter-swatch--none';
+        swatch.setAttribute('aria-hidden', 'true');
+        item.append(swatch, document.createTextNode(tone || '기본 (색 없음)'));
+        item.addEventListener('click', () => {
+            dropdown.close();
+            patchNote({ tone }, { refreshPanel: true });
         });
-        picker.appendChild(btn);
-    };
-
-    UI.NOTE_TONES.forEach((tone) => {
-        addButton(tone, NOTE_TONE_LABELS[tone] || tone, `step-detail-tone-btn--${tone}`);
+        dropdown.body.append(item);
     });
-    addButton('', '기본 (색 없음)', 'step-detail-tone-btn--reset');
+    return dropdown.element;
+}
 
-    return picker;
+function setActiveStepDetailNote(noteIndex) {
+    stepDetailActiveNote = noteIndex;
+    EL.stepDetailNotes?.querySelectorAll('.step-detail-note-card').forEach((card, index) => {
+        card.classList.toggle('is-active', index === noteIndex);
+    });
+    EL.checklistBody?.querySelectorAll('.is-note-active .checklist-note-chip-group').forEach((chip, index) => {
+        chip.classList.toggle('is-active', index === noteIndex);
+    });
 }
 
 function buildNoteCard(note, noteIndex, notes) {
     const card = document.createElement('section');
     card.className = 'step-detail-note-card';
+    card.addEventListener('focusin', () => setActiveStepDetailNote(noteIndex));
+    card.addEventListener('pointerdown', () => setActiveStepDetailNote(noteIndex));
     const cardTone = UI.normalizeNoteTone(note.tone);
     if (cardTone) card.classList.add(`is-tone-${cardTone}`);
     if (stepDetailActiveNote === noteIndex) card.classList.add('is-active');
 
     const commitNotes = (nextNotes, options) => {
+        // Keep event-handler objects current across successive input events.
+        nextNotes.forEach((next, i) => {
+            if (nextNotes.length === notes.length && notes[i]) Object.assign(notes[i], next);
+        });
         commitStepDetailNotes(nextNotes, { keepEmpty: true, ...options });
     };
 
@@ -2412,7 +2478,11 @@ function buildNoteCard(note, noteIndex, notes) {
         btn.className = danger
             ? 'step-detail-icon-btn is-danger'
             : 'step-detail-icon-btn';
-        btn.textContent = label;
+        const iconKinds = { '×': 'trash', '⎘': 'copy', '↑': 'up', '↓': 'down' };
+        if (iconKinds[label]) {
+            btn.append(createNoteActionIcon(iconKinds[label]));
+            btn.classList.add('has-action-icon');
+        } else btn.textContent = label;
         btn.title = title;
         btn.setAttribute('aria-label', title);
         btn.disabled = disabled === true;
@@ -2422,7 +2492,7 @@ function buildNoteCard(note, noteIndex, notes) {
 
     iconButton('↑', 'Move note up', () => moveNote(-1), noteIndex === 0);
     iconButton('↓', 'Move note down', () => moveNote(1), noteIndex === notes.length - 1);
-    iconButton('×', 'Delete note', () => {
+    iconButton('×', note.ref ? '이 행에서 연결 제거' : 'Delete note', () => {
         stepDetailActiveNote = null;
         commitStepDetailNotes(
             notes.filter((_, itemIndex) => itemIndex !== noteIndex),
@@ -2430,8 +2500,60 @@ function buildNoteCard(note, noteIndex, notes) {
         );
     }, false, true);
 
+    if (!note.missing) {
+        const dropdown = createNoteDropdown('공유');
+        const action = (label, callback) => {
+            const button = document.createElement('button');
+            button.type = 'button'; button.textContent = label;
+            button.className = 'checklist-filter-item';
+            button.setAttribute('role', 'menuitem');
+            button.addEventListener('click', () => { dropdown.close(); callback(); });
+            dropdown.body.append(button);
+        };
+        if (!note.ref) action('새 공유 노트로 전환', () => {
+            const id = createSharedNote(note);
+            notes[noteIndex] = { ref: id };
+            commitStepDetailNotes(notes, { refreshPanel: true, keepEmpty: true });
+        });
+        action('기존 공유 노트에 병합…', () => {
+            openSharedNotePicker(false, id => {
+                if (note.ref) {
+                    const targetLabel = currentData.sharedNotes[id]?.label || id;
+                    if (!confirm(`“${note.label || note.ref}”을 “${targetLabel}”에 병합할까요?\n블록을 대상 뒤에 추가하고, 원본을 사용하는 ${sharedNoteUsage(note.ref)}개 행의 연결을 대상으로 바꾼 뒤 원본을 제거합니다. 대상의 이름과 색상은 유지됩니다.`)) return;
+                    if (!UI.mergeSharedNotes(currentData, note.ref, id)) return;
+                    if (sharedNoteTarget) sharedNoteTarget.notes = [{ ref: id }];
+                    if (checklistFilter === `shared:${note.ref}`) {
+                        setChecklistFilter(`shared:${id}`);
+                    }
+                } else {
+                    const step = getStepDetailTarget();
+                    if (!step || !UI.mergeLocalNoteIntoShared(step, currentData, noteIndex, id)) return;
+                }
+                syncToEditor(); renderChecklist(); renderStepDetailContents();
+            }, note.ref);
+        });
+        actions.prepend(dropdown.element);
+    }
+    if (note.ref) {
+        if (!sharedNoteTarget && !note.missing) iconButton('⎘', '행 노트로 복사하고 연결 해제', () => {
+            const { ref, missing, ...content } = note;
+            notes[noteIndex] = structuredClone(content);
+            commitStepDetailNotes(notes, { refreshPanel: true, keepEmpty: true });
+        });
+    }
     head.appendChild(actions);
     card.appendChild(head);
+    if (note.ref) {
+        const notice = document.createElement('p');
+        notice.textContent = note.missing ? `깨진 참조: ${note.ref}`
+            : `공유 노트 · ${sharedNoteUsage(note.ref)}개 행에서 사용 중. 수정하면 모든 연결에 반영됩니다.`;
+        card.appendChild(notice);
+        if (sharedNoteTarget) actions.querySelector('.is-danger')?.remove();
+        if (note.missing) {
+            labelField.disabled = true;
+            return card;
+        }
+    }
 
     const blockList = document.createElement('div');
     blockList.className = 'step-detail-block-list';
@@ -2559,11 +2681,11 @@ function buildNoteBlockRow(block, blockIndex, note, noteIndex, notes, commitNote
     // the note is being edited.
     if (block.type === 'link' && UI.isSafeChecklistRefLink(block.value)) {
         const openLink = document.createElement('a');
-        openLink.className = 'step-detail-icon-btn step-detail-open-link';
+        openLink.className = 'step-detail-icon-btn has-action-icon step-detail-open-link';
         openLink.href = block.value;
         openLink.target = 'qa-scenario-reference';
         openLink.rel = 'noopener noreferrer';
-        openLink.textContent = '↗';
+        openLink.append(createNoteActionIcon('external'));
         openLink.title = `Open ${block.value}`;
         openLink.setAttribute('aria-label', 'Open link in a new tab');
         head.appendChild(openLink);
@@ -2572,7 +2694,8 @@ function buildNoteBlockRow(block, blockIndex, note, noteIndex, notes, commitNote
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
     removeBtn.className = 'step-detail-icon-btn is-danger';
-    removeBtn.textContent = '×';
+    removeBtn.append(createNoteActionIcon('trash'));
+    removeBtn.classList.add('has-action-icon');
     removeBtn.title = 'Remove block';
     removeBtn.setAttribute('aria-label', 'Remove block');
     removeBtn.addEventListener('click', () => {
@@ -2670,7 +2793,7 @@ function buildNoteBlockRow(block, blockIndex, note, noteIndex, notes, commitNote
 function appendNoteFromPanel() {
     const step = getStepDetailTarget();
     if (!step) return;
-    const notes = UI.getChecklistNotes(step);
+    const notes = UI.getChecklistNotes(step, currentData);
     notes.push(UI.createEmptyNoteEntry());
     stepDetailActiveNote = notes.length - 1;
     commitStepDetailNotes(notes, { refreshPanel: true, keepEmpty: true });
@@ -2765,14 +2888,56 @@ function setupStepDetailPanelResizing() {
 }
 
 function setupStepDetailPanel() {
+    EL.stepDetailClose?.replaceChildren(createNoteActionIcon('close'));
+    document.addEventListener('click', event => {
+        document.querySelectorAll('.note-dropdown').forEach(dropdown => {
+            if (!dropdown.contains(event.target)) dropdown.closeMenu();
+        });
+    });
+    document.getElementById('shared-notes-library').addEventListener('click', () => openSharedNotePicker(false));
+    const addDropdown = createNoteDropdown('+ Add');
+    const addActions = [
+        ['새 노트', () => appendNoteFromPanel(), true],
+        ['새 공유 노트', () => {
+            const id = createSharedNote({ label: '새 공유 노트', blocks: [] });
+            if (sharedNoteTarget) {
+                syncToEditor();
+                openSharedNoteEditor(id);
+            } else {
+                const step = getStepDetailTarget();
+                if (!step) return;
+                const notes = UI.getChecklistNotes(step, currentData);
+                notes.push({ ref: id });
+                commitStepDetailNotes(notes, { refreshPanel: true, keepEmpty: true });
+                focusStepDetailNote(notes.length - 1);
+            }
+        }, false],
+        ['공유 노트 연결', () => openSharedNotePicker(true), true]
+    ];
+    addActions.forEach(([label, action, needsRow]) => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'checklist-filter-item';
+        item.setAttribute('role', 'menuitem');
+        item.textContent = label;
+        item.addEventListener('click', () => { addDropdown.close(); action(); });
+        addDropdown.body.append(item);
+        const updateAvailability = () => {
+            item.disabled = needsRow && Boolean(sharedNoteTarget);
+        };
+        addDropdown.toggle.addEventListener('click', updateAvailability, true);
+        addDropdown.toggle.addEventListener('keydown', updateAvailability, true);
+    });
+    EL.stepDetailAddNote.replaceWith(addDropdown.element);
+    addDropdown.toggle.id = 'step-detail-add-note';
+    EL.stepDetailAddNote = addDropdown.toggle;
     EL.stepDetailClose?.addEventListener('click', closeStepDetailPanel);
     EL.stepDetailBackdrop?.addEventListener('click', closeStepDetailPanel);
-    EL.stepDetailAddNote?.addEventListener('click', appendNoteFromPanel);
     setupStepDetailPanelResizing();
 
     document.addEventListener('keydown', (event) => {
-        if (event.key !== 'Escape') return;
-        if (stepDetailIndex === null) return;
+        if (event.key !== 'Escape' || event.defaultPrevented) return;
+        if (stepDetailIndex === null && !sharedNoteTarget) return;
         if (!EL.stepDetailPanel || EL.stepDetailPanel.classList.contains('is-hidden')) return;
         // A code editor's search panel binds Escape to close itself. Let
         // CodeMirror handle it instead of closing the whole notes panel.
@@ -4008,3 +4173,176 @@ function isTextEditingElement(element) {
 }
 
 init();
+
+
+function sharedNoteUsage(id) {
+    return (currentData?.steps || []).filter(step => !UI.isChecklistDividerStep(step)
+        && step.notes?.some(note => note.ref === id)).length;
+}
+
+function createSharedNote(note = UI.createEmptyNoteEntry()) {
+    const id = `note-${crypto.randomUUID()}`;
+    if (!currentData.sharedNotes || typeof currentData.sharedNotes !== 'object' || Array.isArray(currentData.sharedNotes)) {
+        currentData.sharedNotes = {};
+    }
+    const { ref, missing, ...content } = note;
+    currentData.sharedNotes[id] = structuredClone(content);
+    return id;
+}
+
+function openSharedNoteEditor(id) {
+    closeStepDetailPanel();
+    sharedNoteTarget = { notes: [{ ref: id }] };
+    EL.stepDetailPanel.classList.remove('is-hidden');
+    EL.stepDetailBackdrop.classList.remove('is-hidden');
+    EL.stepDetailBackdrop.setAttribute('aria-hidden', 'false');
+    renderStepDetailContents();
+    focusStepDetailNote(0);
+}
+
+function openSharedNotePicker(linkToRow, onSelect = null, excludedId = null) {
+    if (!currentData) return;
+    flushStepDetailCodeEditors();
+    const target = linkToRow ? getStepDetailTarget() : null;
+    if (linkToRow && !target) return;
+    const dialog = document.createElement('dialog');
+    dialog.className = 'shared-notes-dialog';
+    const header = document.createElement('div');
+    header.className = 'shortcuts-modal-header';
+    const title = document.createElement('h3');
+    header.append(title);
+    title.textContent = onSelect ? '병합할 공유 노트 선택' : linkToRow ? '공유 노트 연결' : '공유 노트';
+    const search = document.createElement('input');
+    search.className = 'step-detail-input';
+    search.placeholder = '공유 노트 검색…';
+    search.setAttribute('aria-label', '공유 노트 검색');
+    const list = document.createElement('div');
+    const button = (label, action) => {
+        const el = document.createElement('button');
+        el.type = 'button'; el.className = 'step-detail-add-btn';
+        el.textContent = label; el.addEventListener('click', action);
+        return el;
+    };
+    const choose = id => {
+        dialog.close();
+        if (onSelect) return onSelect(id);
+        if (!linkToRow) return openSharedNoteEditor(id);
+        const notes = UI.getChecklistNotes(target, currentData);
+        if (!notes.some(note => note.ref === id)) notes.push({ ref: id });
+        commitStepDetailNotes(notes, { keepEmpty: true, refreshPanel: true });
+        focusStepDetailNote(notes.findIndex(note => note.ref === id));
+    };
+    const paint = () => {
+        list.replaceChildren();
+        Object.entries(currentData.sharedNotes || {}).forEach(([id, note]) => {
+            if (id === excludedId) return;
+            const label = note?.label || id;
+            if (!label.toLowerCase().includes(search.value.toLowerCase())) return;
+            const row = document.createElement('div');
+            row.className = 'shared-note-list-row';
+            row.append(button(`${label} · ${sharedNoteUsage(id)}개 행`, () => choose(id)));
+            if (!linkToRow && !onSelect) {
+                row.append(button('삭제', () => {
+                    if (sharedNoteUsage(id)) return alert('연결된 행이 있습니다. 먼저 각 행의 연결을 제거하세요.');
+                    if (!confirm(`공유 노트 “${label}”을 삭제할까요?`)) return;
+                    if (sharedNoteTarget?.notes?.[0]?.ref === id) closeStepDetailPanel();
+                    delete currentData.sharedNotes[id]; syncToEditor(); renderChecklist(); paint();
+                }));
+            }
+            list.append(row);
+        });
+    };
+    const content = document.createElement('div');
+    content.className = 'shortcuts-modal-body';
+    content.append(search, list);
+    dialog.append(header, content);
+    if (!onSelect) content.append(button('+ 새 공유 노트 만들기', () => {
+        const id = createSharedNote({ label: search.value.trim() || '새 공유 노트', blocks: [] });
+        syncToEditor(); choose(id);
+    }));
+    const closeButton = button('×', () => dialog.close());
+    closeButton.className = 'shortcuts-modal-close';
+    closeButton.replaceChildren(createNoteActionIcon('close'));
+    closeButton.setAttribute('aria-label', '닫기');
+    header.append(closeButton);
+    search.addEventListener('input', paint);
+    dialog.addEventListener('close', () => dialog.remove());
+    dialog.addEventListener('keydown', event => event.stopPropagation());
+    document.body.append(dialog); paint(); dialog.showModal(); search.focus();
+}
+
+
+function createNoteActionIcon(kind) {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', '16');
+    svg.setAttribute('height', '16');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '1.75');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+    const path = document.createElementNS(ns, 'path');
+    const paths = {
+        copy: 'M9 9h12v12H9z M15 5V3H3v12h2',
+        trash: 'M3 6h18 M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2 M5 6l1 14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-14 M10 10v7 M14 10v7',
+        external: 'M6 18L18 6 M6 6h12v12',
+        up: 'M12 19V5 M5 12l7-7 7 7',
+        down: 'M12 5v14 M5 12l7 7 7-7',
+        close: 'M6 6l12 12M18 6L6 18'
+    };
+    path.setAttribute('d', paths[kind] || paths.close);
+    svg.append(path);
+    return svg;
+}
+
+function createNoteDropdown(label) {
+    // Reuse the existing row-filter trigger, surface, items and swatches.
+    const element = document.createElement('div');
+    element.className = 'checklist-filter-wrap note-dropdown';
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'checklist-filter-toggle';
+    toggle.textContent = label;
+    toggle.setAttribute('aria-haspopup', 'menu');
+    toggle.setAttribute('aria-expanded', 'false');
+    const body = document.createElement('div');
+    body.className = 'checklist-filter-menu';
+    body.id = `note-menu-${crypto.randomUUID()}`;
+    body.setAttribute('role', 'menu');
+    body.setAttribute('aria-label', label);
+    toggle.setAttribute('aria-controls', body.id);
+    body.hidden = true;
+    const close = (restoreFocus = false) => {
+        body.hidden = true;
+        toggle.setAttribute('aria-expanded', 'false');
+        if (restoreFocus) toggle.focus();
+    };
+    element.closeMenu = close;
+    const open = () => {
+        document.querySelectorAll('.note-dropdown').forEach(other => {
+            if (other !== element) other.closeMenu();
+        });
+        body.hidden = false;
+        toggle.setAttribute('aria-expanded', 'true');
+        (body.querySelector('.is-selected:not(:disabled)') || body.querySelector('button:not(:disabled)'))?.focus();
+    };
+    toggle.addEventListener('click', () => body.hidden ? open() : close());
+    element.addEventListener('keydown', event => {
+        const items = [...body.querySelectorAll('button:not(:disabled)')];
+        if (event.key === 'Escape' && !body.hidden) {
+            event.preventDefault(); event.stopPropagation(); close(true);
+        } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault(); event.stopPropagation();
+            if (body.hidden) return open();
+            const offset = event.key === 'ArrowDown' ? 1 : -1;
+            const index = items.indexOf(document.activeElement);
+            items[(index + offset + items.length) % items.length]?.focus();
+        } else if (event.key === 'Tab') close();
+    });
+    element.append(toggle, body);
+    return { element, toggle, body, close };
+}

@@ -94,6 +94,9 @@ function buildScenarioDataForExport(parsed, preferences, context) {
         : [...context.requiredExportFields];
     const selectorTree = buildFieldSelectorTree(selectedPaths, context.canonicalizeFieldPath);
     const selected = selectValueByFieldTree(parsed, selectorTree);
+    // References must never be exported without their same-file definitions.
+    if (selected?.steps?.some(step => step.notes?.some(note => typeof note.ref === 'string'))
+        && parsed.sharedNotes) selected.sharedNotes = structuredClone(parsed.sharedNotes);
     return buildRequiredScenarioWithDefaults(selected);
 }
 

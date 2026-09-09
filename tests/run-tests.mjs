@@ -9,6 +9,7 @@ import './pass-summary-refresh.test.mjs';
 import './note-preferences.test.mjs';
 import './checklist-filter.test.mjs';
 import './panel-visibility.test.mjs';
+import './shared-notes.test.mjs';
 import './deleted-file-history-manager.test.mjs';
 import './tree-actions-manager.test.mjs';
 import { run } from './lib/test-runner.mjs';

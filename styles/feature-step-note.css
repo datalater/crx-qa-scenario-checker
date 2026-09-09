@@ -329,7 +329,13 @@ tr:hover .checklist-note-add,
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
-  padding: 0 4px;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .step-detail-close:hover {
@@ -365,7 +371,7 @@ tr:hover .checklist-note-add,
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-secondary);
-  margin: 0;
+  margin: 0 auto 0 0;
 }
 
 .step-detail-add-btn {
@@ -417,14 +423,12 @@ tr:hover .checklist-note-add,
     box-shadow 120ms ease;
 }
 
-/* The tone shows as a left stripe so it does not compete with the active
-   outline, which means something different. */
+/* Tone uses only the background; borders and outlines indicate selection. */
 .step-detail-note-card.is-tone-note,
 .step-detail-note-card.is-tone-tip,
 .step-detail-note-card.is-tone-important,
 .step-detail-note-card.is-tone-warning,
 .step-detail-note-card.is-tone-caution {
-  border-left: 3px solid var(--note-tone);
   background-color: color-mix(in srgb, var(--note-tone) 7%, var(--pane-bg));
 }
 
@@ -468,8 +472,9 @@ tr:hover .checklist-note-add,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
   font-size: 11px;
   line-height: 1;
   color: var(--text-secondary);
@@ -481,6 +486,27 @@ tr:hover .checklist-note-add,
   transition:
     color 120ms ease,
     border-color 120ms ease;
+}
+
+.step-detail-icon-btn.has-action-icon {
+  color: var(--text-secondary);
+}
+
+.shared-notes-dialog .shortcuts-modal-close {
+  width: 24px;
+  height: 24px;
+}
+
+.note-dropdown .checklist-filter-item:disabled { opacity: 0.4; cursor: default; }
+
+.step-detail-icon-btn.has-action-icon svg,
+.step-detail-close svg,
+.shared-notes-dialog .shortcuts-modal-close svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+  margin: auto;
+  flex-shrink: 0;
 }
 
 .step-detail-icon-btn:hover:not(:disabled) {
@@ -781,6 +807,14 @@ tr:hover .checklist-note-add,
   font-weight: 600;
 }
 
+.checklist-filter-group-label {
+  padding: 5px 8px 3px;
+  font-family: var(--font-heading, inherit);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
 .checklist-filter-separator {
   height: 1px;
   margin: 4px 2px;
@@ -801,3 +835,20 @@ tr:hover .checklist-note-add,
   background-color: transparent;
   border: 1px solid var(--border-color);
 }
+
+/* Shared-note dialogs use the existing modal header/body and note controls. */
+.shared-notes-dialog {
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  padding: 0;
+  background: var(--pane-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+.shared-notes-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+.shared-notes-dialog .step-detail-input { box-sizing: border-box; width: 100%; margin-bottom: 12px; }
+.shared-note-list-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.shared-note-list-row > :first-child { flex: 1; text-align: left; }
+.step-detail-note-card > p { font-size: 12px; color: var(--text-secondary); padding: 0 10px; line-height: 1.5; }
