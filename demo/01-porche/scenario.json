@@ -62,7 +62,8 @@
               "lang": "tsx",
               "value": "type PriceSummaryProps = {\n  basePrice: number;\n  optionsPrice: number;\n};\n\nexport function PriceSummary({ basePrice, optionsPrice }: PriceSummaryProps) {\n  const total = basePrice + optionsPrice;\n\n  return (\n    <aside className=\"price-summary\">\n      <dl>\n        <dt>기본 차량 가격</dt>\n        <dd>{formatKrw(basePrice)}</dd>\n        <dt>선택된 옵션 가격</dt>\n        <dd>{formatKrw(optionsPrice)}</dd>\n      </dl>\n      <strong>예상 총액 {formatKrw(total)}</strong>\n    </aside>\n  );\n}"
             }
-          ]
+          ],
+          "tone": "tip"
         }
       ]
     },
@@ -102,7 +103,8 @@
               "type": "text",
               "value": "안내 문구를 토스트로 띄울지 인라인으로 둘지 PRD에 명시가 없다. 현재는 인라인으로 가정했다."
             }
-          ]
+          ],
+          "tone": "caution"
         }
       ]
     },
@@ -201,7 +203,8 @@
               "lang": "json",
               "value": "{\n  \"Coupe\": {\n    \"wheels\": [\"19-inch Comfort Wheel\", \"21-inch Sport Wheel\"]\n  },\n  \"Cabriolet\": {\n    \"wheels\": [\"19-inch Comfort Wheel\", \"21-inch Sport Wheel\"]\n  },\n  \"Track Edition\": {\n    \"wheels\": [\"21-inch Performance Wheel\"]\n  }\n}"
             }
-          ]
+          ],
+          "tone": "note"
         },
         {
           "label": "충돌 판정 로직",
@@ -211,7 +214,8 @@
               "lang": "javascript",
               "value": "export function isWheelAllowed(model, wheel, matrix) {\n  const allowed = matrix[model]?.wheels ?? [];\n  return allowed.includes(wheel);\n}\n\nexport function selectWheel(state, wheel, matrix) {\n  if (!isWheelAllowed(state.model, wheel, matrix)) {\n    return { ...state, conflictModal: { wheel } };\n  }\n  return { ...state, wheel, conflictModal: null };\n}"
             }
-          ]
+          ],
+          "tone": "important"
         }
       ]
     },
@@ -392,7 +396,8 @@
               "lang": "typescript",
               "value": "type SelectedOption = {\n  id: string;\n  name: string;\n  price: number;\n};\n\nexport function calculateTotal(\n  basePrice: number,\n  options: SelectedOption[]\n): number {\n  return options.reduce((sum, option) => sum + option.price, basePrice);\n}"
             }
-          ]
+          ],
+          "tone": "tip"
         }
       ]
     },
@@ -430,7 +435,8 @@
               "lang": "css",
               "value": ".price-summary__options:empty::after {\n  content: \"선택한 유료 옵션이 없습니다.\";\n  color: #7d8590;\n  font-size: 12px;\n}"
             }
-          ]
+          ],
+          "tone": "tip"
         }
       ]
     },
@@ -526,7 +532,8 @@
               "lang": "jsx",
               "value": "const REQUIRED_MESSAGES = {\n  name: \"이름을 입력해주세요.\",\n  email: \"이메일을 입력해주세요.\",\n  phone: \"연락처를 입력해주세요.\",\n  consent: \"개인정보 수집 및 이용에 동의해주세요.\",\n};\n\nexport function FormErrors({ errors }) {\n  return (\n    <ul className=\"form-errors\">\n      {Object.entries(REQUIRED_MESSAGES)\n        .filter(([field]) => errors[field])\n        .map(([field, message]) => (\n          <li key={field} role=\"alert\">{message}</li>\n        ))}\n    </ul>\n  );\n}"
             }
-          ]
+          ],
+          "tone": "tip"
         }
       ]
     },
