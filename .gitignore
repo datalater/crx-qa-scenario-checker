@@ -1,0 +1,11 @@
+node_modules/
+.DS_Store
+*.crx
+*.pem
+
+# Fetched source documents (PRD dumps and similar) stay local.
+.cache/
+
+# Scenarios built from real internal documents. This repository is public, so
+# only fictional demos (see demo/01-porche) belong in it.
+demo/02-amr/
