@@ -2,7 +2,8 @@ import {
     WORKSPACE_STORAGE_KEY,
     CHECKLIST_DENSITY_STORAGE_KEY,
     NOTE_PANEL_WIDTH_STORAGE_KEY,
-    NOTE_CODE_LANG_STORAGE_KEY
+    NOTE_CODE_LANG_STORAGE_KEY,
+    CHECKLIST_FILTER_STORAGE_KEY
 } from './constants/storage.js';
 import { AUTOSAVE_DELAY_MS, WORKSPACE_VERSION, DEFAULT_FILE_NAME } from './configs/workspace.js';
 import { EDITOR_CONFIG } from './configs/editor-config.js';
@@ -79,6 +80,9 @@ const EL = {
     scenarioTitle: document.getElementById('scenario-title'),
     checklistProgress: document.getElementById('checklist-progress'),
     checklistDensityToggle: document.getElementById('checklist-density-toggle'),
+    checklistFilterToggle: document.getElementById('checklist-filter-toggle'),
+    checklistFilterLabel: document.getElementById('checklist-filter-label'),
+    checklistFilterMenu: document.getElementById('checklist-filter-menu'),
     stepDetailPanel: document.getElementById('step-detail-panel'),
     stepDetailBackdrop: document.getElementById('step-detail-backdrop'),
     stepDetailTitle: document.getElementById('step-detail-title'),
@@ -158,6 +162,7 @@ let workspace = null;
 let checklistShowNote = false;
 let stepDetailIndex = null;
 let stepDetailActiveNote = null;
+let checklistFilter = 'all';
 let stepDetailCodeEditors = [];
 let autosaveTimer = null;
 let activeFileDirty = false;
@@ -249,6 +254,7 @@ function init() {
     setupEditorFindReplaceManager();
     setupDeletedFileHistoryManager();
     setupChecklistDensityToggle();
+    setupChecklistFilter();
     setupStepDetailPanel();
     loadWorkspace();
     setupEventListeners();
@@ -1985,7 +1991,8 @@ function renderChecklist() {
         onOpenChecklistContextMenu: openChecklistContextMenu,
         onOpenStepDetail: openStepDetailPanel,
         activeNoteIndex: stepDetailIndex,
-        activeNoteKey: stepDetailActiveNote
+        activeNoteKey: stepDetailActiveNote,
+        activeFilter: checklistFilter
     });
     refreshPassSummary();
     refreshStepDetailPanel();
@@ -2015,6 +2022,113 @@ function setChecklistDensity(showRef, options = {}) {
             localStorage.setItem(CHECKLIST_DENSITY_STORAGE_KEY, checklistShowNote ? 'trace' : 'check');
         } catch (_) { /* storage unavailable */ }
     }
+}
+
+function applyChecklistFilterToControl() {
+    const items = EL.checklistFilterMenu?.querySelectorAll('[data-filter]');
+    const selected = [...(items || [])].find(item => item.dataset.filter === checklistFilter);
+
+    if (EL.checklistFilterLabel && selected) {
+        EL.checklistFilterLabel.textContent = selected.textContent.trim();
+    }
+
+    items?.forEach((item) => {
+        const isSelected = item.dataset.filter === checklistFilter;
+        item.classList.toggle('is-selected', isSelected);
+        item.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+    });
+
+    if (!EL.checklistFilterToggle) return;
+    // The trigger takes the tone of the selection, so the colour is visible
+    // without opening the list.
+    UI.NOTE_TONES.forEach((tone) => {
+        EL.checklistFilterToggle.classList.toggle(`is-tone-${tone}`, checklistFilter === tone);
+    });
+    EL.checklistFilterToggle.classList.toggle('is-filtered', checklistFilter !== 'all');
+}
+
+function openChecklistFilterMenu() {
+    if (!EL.checklistFilterMenu) return;
+    EL.checklistFilterMenu.hidden = false;
+    EL.checklistFilterToggle?.setAttribute('aria-expanded', 'true');
+    const selected = EL.checklistFilterMenu.querySelector('.is-selected');
+    (selected || EL.checklistFilterMenu.querySelector('[data-filter]'))?.focus();
+}
+
+function closeChecklistFilterMenu(options = {}) {
+    const { restoreFocus = false } = options;
+    if (!EL.checklistFilterMenu || EL.checklistFilterMenu.hidden) return;
+    EL.checklistFilterMenu.hidden = true;
+    EL.checklistFilterToggle?.setAttribute('aria-expanded', 'false');
+    if (restoreFocus) EL.checklistFilterToggle?.focus();
+}
+
+function setChecklistFilter(filter, options = {}) {
+    const { persist = true } = options;
+    checklistFilter = UI.normalizeChecklistFilter(filter);
+    applyChecklistFilterToControl();
+
+    if (persist) {
+        try {
+            localStorage.setItem(CHECKLIST_FILTER_STORAGE_KEY, checklistFilter);
+        } catch (_) { /* storage unavailable */ }
+    }
+    renderChecklist();
+}
+
+function moveChecklistFilterFocus(current, offset) {
+    const items = [...(EL.checklistFilterMenu?.querySelectorAll('[data-filter]') || [])];
+    if (items.length === 0) return;
+    const index = items.indexOf(current);
+    const next = index === -1 ? 0 : (index + offset + items.length) % items.length;
+    items[next].focus();
+}
+
+function setupChecklistFilter() {
+    let stored = null;
+    try {
+        stored = localStorage.getItem(CHECKLIST_FILTER_STORAGE_KEY);
+    } catch (_) { /* storage unavailable */ }
+
+    checklistFilter = UI.normalizeChecklistFilter(stored);
+    applyChecklistFilterToControl();
+
+    EL.checklistFilterToggle?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (EL.checklistFilterMenu?.hidden) openChecklistFilterMenu();
+        else closeChecklistFilterMenu();
+    });
+
+    EL.checklistFilterMenu?.querySelectorAll('[data-filter]').forEach((item) => {
+        item.addEventListener('click', () => {
+            setChecklistFilter(item.dataset.filter);
+            closeChecklistFilterMenu({ restoreFocus: true });
+        });
+        item.addEventListener('keydown', (event) => {
+            if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                moveChecklistFilterFocus(item, 1);
+            } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                moveChecklistFilterFocus(item, -1);
+            }
+        });
+    });
+
+    document.addEventListener('click', (event) => {
+        if (EL.checklistFilterMenu?.hidden) return;
+        if (EL.checklistFilterMenu.contains(event.target)) return;
+        if (EL.checklistFilterToggle?.contains(event.target)) return;
+        closeChecklistFilterMenu();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        if (EL.checklistFilterMenu?.hidden) return;
+        event.preventDefault();
+        event.stopPropagation();
+        closeChecklistFilterMenu({ restoreFocus: true });
+    });
 }
 
 function setupChecklistDensityToggle() {
@@ -2662,6 +2776,9 @@ function setupStepDetailPanel() {
         // A code editor's search panel binds Escape to close itself. Let
         // CodeMirror handle it instead of closing the whole notes panel.
         if (EL.stepDetailPanel.querySelector('.cm-panels')) return;
+        // Both handlers sit on `document`, where stopPropagation does not stop
+        // a sibling listener, so the open filter menu is checked directly.
+        if (EL.checklistFilterMenu && !EL.checklistFilterMenu.hidden) return;
         event.preventDefault();
         closeStepDetailPanel();
     });

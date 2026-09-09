@@ -100,7 +100,9 @@
  * once so the table chip and the panel card cannot drift apart.
  */
 .checklist-note-chip-group,
-.step-detail-note-card {
+.step-detail-note-card,
+.checklist-filter-toggle,
+.checklist-filter-swatch {
   --note-tone: var(--accent-primary);
 }
 
@@ -684,3 +686,118 @@ tr:hover .checklist-note-add,
 .step-detail-tone-btn--important { --tone-swatch: #a371f7; }
 .step-detail-tone-btn--warning { --tone-swatch: #d29922; }
 .step-detail-tone-btn--caution { --tone-swatch: #f85149; }
+
+/* --- Row filter --- */
+
+.checklist-filter-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.checklist-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-heading, inherit);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background-color: var(--bg-color);
+  border: 1px solid var(--border-muted);
+  border-radius: 4px;
+  padding: 2px 6px;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+
+.checklist-filter-toggle::after {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-top: 4px solid currentColor;
+  opacity: 0.7;
+}
+
+.checklist-filter-toggle:hover {
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
+}
+
+/* While a filter is on, the trigger takes the colour of the selected tone. */
+.checklist-filter-toggle.is-filtered {
+  color: var(--note-tone);
+  border-color: var(--note-tone);
+  background-color: color-mix(in srgb, var(--note-tone) 14%, var(--bg-color));
+}
+
+.checklist-filter-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  min-width: 150px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--pane-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: 0 12px 24px rgb(1 4 9 / 45%);
+}
+
+.checklist-filter-menu[hidden] {
+  display: none;
+}
+
+.checklist-filter-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-code);
+  font-size: 11px;
+  color: var(--text-primary);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  padding: 5px 8px;
+  cursor: pointer;
+}
+
+.checklist-filter-item:hover,
+.checklist-filter-item:focus-visible {
+  outline: none;
+  background: rgba(56, 139, 253, 0.12);
+}
+
+.checklist-filter-item.is-selected {
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
+.checklist-filter-separator {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--border-muted);
+}
+
+/* Same swatch shape as the divider colour menu. */
+.checklist-filter-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background-color: var(--note-tone);
+}
+
+.checklist-filter-swatch--none {
+  background-color: transparent;
+  border: 1px solid var(--border-color);
+}

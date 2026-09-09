@@ -189,6 +189,47 @@
                             aria-label="Show note column"
                             aria-pressed="false"
                         >Note</button>
+                        <div class="checklist-filter-wrap">
+                            <button
+                                id="checklist-filter-toggle"
+                                class="checklist-filter-toggle"
+                                type="button"
+                                aria-haspopup="listbox"
+                                aria-expanded="false"
+                                aria-label="Filter rows"
+                                title="행 필터"
+                            ><span id="checklist-filter-label" class="checklist-filter-toggle__label">All rows</span></button>
+                            <div
+                                id="checklist-filter-menu"
+                                class="checklist-filter-menu"
+                                role="listbox"
+                                aria-label="Filter rows"
+                                hidden
+                            >
+                                <button class="checklist-filter-item" type="button" role="option" data-filter="all">
+                                    <span class="checklist-filter-swatch checklist-filter-swatch--none"></span>All rows
+                                </button>
+                                <button class="checklist-filter-item" type="button" role="option" data-filter="outline">
+                                    <span class="checklist-filter-swatch checklist-filter-swatch--none"></span>Dividers only
+                                </button>
+                                <div class="checklist-filter-separator" role="separator"></div>
+                                <button class="checklist-filter-item" type="button" role="option" data-filter="note">
+                                    <span class="checklist-filter-swatch is-tone-note"></span>Note
+                                </button>
+                                <button class="checklist-filter-item" type="button" role="option" data-filter="tip">
+                                    <span class="checklist-filter-swatch is-tone-tip"></span>Tip
+                                </button>
+                                <button class="checklist-filter-item" type="button" role="option" data-filter="important">
+                                    <span class="checklist-filter-swatch is-tone-important"></span>Important
+                                </button>
+                                <button class="checklist-filter-item" type="button" role="option" data-filter="warning">
+                                    <span class="checklist-filter-swatch is-tone-warning"></span>Warning
+                                </button>
+                                <button class="checklist-filter-item" type="button" role="option" data-filter="caution">
+                                    <span class="checklist-filter-swatch is-tone-caution"></span>Caution
+                                </button>
+                            </div>
+                        </div>
                         <span
                             id="checklist-progress"
                             class="checklist-progress"

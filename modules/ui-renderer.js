@@ -305,6 +305,49 @@ export function getChecklistNoteChips(step) {
     });
 }
 
+export const CHECKLIST_FILTERS = ['all', 'outline', ...NOTE_TONES];
+
+export function normalizeChecklistFilter(value) {
+    const filter = typeof value === 'string' ? value.trim().toLowerCase() : '';
+    return CHECKLIST_FILTERS.includes(filter) ? filter : 'all';
+}
+
+/**
+ * `outline` hides every step, leaving the dividers as a table of contents.
+ * A tone keeps the steps carrying a note of that tone.
+ */
+export function stepMatchesChecklistFilter(step, filter) {
+    if (filter === 'all') return true;
+    if (filter === 'outline') return false;
+    return getChecklistNotes(step).some(note => normalizeNoteTone(note.tone) === filter);
+}
+
+/**
+ * A divider is kept only when the section it opens still has a visible step,
+ * so filtering never leaves a heading with nothing under it.
+ */
+export function buildChecklistVisibility(steps, filter) {
+    const list = Array.isArray(steps) ? steps : [];
+    const visible = list.map(step => (
+        isChecklistDividerStep(step) ? false : stepMatchesChecklistFilter(step, filter)
+    ));
+
+    if (filter === 'outline') return list.map(step => isChecklistDividerStep(step));
+
+    list.forEach((step, index) => {
+        if (!isChecklistDividerStep(step)) return;
+        for (let i = index + 1; i < list.length; i += 1) {
+            if (isChecklistDividerStep(list[i])) break;
+            if (visible[i]) {
+                visible[index] = true;
+                break;
+            }
+        }
+    });
+
+    return visible;
+}
+
 function formatLinkHost(link) {
     try {
         return new URL(link).hostname.replace(/^www\./, '');
@@ -924,7 +967,7 @@ function renderChecklistNoteCell(cell, options) {
 }
 
 export function renderChecklist(container, data, options = {}) {
-    const { onUpdatePass, onUpdateStep, onHighlightStep, onScenarioTitleUpdate, onAddStep, onAddDivider, onOpenChecklistContextMenu, onOpenStepDetail, activeNoteIndex = null, activeNoteKey = null } = options;
+    const { onUpdatePass, onUpdateStep, onHighlightStep, onScenarioTitleUpdate, onAddStep, onAddDivider, onOpenChecklistContextMenu, onOpenStepDetail, activeNoteIndex = null, activeNoteKey = null, activeFilter = 'all' } = options;
     if (!container) return;
     const canInsertRows = typeof onAddStep === 'function' || typeof onAddDivider === 'function';
 
@@ -967,8 +1010,23 @@ export function renderChecklist(container, data, options = {}) {
     }
 
     container.innerHTML = '';
+    const filter = normalizeChecklistFilter(activeFilter);
+    const visibility = buildChecklistVisibility(data.steps, filter);
+
+    if (!visibility.some(Boolean)) {
+        const emptyRow = document.createElement('tr');
+        emptyRow.className = 'empty-state';
+        emptyRow.innerHTML = '<td colspan="6">이 조건에 해당하는 행이 없습니다.</td>';
+        container.appendChild(emptyRow);
+        return;
+    }
+
     let visibleIndex = 0;
     data.steps.forEach((step, index) => {
+        // The step number keeps counting through hidden rows so a filtered view
+        // still shows where each row sits in the whole scenario.
+        if (!isChecklistDividerStep(step)) visibleIndex += 1;
+        if (!visibility[index]) return;
         if (isChecklistDividerStep(step)) {
             const dividerRow = document.createElement('tr');
             dividerRow.className = 'checklist-divider-row';
@@ -1055,7 +1113,6 @@ export function renderChecklist(container, data, options = {}) {
             return;
         }
 
-        visibleIndex += 1;
         const tr = document.createElement('tr');
         const isPassed = step.pass === true;
         
