@@ -1,5 +1,6 @@
 import {
     NOTE_BLOCK_TYPES,
+    NOTE_TONES,
     computeChecklistProgress,
     createEmptyNoteEntry,
     getChecklistNoteChips,
@@ -8,6 +9,7 @@ import {
     isSafeChecklistRefLink,
     normalizeNoteBlock,
     normalizeNoteEntry,
+    normalizeNoteTone,
     serializeNotes
 } from '../modules/ui-renderer.js';
 import { buildRequiredScenarioWithDefaults } from '../modules/export-data-manager.js';
@@ -312,4 +314,53 @@ test('the first link block wins when a note has several', () => {
         }]
     });
     assertEqual(chips[0].link, 'https://first.com');
+});
+
+test('tones are the five GFM alert kinds', () => {
+    assertDeepEqual(NOTE_TONES, ['note', 'tip', 'important', 'warning', 'caution']);
+});
+
+test('a tone is normalized and validated against that set', () => {
+    assertEqual(normalizeNoteTone('warning'), 'warning');
+    assertEqual(normalizeNoteTone('  WARNING  '), 'warning');
+    assertEqual(normalizeNoteTone('rust'), '');
+    assertEqual(normalizeNoteTone(''), '');
+    assertEqual(normalizeNoteTone(null), '');
+    assertEqual(normalizeNoteTone(42), '');
+});
+
+test('a valid tone is kept on the note', () => {
+    assertDeepEqual(
+        normalizeNoteEntry({ label: 'x', tone: 'caution', blocks: [] }),
+        { label: 'x', blocks: [], tone: 'caution' }
+    );
+});
+
+test('an empty or unknown tone leaves no key behind', () => {
+    assertDeepEqual(normalizeNoteEntry({ label: 'x', tone: '', blocks: [] }), { label: 'x', blocks: [] });
+    assertDeepEqual(normalizeNoteEntry({ label: 'x', tone: 'rust', blocks: [] }), { label: 'x', blocks: [] });
+    assertEqual('tone' in normalizeNoteEntry({ label: 'x', blocks: [] }), false);
+});
+
+test('serialize keeps a tone and omits it otherwise', () => {
+    assertDeepEqual(
+        serializeNotes([{ label: 'a', tone: 'tip', blocks: [] }, { label: 'b', blocks: [] }]),
+        [{ label: 'a', tone: 'tip', blocks: [] }, { label: 'b', blocks: [] }]
+    );
+});
+
+test('a chip reports its tone so the table can colour it', () => {
+    const chips = getChecklistNoteChips({
+        notes: [
+            { label: 'plain', blocks: [] },
+            { label: 'careful', tone: 'warning', blocks: [] }
+        ]
+    });
+    assertEqual(chips[0].tone, '');
+    assertEqual(chips[1].tone, 'warning');
+});
+
+test('a legacy note carries no tone', () => {
+    assertEqual(getChecklistNoteChips({ note: 'plain memo' })[0].tone, '');
+    assertEqual(getChecklistNoteChips({ ref: [{ slug: 'AC-01' }] })[0].tone, '');
 });

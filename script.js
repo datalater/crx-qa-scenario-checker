@@ -2202,9 +2202,52 @@ const NOTE_BLOCK_META = {
     code: { title: 'Code', placeholder: '' }
 };
 
+const NOTE_TONE_LABELS = {
+    note: 'Note (파랑)',
+    tip: 'Tip (초록)',
+    important: 'Important (자주)',
+    warning: 'Warning (노랑)',
+    caution: 'Caution (빨강)'
+};
+
+function buildNoteTonePicker(note, patchNote) {
+    const picker = document.createElement('div');
+    picker.className = 'step-detail-tone-picker';
+    picker.setAttribute('role', 'group');
+    picker.setAttribute('aria-label', 'Note tone');
+
+    const current = UI.normalizeNoteTone(note.tone);
+
+    const addButton = (tone, title, extraClass) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `step-detail-tone-btn ${extraClass}`.trim();
+        btn.title = title;
+        btn.setAttribute('aria-label', title);
+        btn.setAttribute('aria-pressed', current === tone ? 'true' : 'false');
+        if (current === tone) btn.classList.add('is-selected');
+        btn.addEventListener('click', () => {
+            // Clicking the selected tone clears it, so the picker needs no
+            // separate toggle.
+            const next = current === tone ? '' : tone;
+            patchNote({ tone: next }, { refreshPanel: true });
+        });
+        picker.appendChild(btn);
+    };
+
+    UI.NOTE_TONES.forEach((tone) => {
+        addButton(tone, NOTE_TONE_LABELS[tone] || tone, `step-detail-tone-btn--${tone}`);
+    });
+    addButton('', '기본 (색 없음)', 'step-detail-tone-btn--reset');
+
+    return picker;
+}
+
 function buildNoteCard(note, noteIndex, notes) {
     const card = document.createElement('section');
     card.className = 'step-detail-note-card';
+    const cardTone = UI.normalizeNoteTone(note.tone);
+    if (cardTone) card.classList.add(`is-tone-${cardTone}`);
     if (stepDetailActiveNote === noteIndex) card.classList.add('is-active');
 
     const commitNotes = (nextNotes, options) => {
@@ -2233,6 +2276,7 @@ function buildNoteCard(note, noteIndex, notes) {
         patchNote({ label: labelField.value });
     });
     head.appendChild(labelField);
+    head.appendChild(buildNoteTonePicker(note, patchNote));
 
     const actions = document.createElement('div');
     actions.className = 'step-detail-note-actions';

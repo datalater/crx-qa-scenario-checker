@@ -95,6 +95,35 @@
  * and the optional anchor opens the reference in a background tab. They are
  * siblings because an anchor inside a button is invalid HTML.
  */
+/*
+ * Tone palette, matching the GFM alert tokens rendered inside cells. Declared
+ * once so the table chip and the panel card cannot drift apart.
+ */
+.checklist-note-chip-group,
+.step-detail-note-card {
+  --note-tone: var(--accent-primary);
+}
+
+.is-tone-note {
+  --note-tone: #2f81f7;
+}
+
+.is-tone-tip {
+  --note-tone: #3fb950;
+}
+
+.is-tone-important {
+  --note-tone: #a371f7;
+}
+
+.is-tone-warning {
+  --note-tone: #d29922;
+}
+
+.is-tone-caution {
+  --note-tone: #f85149;
+}
+
 .checklist-note-chip-group {
   display: inline-flex;
   align-items: stretch;
@@ -102,8 +131,8 @@
   font-family: var(--font-code);
   font-size: 10px;
   line-height: 1.5;
-  background-color: color-mix(in srgb, var(--accent-primary) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent-primary) 35%, transparent);
+  background-color: color-mix(in srgb, var(--note-tone) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--note-tone) 35%, transparent);
   border-radius: 4px;
   overflow: hidden;
   transition:
@@ -113,13 +142,13 @@
 }
 
 .checklist-note-chip-group:hover {
-  border-color: var(--accent-primary);
+  border-color: var(--note-tone);
 }
 
 .checklist-note-chip-group.is-active {
-  border-color: var(--accent-primary);
-  background-color: color-mix(in srgb, var(--accent-primary) 24%, transparent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-primary) 45%, transparent);
+  border-color: var(--note-tone);
+  background-color: color-mix(in srgb, var(--note-tone) 24%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--note-tone) 45%, transparent);
 }
 
 .checklist-note-chip {
@@ -158,23 +187,25 @@
   flex: 0 0 auto;
   width: 18px;
   color: var(--text-secondary);
-  border-left: 1px solid color-mix(in srgb, var(--accent-primary) 30%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--note-tone) 30%, transparent);
   transition:
     color 120ms ease,
     background-color 120ms ease;
 }
 
 .checklist-note-chip__link:hover {
-  color: var(--accent-primary);
-  background-color: color-mix(in srgb, var(--accent-primary) 22%, transparent);
+  color: var(--note-tone);
+  background-color: color-mix(in srgb, var(--note-tone) 22%, transparent);
 }
 
 .checklist-note-chip__link:focus-visible {
-  outline: 1px solid var(--accent-primary);
+  outline: 1px solid var(--note-tone);
   outline-offset: -1px;
 }
 
 /* Highlight the row whose note is open in the panel. */
+/* The row highlight is about which note is open, not its tone, and the tone
+   variable is only defined on the chip and the card. */
 tr.is-note-active {
   background-color: color-mix(in srgb, var(--accent-primary) 7%, transparent);
 }
@@ -384,6 +415,17 @@ tr:hover .checklist-note-add,
     box-shadow 120ms ease;
 }
 
+/* The tone shows as a left stripe so it does not compete with the active
+   outline, which means something different. */
+.step-detail-note-card.is-tone-note,
+.step-detail-note-card.is-tone-tip,
+.step-detail-note-card.is-tone-important,
+.step-detail-note-card.is-tone-warning,
+.step-detail-note-card.is-tone-caution {
+  border-left: 3px solid var(--note-tone);
+  background-color: color-mix(in srgb, var(--note-tone) 7%, var(--pane-bg));
+}
+
 .step-detail-note-card.is-active {
   border-color: var(--accent-primary);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-primary) 40%, transparent);
@@ -589,3 +631,56 @@ tr:hover .checklist-note-add,
   outline: none;
   border-color: var(--accent-primary);
 }
+
+/* --- Tone picker --- */
+
+.step-detail-tone-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.step-detail-tone-btn {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background-color: var(--tone-swatch, transparent);
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.step-detail-tone-btn:hover {
+  transform: scale(1.15);
+}
+
+.step-detail-tone-btn.is-selected {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--tone-swatch, var(--text-secondary)) 55%, transparent);
+}
+
+/* The reset swatch shows a slash so it reads as "no tone" rather than black. */
+.step-detail-tone-btn--reset {
+  position: relative;
+  background-color: transparent;
+}
+
+.step-detail-tone-btn--reset::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 1px;
+  height: 10px;
+  background-color: var(--text-secondary);
+  transform: rotate(45deg);
+}
+
+.step-detail-tone-btn--note { --tone-swatch: #2f81f7; }
+.step-detail-tone-btn--tip { --tone-swatch: #3fb950; }
+.step-detail-tone-btn--important { --tone-swatch: #a371f7; }
+.step-detail-tone-btn--warning { --tone-swatch: #d29922; }
+.step-detail-tone-btn--caution { --tone-swatch: #f85149; }

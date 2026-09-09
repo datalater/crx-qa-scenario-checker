@@ -98,6 +98,20 @@ function getChecklistAlertConfig(token) {
 
 export const NOTE_BLOCK_TYPES = ['link', 'text', 'code'];
 
+/**
+ * Note tones reuse the GFM alert vocabulary already used by the `[!note]`
+ * inline tokens, so a label reads the same way as an alert in the spec it came
+ * from. A tone is stored by name rather than by colour: the set stays small,
+ * the value survives a theme change, and it can be validated.
+ */
+export const NOTE_TONES = ['note', 'tip', 'important', 'warning', 'caution'];
+
+export function normalizeNoteTone(value) {
+    if (typeof value !== 'string') return '';
+    const tone = value.trim().toLowerCase();
+    return NOTE_TONES.includes(tone) ? tone : '';
+}
+
 export function isSafeChecklistRefLink(link) {
     if (typeof link !== 'string' || !link.trim()) return false;
     try {
@@ -165,7 +179,11 @@ export function normalizeNoteEntry(value, options = {}) {
     });
 
     if (!label && blocks.length === 0 && !keepEmpty) return null;
-    return { label, blocks };
+
+    const entry = { label, blocks };
+    const tone = normalizeNoteTone(value.tone);
+    if (tone) entry.tone = tone;
+    return entry;
 }
 
 function convertLegacyRefToNotes(legacyRef) {
@@ -236,10 +254,13 @@ export function getChecklistNotes(step) {
 }
 
 export function serializeNotes(notes) {
-    return notes.map(note => ({
-        label: note.label || '',
-        blocks: (note.blocks || []).map(block => ({ ...block }))
-    }));
+    return notes.map((note) => {
+        const serialized = { label: note.label || '' };
+        const tone = normalizeNoteTone(note.tone);
+        if (tone) serialized.tone = tone;
+        serialized.blocks = (note.blocks || []).map(block => ({ ...block }));
+        return serialized;
+    });
 }
 
 export function hasLegacyChecklistNoteShape(step) {
@@ -278,6 +299,7 @@ export function getChecklistNoteChips(step) {
             label,
             link,
             hasLink: Boolean(link),
+            tone: normalizeNoteTone(note.tone),
             blockCount: note.blocks.length
         };
     });
@@ -847,6 +869,7 @@ function renderChecklistNoteCell(cell, options) {
         // inside a button is invalid HTML and swallows the navigation.
         const group = document.createElement('span');
         group.className = 'checklist-note-chip-group';
+        if (chip.tone) group.classList.add(`is-tone-${chip.tone}`);
         if (activeNoteKey === chip.noteIndex) group.classList.add('is-active');
 
         const chipEl = document.createElement('button');
