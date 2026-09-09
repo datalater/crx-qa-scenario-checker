@@ -16,6 +16,14 @@ export function assertEqual(actual, expected, message = 'Values are not equal') 
     }
 }
 
+export function assertDeepEqual(actual, expected, message = 'Values are not deeply equal') {
+    const actualJson = JSON.stringify(actual);
+    const expectedJson = JSON.stringify(expected);
+    if (actualJson !== expectedJson) {
+        throw new Error(`${message}\nExpected: ${expectedJson}\nActual: ${actualJson}`);
+    }
+}
+
 export async function run() {
     const startedAt = Date.now();
     let passed = 0;

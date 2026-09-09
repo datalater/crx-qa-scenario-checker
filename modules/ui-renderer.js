@@ -96,6 +96,201 @@ function getChecklistAlertConfig(token) {
     return CHECKLIST_ALERTS[match[1].toLowerCase()] || null;
 }
 
+export const NOTE_BLOCK_TYPES = ['link', 'text', 'code'];
+
+export function isSafeChecklistRefLink(link) {
+    if (typeof link !== 'string' || !link.trim()) return false;
+    try {
+        const parsed = new URL(link.trim());
+        return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+    } catch (_) {
+        return false;
+    }
+}
+
+export function normalizeNoteBlock(value, options = {}) {
+    const { keepEmpty = false } = options;
+
+    if (typeof value === 'string') {
+        const text = value.trim();
+        if (text) return { type: 'text', value: text };
+        return keepEmpty ? { type: 'text', value: '' } : null;
+    }
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+
+    const type = typeof value.type === 'string' ? value.type.trim().toLowerCase() : '';
+    if (!NOTE_BLOCK_TYPES.includes(type)) return null;
+
+    // Code keeps its own whitespace; the other types are single-line values.
+    const rawValue = value.value == null ? '' : String(value.value);
+    const normalizedValue = type === 'code' ? rawValue.replace(/\s+$/, '') : rawValue.trim();
+    // An empty value is kept while editing: the block was just added, or the
+    // user cleared the field and is about to retype it.
+    if (!normalizedValue && !keepEmpty) return null;
+
+    const block = { type, value: normalizedValue };
+
+    if (type === 'link') {
+        const label = typeof value.label === 'string' ? value.label.trim() : '';
+        if (label) block.label = label;
+    }
+    if (type === 'code') {
+        const lang = typeof value.lang === 'string' ? value.lang.trim().toLowerCase() : '';
+        if (lang) block.lang = lang;
+    }
+    return block;
+}
+
+/**
+ * A note groups related blocks under one label, so a step can carry several
+ * notes of different kinds (spec origin, open question, sample code...).
+ * An empty label is allowed while the user is still typing one.
+ */
+export function normalizeNoteEntry(value, options = {}) {
+    const { keepEmpty = false } = options;
+
+    if (typeof value === 'string') {
+        const text = value.trim();
+        if (text) return { label: '', blocks: [{ type: 'text', value: text }] };
+        return keepEmpty ? createEmptyNoteEntry() : null;
+    }
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+
+    const label = typeof value.label === 'string' ? value.label.trim() : '';
+    const source = Array.isArray(value.blocks) ? value.blocks : [];
+    const blocks = [];
+    source.forEach((item) => {
+        const block = normalizeNoteBlock(item, { keepEmpty });
+        if (block) blocks.push(block);
+    });
+
+    if (!label && blocks.length === 0 && !keepEmpty) return null;
+    return { label, blocks };
+}
+
+function convertLegacyRefToNotes(legacyRef) {
+    const refs = Array.isArray(legacyRef) ? legacyRef : [legacyRef];
+    const notes = [];
+    refs.forEach((entry) => {
+        if (typeof entry === 'string') {
+            const label = entry.trim();
+            if (label) notes.push({ label, blocks: [] });
+            return;
+        }
+        if (!entry || typeof entry !== 'object') return;
+        const label = typeof entry.slug === 'string' ? entry.slug.trim() : '';
+        const link = typeof entry.link === 'string' ? entry.link.trim() : '';
+        const text = typeof entry.text === 'string' ? entry.text.trim() : '';
+        const blocks = [];
+        if (link) blocks.push({ type: 'link', value: link });
+        if (text) blocks.push({ type: 'text', value: text });
+        if (label || blocks.length) notes.push({ label, blocks });
+    });
+    return notes;
+}
+
+/**
+ * Reads a step's notes, accepting every shape this field has had:
+ *   notes: [{ label, blocks }]       -> current
+ *   note: "plain text"               -> one unlabeled note
+ *   note: [{ type, value }]          -> flat block list, wrapped in one note
+ *   ref:  [{ slug, link, text }]     -> one note per ref
+ */
+export function getChecklistNotes(step) {
+    const notes = [];
+
+    if (step?.ref !== undefined && step?.ref !== null) {
+        notes.push(...convertLegacyRefToNotes(step.ref));
+    }
+
+    const legacyNote = step?.note;
+    if (typeof legacyNote === 'string') {
+        const text = legacyNote.trim();
+        if (text) notes.push({ label: '', blocks: [{ type: 'text', value: text }] });
+    } else if (Array.isArray(legacyNote)) {
+        // Flat block list: a leading `label` block becomes the note label.
+        const blocks = [];
+        let label = '';
+        legacyNote.forEach((item) => {
+            if (item && typeof item === 'object' && item.type === 'label') {
+                const value = typeof item.value === 'string' ? item.value.trim() : '';
+                if (value && !label) label = value;
+                return;
+            }
+            const block = normalizeNoteBlock(item);
+            if (block) blocks.push(block);
+        });
+        if (label || blocks.length) notes.push({ label, blocks });
+    }
+
+    if (Array.isArray(step?.notes)) {
+        // An empty note is kept: the user just created that card and is about
+        // to type into it, so dropping it would make the card disappear.
+        step.notes.forEach((item) => {
+            const note = normalizeNoteEntry(item, { keepEmpty: true });
+            if (note) notes.push(note);
+        });
+    }
+
+    return notes;
+}
+
+export function serializeNotes(notes) {
+    return notes.map(note => ({
+        label: note.label || '',
+        blocks: (note.blocks || []).map(block => ({ ...block }))
+    }));
+}
+
+export function hasLegacyChecklistNoteShape(step) {
+    if (step?.ref !== undefined && step?.ref !== null) {
+        return Array.isArray(step.ref) ? step.ref.length > 0 : true;
+    }
+    const legacyNote = step?.note;
+    if (typeof legacyNote === 'string') return legacyNote.trim().length > 0;
+    if (Array.isArray(legacyNote)) return legacyNote.length > 0;
+    return false;
+}
+
+export function createEmptyNoteEntry() {
+    return { label: '', blocks: [] };
+}
+
+/**
+ * Builds one chip per note for the table. The label is what the user typed;
+ * without one, fall back to a link label, its host, then a generic index.
+ */
+export function getChecklistNoteChips(step) {
+    return getChecklistNotes(step).map((note, noteIndex) => {
+        const linkBlock = note.blocks.find(block => block.type === 'link');
+        let label = note.label;
+        if (!label && linkBlock) {
+            label = linkBlock.label || formatLinkHost(linkBlock.value);
+        }
+        if (!label) label = `Note ${noteIndex + 1}`;
+
+        const link = linkBlock && isSafeChecklistRefLink(linkBlock.value)
+            ? linkBlock.value
+            : '';
+
+        return {
+            noteIndex,
+            label,
+            link,
+            hasLink: Boolean(link),
+            blockCount: note.blocks.length
+        };
+    });
+}
+
+function formatLinkHost(link) {
+    try {
+        return new URL(link).hostname.replace(/^www\./, '');
+    } catch (_) {
+        return 'link';
+    }
+}
+
 function normalizeStepFieldForEditor(value) {
     if (Array.isArray(value)) {
         return value
@@ -158,6 +353,39 @@ export function updatePassHeaderState(passHeaderToggle, currentData) {
     passHeaderToggle.classList.toggle('all-passed', allPassed);
     passHeaderToggle.classList.toggle('disabled', !hasSteps);
     passHeaderToggle.setAttribute('aria-pressed', allPassed ? 'true' : 'false');
+}
+
+export function computeChecklistProgress(currentData) {
+    const steps = (currentData && Array.isArray(currentData.steps)) ? currentData.steps : [];
+    const checkableSteps = steps.filter(step => !isChecklistDividerStep(step));
+    const total = checkableSteps.length;
+    const passed = checkableSteps.filter(step => step?.pass === true).length;
+    return {
+        passed,
+        total,
+        hasSteps: total > 0,
+        allPassed: total > 0 && passed === total
+    };
+}
+
+export function updateChecklistProgressIndicator(indicator, currentData) {
+    if (!indicator) return;
+
+    const { passed, total, hasSteps, allPassed } = computeChecklistProgress(currentData);
+
+    indicator.hidden = !hasSteps;
+    indicator.classList.toggle('is-complete', allPassed);
+
+    if (!hasSteps) {
+        indicator.textContent = '';
+        indicator.removeAttribute('title');
+        return;
+    }
+
+    indicator.textContent = `${passed}/${total}`;
+    indicator.title = allPassed
+        ? `All ${total} steps passed`
+        : `${passed} of ${total} steps passed`;
 }
 
 export function renderFileTree(container, workspace, options = {}) {
@@ -580,7 +808,7 @@ function appendAddRowButton(container, insertIndex, options = {}) {
     const wrapperRow = document.createElement('tr');
     wrapperRow.className = `checklist-add-row-zone ${zoneClassName}`.trim();
     const cell = document.createElement('td');
-    cell.colSpan = 5;
+    cell.colSpan = 6;
     const actions = document.createElement('div');
     actions.className = 'checklist-add-row-actions';
     if (typeof onAddStep === 'function') {
@@ -594,8 +822,86 @@ function appendAddRowButton(container, insertIndex, options = {}) {
     container.appendChild(wrapperRow);
 }
 
+const CHECKLIST_REF_LINK_ICON = '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M3.75 2h3a.75.75 0 0 1 0 1.5h-3a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25v-3a.75.75 0 0 1 1.5 0v3A1.75 1.75 0 0 1 12.25 14h-8.5A1.75 1.75 0 0 1 2 12.25v-8.5A1.75 1.75 0 0 1 3.75 2Zm6.5 0h3.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0V4.56L8.56 9.25a.75.75 0 1 1-1.06-1.06L12.19 3.5h-1.94a.75.75 0 0 1 0-1.5Z"></path></svg>';
+
+const CHECKLIST_NOTE_ICON = '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M1 2.75A1.75 1.75 0 0 1 2.75 1h10.5A1.75 1.75 0 0 1 15 2.75v8.5A1.75 1.75 0 0 1 13.25 13H7.06l-3.53 2.72A.75.75 0 0 1 2.3 15.1l.2-2.1h-.25A1.75 1.75 0 0 1 1 11.25v-8.5Zm3.5 2a.75.75 0 0 0 0 1.5h7a.75.75 0 0 0 0-1.5h-7Zm0 3a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 0-1.5h-4.5Z"></path></svg>';
+
+function renderChecklistNoteCell(cell, options) {
+    if (!cell) return;
+    const { index, chips, activeNoteKey, onOpenStepDetail } = options;
+
+    const open = (target, event) => {
+        event.stopPropagation();
+        if (typeof onOpenStepDetail === 'function') onOpenStepDetail(index, target);
+    };
+
+    // Clicking anywhere in the cell opens the panel; the chips and the add
+    // button narrow that down to a specific note or a new one.
+    cell.addEventListener('click', (event) => open({ type: 'panel' }, event));
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'checklist-note-wrapper';
+
+    chips.forEach((chip) => {
+        // The label button and the link anchor are siblings: an anchor nested
+        // inside a button is invalid HTML and swallows the navigation.
+        const group = document.createElement('span');
+        group.className = 'checklist-note-chip-group';
+        if (activeNoteKey === chip.noteIndex) group.classList.add('is-active');
+
+        const chipEl = document.createElement('button');
+        chipEl.type = 'button';
+        chipEl.className = 'checklist-note-chip';
+
+        const labelEl = document.createElement('span');
+        labelEl.className = 'checklist-note-chip__label';
+        labelEl.textContent = chip.label;
+        chipEl.appendChild(labelEl);
+
+        const blockLabel = chip.blockCount === 1 ? '1 block' : `${chip.blockCount} blocks`;
+        chipEl.title = `Open note "${chip.label}" (${blockLabel})`;
+        chipEl.setAttribute('aria-label', `Open note ${chip.label}, ${blockLabel}`);
+        chipEl.addEventListener('click', (event) => {
+            open({ type: 'note', noteIndex: chip.noteIndex }, event);
+        });
+        group.appendChild(chipEl);
+
+        if (chip.link) {
+            const linkEl = document.createElement('a');
+            linkEl.className = 'checklist-note-chip__link';
+            linkEl.href = chip.link;
+            // A named target reuses one background tab instead of piling up a
+            // new one per click, and never navigates this window.
+            linkEl.target = 'qa-scenario-reference';
+            linkEl.rel = 'noopener noreferrer';
+            linkEl.innerHTML = CHECKLIST_REF_LINK_ICON;
+            linkEl.title = `Open ${chip.link}`;
+            linkEl.setAttribute('aria-label', `Open link for ${chip.label} in a new tab`);
+            // The cell and the row both open the panel on click, so the anchor
+            // must stop the event from reaching them.
+            linkEl.addEventListener('click', (event) => {
+                event.stopPropagation();
+            });
+            group.appendChild(linkEl);
+        }
+
+        wrapper.appendChild(group);
+    });
+
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'checklist-note-add';
+    addBtn.textContent = '+';
+    addBtn.title = 'Add note';
+    addBtn.setAttribute('aria-label', 'Add note');
+    addBtn.addEventListener('click', (event) => open({ type: 'new' }, event));
+    wrapper.appendChild(addBtn);
+
+    cell.appendChild(wrapper);
+}
+
 export function renderChecklist(container, data, options = {}) {
-    const { onUpdatePass, onUpdateStep, onHighlightStep, onScenarioTitleUpdate, onAddStep, onAddDivider, onOpenChecklistContextMenu } = options;
+    const { onUpdatePass, onUpdateStep, onHighlightStep, onScenarioTitleUpdate, onAddStep, onAddDivider, onOpenChecklistContextMenu, onOpenStepDetail, activeNoteIndex = null, activeNoteKey = null } = options;
     if (!container) return;
     const canInsertRows = typeof onAddStep === 'function' || typeof onAddDivider === 'function';
 
@@ -611,7 +917,7 @@ export function renderChecklist(container, data, options = {}) {
     };
 
     if (!data || !data.steps || !Array.isArray(data.steps)) {
-        container.innerHTML = '<tr class="empty-state"><td colspan="5">JSON structure must contain a "steps" array.</td></tr>';
+        container.innerHTML = '<tr class="empty-state"><td colspan="6">JSON structure must contain a "steps" array.</td></tr>';
         if (onScenarioTitleUpdate) onScenarioTitleUpdate("No valid steps found", false);
         return;
     }
@@ -624,7 +930,7 @@ export function renderChecklist(container, data, options = {}) {
         container.innerHTML = '';
         const emptyRow = document.createElement('tr');
         emptyRow.className = 'empty-state';
-        emptyRow.innerHTML = '<td colspan="5">No steps in this scenario file.</td>';
+        emptyRow.innerHTML = '<td colspan="6">No steps in this scenario file.</td>';
         container.appendChild(emptyRow);
         if (canInsertRows) {
             appendAddRowButton(container, 0, {
@@ -644,7 +950,7 @@ export function renderChecklist(container, data, options = {}) {
             const dividerRow = document.createElement('tr');
             dividerRow.className = 'checklist-divider-row';
             const dividerCell = document.createElement('td');
-            dividerCell.colSpan = 5;
+            dividerCell.colSpan = 6;
             const dividerContent = document.createElement('div');
             dividerContent.className = 'cell-content checklist-divider-content';
             dividerContent.contentEditable = 'true';
@@ -741,7 +1047,19 @@ export function renderChecklist(container, data, options = {}) {
                     <span class="checkmark"></span>
                 </label>
             </td>
+            <td class="col-note"></td>
         `;
+
+        const noteChips = getChecklistNoteChips(step);
+        const isActiveStep = activeNoteIndex === index;
+        renderChecklistNoteCell(tr.querySelector('.col-note'), {
+            index,
+            chips: noteChips,
+            activeNoteKey: isActiveStep ? activeNoteKey : null,
+            onOpenStepDetail
+        });
+        if (noteChips.length > 0) tr.classList.add('has-note');
+        if (isActiveStep) tr.classList.add('is-note-active');
 
         const populateCell = (field, val) => {
             const cell = tr.querySelector(`[data-field="${field}"]`);

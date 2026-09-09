@@ -1,0 +1,591 @@
+/* Note column, progress indicator, density toggle, note panel */
+
+.checklist-header-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.checklist-header-meta .scenario-meta {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* Progress and density controls must never shrink, even with long file paths. */
+.checklist-progress,
+.checklist-density-toggle {
+  flex: 0 0 auto;
+}
+
+.checklist-progress {
+  font-family: var(--font-code);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  padding: 1px 6px;
+  border: 1px solid var(--border-muted);
+  border-radius: 999px;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+
+.checklist-progress.is-complete {
+  color: #56d364;
+  border-color: #238636;
+  background-color: color-mix(in srgb, #238636 18%, transparent);
+}
+
+.checklist-progress[hidden] {
+  display: none;
+}
+
+.checklist-density-toggle {
+  font-family: var(--font-heading, inherit);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-muted);
+  border-radius: 4px;
+  padding: 1px 6px;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+
+.checklist-density-toggle:hover {
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
+}
+
+.checklist-density-toggle.is-active {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  background-color: color-mix(in srgb, var(--accent-primary) 14%, transparent);
+}
+
+/* --- Ref column: hidden in Check mode, shown in Trace mode --- */
+
+.col-note {
+  width: 150px;
+  min-width: 110px;
+  vertical-align: middle;
+}
+
+.spreadsheet-view:not(.is-note-visible) .col-note {
+  display: none;
+}
+
+.checklist-note-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+}
+
+/*
+ * A chip is a group of two controls: the label button opens the note panel,
+ * and the optional anchor opens the reference in a background tab. They are
+ * siblings because an anchor inside a button is invalid HTML.
+ */
+.checklist-note-chip-group {
+  display: inline-flex;
+  align-items: stretch;
+  max-width: 100%;
+  font-family: var(--font-code);
+  font-size: 10px;
+  line-height: 1.5;
+  background-color: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 35%, transparent);
+  border-radius: 4px;
+  overflow: hidden;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.checklist-note-chip-group:hover {
+  border-color: var(--accent-primary);
+}
+
+.checklist-note-chip-group.is-active {
+  border-color: var(--accent-primary);
+  background-color: color-mix(in srgb, var(--accent-primary) 24%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-primary) 45%, transparent);
+}
+
+.checklist-note-chip {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  font: inherit;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  padding: 0 4px;
+  cursor: pointer;
+  transition: color 120ms ease;
+}
+
+.checklist-note-chip:hover {
+  color: var(--text-primary);
+}
+
+.checklist-note-chip-group.is-active .checklist-note-chip {
+  color: var(--text-primary);
+}
+
+.checklist-note-chip__label {
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Separate hit area so the icon is clearly its own target. */
+.checklist-note-chip__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 18px;
+  color: var(--text-secondary);
+  border-left: 1px solid color-mix(in srgb, var(--accent-primary) 30%, transparent);
+  transition:
+    color 120ms ease,
+    background-color 120ms ease;
+}
+
+.checklist-note-chip__link:hover {
+  color: var(--accent-primary);
+  background-color: color-mix(in srgb, var(--accent-primary) 22%, transparent);
+}
+
+.checklist-note-chip__link:focus-visible {
+  outline: 1px solid var(--accent-primary);
+  outline-offset: -1px;
+}
+
+/* Highlight the row whose note is open in the panel. */
+tr.is-note-active {
+  background-color: color-mix(in srgb, var(--accent-primary) 7%, transparent);
+}
+
+.checklist-note-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    opacity 120ms ease;
+}
+
+tr:hover .checklist-note-add,
+.checklist-note-add:focus-visible {
+  opacity: 1;
+}
+
+.checklist-note-add:hover {
+  color: var(--accent-primary);
+  background-color: color-mix(in srgb, var(--accent-primary) 14%, transparent);
+}
+
+/* --- Note panel --- */
+
+.step-detail-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgb(1 4 9 / 45%);
+  z-index: 60;
+}
+
+.step-detail-backdrop.is-hidden {
+  display: none;
+}
+
+/*
+ * Default width fits roughly 80 monospace columns in a code block. Every
+ * padding layer between the panel edge and a glyph costs width, so the
+ * nesting below is intentionally shallow.
+ */
+.step-detail-panel {
+  --step-detail-panel-width: 680px;
+
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  /* The width is clamped in JS so the stored value always matches what is
+     rendered; a second CSS cap here would silently disagree with it. */
+  width: var(--step-detail-panel-width);
+  max-width: 100vw;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--editor-bg, var(--bg-color));
+  border-left: 1px solid var(--border-muted);
+  box-shadow: -8px 0 24px rgb(1 4 9 / 40%);
+  z-index: 61;
+}
+
+.step-detail-resizer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 6px;
+  margin-left: -3px;
+  cursor: col-resize;
+  touch-action: none;
+  background-color: transparent;
+  transition: background-color 120ms ease;
+  z-index: 1;
+}
+
+.step-detail-resizer:hover,
+.step-detail-resizer.resizing {
+  background-color: var(--accent-primary);
+}
+
+.step-detail-panel.is-hidden {
+  display: none;
+}
+
+.step-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 12px;
+  height: var(--pane-header-height, 34px);
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--border-muted);
+}
+
+.step-detail-header h3 {
+  font-family: var(--font-heading, inherit);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.step-detail-close {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.step-detail-close:hover {
+  color: var(--text-primary);
+}
+
+.step-detail-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.step-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.step-detail-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.step-detail-section-head h4 {
+  font-family: var(--font-heading, inherit);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.step-detail-add-btn {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-muted);
+  border-radius: 4px;
+  padding: 2px 6px;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+.step-detail-add-btn:hover {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.step-detail-empty {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.step-detail-empty[hidden] {
+  display: none;
+}
+
+.step-detail-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* One card per note: label on top, its blocks below. */
+.step-detail-note-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  background-color: var(--pane-bg);
+  border: 1px solid var(--border-muted);
+  border-radius: 6px;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.step-detail-note-card.is-active {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-primary) 40%, transparent);
+}
+
+.step-detail-note-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.step-detail-label-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-code);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background-color: var(--bg-color);
+  border: 1px solid var(--border-muted);
+  border-radius: 4px;
+  padding: 3px 6px;
+}
+
+.step-detail-label-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.step-detail-note-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.step-detail-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 0;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+.step-detail-icon-btn:hover:not(:disabled) {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.step-detail-icon-btn.is-danger:hover:not(:disabled) {
+  color: #f85149;
+  border-color: #f85149;
+}
+
+.step-detail-icon-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.step-detail-block-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.step-detail-block {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 7px;
+  border: 1px solid var(--border-muted);
+  border-radius: 4px;
+}
+
+/* A code block gives its width to the editor instead of nested padding. */
+.step-detail-block--code {
+  padding: 0;
+  border: none;
+}
+
+.step-detail-block--code .step-detail-block-head {
+  padding: 0 2px;
+}
+
+.step-detail-block-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.step-detail-block-kind {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent-primary);
+}
+
+/* The spacer takes the leftover room so every trailing control stays grouped
+   on the right, however many there are. */
+.step-detail-block-head-spacer {
+  flex: 1 1 auto;
+}
+
+.step-detail-open-link {
+  text-decoration: none;
+}
+
+.step-detail-open-link:hover {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.step-detail-block-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.step-detail-block-add-btn {
+  font-size: 10px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px dashed var(--border-color);
+  border-radius: 4px;
+  padding: 2px 6px;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+.step-detail-block-add-btn:hover {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  border-style: solid;
+}
+
+.step-detail-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.step-detail-field-label {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.step-detail-lang-select {
+  font-family: var(--font-code);
+  font-size: 10px;
+  color: var(--text-primary);
+  background-color: var(--bg-color);
+  border: 1px solid var(--border-muted);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+.step-detail-lang-select:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.step-detail-code-host {
+  min-width: 0;
+}
+
+.step-detail-code-warning {
+  font-size: 10px;
+  color: #d29922;
+  margin: 0;
+}
+
+.step-detail-input {
+  width: 100%;
+  font-family: var(--font-code);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background-color: var(--bg-color);
+  border: 1px solid var(--border-muted);
+  border-radius: 4px;
+  padding: 4px 6px;
+  resize: vertical;
+}
+
+.step-detail-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}

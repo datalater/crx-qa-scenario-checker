@@ -1,4 +1,9 @@
-import { WORKSPACE_STORAGE_KEY } from './constants/storage.js';
+import {
+    WORKSPACE_STORAGE_KEY,
+    CHECKLIST_DENSITY_STORAGE_KEY,
+    NOTE_PANEL_WIDTH_STORAGE_KEY,
+    NOTE_CODE_LANG_STORAGE_KEY
+} from './constants/storage.js';
 import { AUTOSAVE_DELAY_MS, WORKSPACE_VERSION, DEFAULT_FILE_NAME } from './configs/workspace.js';
 import { EDITOR_CONFIG } from './configs/editor-config.js';
 import { tryParseJson } from './utils/json.js';
@@ -52,6 +57,7 @@ const EL = {
     highlighting: document.getElementById('highlighting'),
     highlightContent: document.getElementById('highlighting-content'),
     checklistBody: document.getElementById('checklist-body'),
+    checklistView: document.getElementById('checklist-view'),
     highlightOverlay: document.getElementById('highlight-overlay'),
     jsonStatus: document.getElementById('json-status'),
     jsonErrorPosition: document.getElementById('json-error-position'),
@@ -71,6 +77,16 @@ const EL = {
     btnEditorReplaceOne: document.getElementById('btn-editor-replace-one'),
     btnEditorReplaceAll: document.getElementById('btn-editor-replace-all'),
     scenarioTitle: document.getElementById('scenario-title'),
+    checklistProgress: document.getElementById('checklist-progress'),
+    checklistDensityToggle: document.getElementById('checklist-density-toggle'),
+    stepDetailPanel: document.getElementById('step-detail-panel'),
+    stepDetailBackdrop: document.getElementById('step-detail-backdrop'),
+    stepDetailTitle: document.getElementById('step-detail-title'),
+    stepDetailClose: document.getElementById('step-detail-close'),
+    stepDetailNotes: document.getElementById('step-detail-notes'),
+    stepDetailNotesEmpty: document.getElementById('step-detail-notes-empty'),
+    stepDetailAddNote: document.getElementById('step-detail-add-note'),
+    stepDetailResizer: document.getElementById('step-detail-resizer'),
     btnFormat: document.getElementById('btn-format'),
     saveIndicator: document.getElementById('save-indicator'),
     saveIndicatorTime: document.getElementById('save-indicator-time'),
@@ -101,6 +117,7 @@ const EL = {
     treeContextReadonly: document.getElementById('tree-context-readonly'),
     checklistContextMenu: document.getElementById('checklist-context-menu'),
     checklistContextDelete: document.getElementById('checklist-context-delete'),
+    checklistContextDetail: document.getElementById('checklist-context-detail'),
     btnKeyboardShortcuts: document.getElementById('btn-keyboard-shortcuts'),
     shortcutsModal: document.getElementById('keyboard-shortcuts-modal'),
     shortcutsBackdrop: document.getElementById('keyboard-shortcuts-backdrop'),
@@ -138,6 +155,10 @@ const EL = {
 
 let currentData = null;
 let workspace = null;
+let checklistShowNote = false;
+let stepDetailIndex = null;
+let stepDetailActiveNote = null;
+let stepDetailCodeEditors = [];
 let autosaveTimer = null;
 let activeFileDirty = false;
 let topSaveStatusActivated = false;
@@ -202,8 +223,12 @@ const REQUIRED_EXPORT_FIELDS = [
     'steps.given',
     'steps.when',
     'steps.then',
-    'steps.pass'
+    'steps.pass',
+    'steps.notes'
 ];
+const DEFAULT_NOTE_CODE_LANG = 'javascript';
+const NOTE_PANEL_MIN_WIDTH = 320;
+const NOTE_PANEL_DEFAULT_WIDTH = 680;
 const DEFAULT_PANEL_VISIBILITY = {
     fileTree: true,
     jsonEditor: true,
@@ -223,6 +248,8 @@ function init() {
     setupEditorCursorHistoryManager();
     setupEditorFindReplaceManager();
     setupDeletedFileHistoryManager();
+    setupChecklistDensityToggle();
+    setupStepDetailPanel();
     loadWorkspace();
     setupEventListeners();
     resizerLayout.setupResizing();
@@ -610,7 +637,7 @@ function renderNoFileSelectedState() {
     setJsonValidationIdleState('No file');
 
     if (EL.checklistBody) {
-        EL.checklistBody.innerHTML = '<tr class="empty-state"><td colspan="5">Select a file or create a new file.</td></tr>';
+        EL.checklistBody.innerHTML = '<tr class="empty-state"><td colspan="6">Select a file or create a new file.</td></tr>';
     }
 
     if (EL.scenarioTitle) {
@@ -1277,6 +1304,10 @@ function openChecklistContextMenu(target) {
 
     if (EL.checklistContextColor) {
         EL.checklistContextColor.hidden = !target.isDivider;
+    }
+
+    if (EL.checklistContextDetail) {
+        EL.checklistContextDetail.hidden = target.isDivider === true;
     }
 
     const menuWidth = 160;
@@ -1951,14 +1982,645 @@ function renderChecklist() {
         onAddDivider: (insertIndex) => {
             insertChecklistEntry(insertIndex, { divider: true });
         },
-        onOpenChecklistContextMenu: openChecklistContextMenu
+        onOpenChecklistContextMenu: openChecklistContextMenu,
+        onOpenStepDetail: openStepDetailPanel,
+        activeNoteIndex: stepDetailIndex,
+        activeNoteKey: stepDetailActiveNote
     });
-    UI.updatePassHeaderState(EL.passHeaderToggle, currentData);
+    refreshPassSummary();
+    refreshStepDetailPanel();
     clearHighlightIfNoSelection();
 }
 
 function isStepArrayField(field) {
     return field === 'given' || field === 'when' || field === 'then';
+}
+
+function setChecklistDensity(showRef, options = {}) {
+    const { persist = true } = options;
+    checklistShowNote = showRef === true;
+
+    if (EL.checklistView) {
+        EL.checklistView.classList.toggle('is-note-visible', checklistShowNote);
+    }
+    if (EL.checklistDensityToggle) {
+        EL.checklistDensityToggle.setAttribute('aria-pressed', checklistShowNote ? 'true' : 'false');
+        EL.checklistDensityToggle.classList.toggle('is-active', checklistShowNote);
+        const label = checklistShowNote ? 'Hide note column' : 'Show note column';
+        EL.checklistDensityToggle.title = label;
+        EL.checklistDensityToggle.setAttribute('aria-label', label);
+    }
+    if (persist) {
+        try {
+            localStorage.setItem(CHECKLIST_DENSITY_STORAGE_KEY, checklistShowNote ? 'trace' : 'check');
+        } catch (_) { /* storage unavailable */ }
+    }
+}
+
+function setupChecklistDensityToggle() {
+    let stored = null;
+    try {
+        stored = localStorage.getItem(CHECKLIST_DENSITY_STORAGE_KEY);
+    } catch (_) { /* storage unavailable */ }
+
+    setChecklistDensity(stored === 'trace', { persist: false });
+
+    if (EL.checklistDensityToggle) {
+        EL.checklistDensityToggle.addEventListener('click', () => {
+            setChecklistDensity(!checklistShowNote);
+        });
+    }
+}
+
+function getStepDetailTarget() {
+    if (stepDetailIndex === null) return null;
+    const step = currentData?.steps?.[stepDetailIndex];
+    if (!step || UI.isChecklistDividerStep(step)) return null;
+    return step;
+}
+
+function openStepDetailPanel(index, target = { type: 'panel' }) {
+    stepDetailIndex = index;
+    const step = getStepDetailTarget();
+    if (!step) {
+        closeStepDetailPanel();
+        return;
+    }
+
+    const requested = target || { type: 'panel' };
+    let focusNoteIndex = null;
+
+    if (requested.type === 'new') {
+        // Append an empty note and focus its label so the user can name it.
+        const notes = UI.getChecklistNotes(step);
+        notes.push(UI.createEmptyNoteEntry());
+        focusNoteIndex = notes.length - 1;
+        stepDetailActiveNote = focusNoteIndex;
+        commitStepDetailNotes(notes, { refreshPanel: false, keepEmpty: true });
+    } else if (requested.type === 'note' && Number.isInteger(requested.noteIndex)) {
+        focusNoteIndex = requested.noteIndex;
+        stepDetailActiveNote = focusNoteIndex;
+    } else {
+        stepDetailActiveNote = null;
+    }
+
+    EL.stepDetailPanel?.classList.remove('is-hidden');
+    EL.stepDetailBackdrop?.classList.remove('is-hidden');
+    EL.stepDetailBackdrop?.setAttribute('aria-hidden', 'false');
+    // renderChecklist repaints the table for the active style and calls
+    // refreshStepDetailPanel, which paints the notes.
+    renderChecklist();
+    focusStepDetailNote(focusNoteIndex);
+}
+
+function focusStepDetailNote(noteIndex) {
+    const cards = EL.stepDetailNotes?.querySelectorAll('.step-detail-note-card');
+    if (!cards || cards.length === 0) {
+        EL.stepDetailAddNote?.focus();
+        return;
+    }
+    const card = Number.isInteger(noteIndex) ? cards[noteIndex] : cards[0];
+    if (!card) return;
+    card.scrollIntoView({ block: 'nearest' });
+    const field = card.querySelector('.step-detail-label-input')
+        || card.querySelector('.step-detail-input');
+    if (field) {
+        field.focus();
+        if (typeof field.select === 'function') field.select();
+    }
+}
+
+function closeStepDetailPanel() {
+    const hadTarget = stepDetailIndex !== null;
+    // Flush pending editor text before the instances are torn down, so that
+    // closing with Escape keeps what was typed.
+    flushStepDetailCodeEditors();
+    // Blocks and notes left empty are only useful while the panel is open;
+    // drop them so they do not linger in the saved JSON.
+    pruneEmptyStepDetailEntries();
+    stepDetailIndex = null;
+    stepDetailActiveNote = null;
+    destroyStepDetailCodeEditors();
+    closeNoteBlockAddMenu();
+    EL.stepDetailPanel?.classList.add('is-hidden');
+    EL.stepDetailBackdrop?.classList.add('is-hidden');
+    EL.stepDetailBackdrop?.setAttribute('aria-hidden', 'true');
+    if (hadTarget) renderChecklist();
+}
+
+function refreshStepDetailPanel() {
+    if (stepDetailIndex === null) return;
+    if (!getStepDetailTarget()) {
+        closeStepDetailPanel();
+        return;
+    }
+    if (EL.stepDetailPanel?.contains(document.activeElement)) return;
+    renderStepDetailContents();
+}
+
+function pruneEmptyStepDetailEntries() {
+    const step = getStepDetailTarget();
+    if (!step || !Array.isArray(step.notes)) return;
+
+    const pruned = [];
+    step.notes.forEach((note) => {
+        const entry = UI.normalizeNoteEntry(note);
+        if (entry) pruned.push(entry);
+    });
+
+    const before = JSON.stringify(step.notes);
+    if (pruned.length === 0) delete step.notes;
+    else step.notes = UI.serializeNotes(pruned);
+
+    if (before !== JSON.stringify(step.notes)) syncToEditor();
+}
+
+function flushStepDetailCodeEditors() {
+    stepDetailCodeEditors.forEach((entry) => {
+        if (typeof entry.flush === 'function') entry.flush();
+    });
+}
+
+function destroyStepDetailCodeEditors() {
+    stepDetailCodeEditors.forEach((entry) => {
+        try {
+            entry.editor.destroy();
+        } catch (_) { /* already gone */ }
+    });
+    stepDetailCodeEditors = [];
+}
+
+function commitStepDetailNotes(notes, options = {}) {
+    const { refreshPanel = false, keepEmpty = false } = options;
+    const step = getStepDetailTarget();
+    if (!step) return;
+
+    const normalized = [];
+    notes.forEach((note) => {
+        const entry = UI.normalizeNoteEntry(note, { keepEmpty });
+        if (entry) normalized.push(entry);
+    });
+
+    // Older shapes (`ref`, flat `note`) are folded into `notes` on first write.
+    if (UI.hasLegacyChecklistNoteShape(step)) {
+        delete step.ref;
+        delete step.note;
+    }
+
+    if (normalized.length === 0) delete step.notes;
+    else step.notes = UI.serializeNotes(normalized);
+
+    syncToEditor();
+    renderChecklist();
+    if (refreshPanel) renderStepDetailContents();
+}
+
+function renderStepDetailContents() {
+    const step = getStepDetailTarget();
+    if (!step || !EL.stepDetailNotes) return;
+
+    if (EL.stepDetailTitle) {
+        EL.stepDetailTitle.textContent = `Step ${countVisibleStepNumber(stepDetailIndex)}`;
+    }
+
+    destroyStepDetailCodeEditors();
+
+    const notes = UI.getChecklistNotes(step);
+    EL.stepDetailNotes.innerHTML = '';
+    if (EL.stepDetailNotesEmpty) {
+        EL.stepDetailNotesEmpty.hidden = notes.length > 0;
+    }
+
+    notes.forEach((note, noteIndex) => {
+        EL.stepDetailNotes.appendChild(buildNoteCard(note, noteIndex, notes));
+    });
+}
+
+const NOTE_BLOCK_META = {
+    link: { title: 'Link', placeholder: 'https://...' },
+    text: { title: 'Text', placeholder: '원문이나 메모를 입력하세요.' },
+    code: { title: 'Code', placeholder: '' }
+};
+
+function buildNoteCard(note, noteIndex, notes) {
+    const card = document.createElement('section');
+    card.className = 'step-detail-note-card';
+    if (stepDetailActiveNote === noteIndex) card.classList.add('is-active');
+
+    const commitNotes = (nextNotes, options) => {
+        commitStepDetailNotes(nextNotes, { keepEmpty: true, ...options });
+    };
+
+    const patchNote = (patch, options) => {
+        const next = notes.map((item, itemIndex) => (
+            itemIndex === noteIndex ? { ...item, ...patch } : item
+        ));
+        commitNotes(next, options);
+    };
+
+    const head = document.createElement('div');
+    head.className = 'step-detail-note-head';
+
+    const labelField = document.createElement('input');
+    labelField.type = 'text';
+    labelField.className = 'step-detail-label-input';
+    labelField.value = note.label || '';
+    labelField.placeholder = 'Label (표에 표시됩니다)';
+    labelField.setAttribute('aria-label', 'Note label');
+    // Saving on every keystroke keeps the table chip in sync and means nothing
+    // is lost when the panel is closed with Escape.
+    labelField.addEventListener('input', () => {
+        patchNote({ label: labelField.value });
+    });
+    head.appendChild(labelField);
+
+    const actions = document.createElement('div');
+    actions.className = 'step-detail-note-actions';
+
+    const moveNote = (offset) => {
+        const target = noteIndex + offset;
+        if (target < 0 || target >= notes.length) return;
+        const next = notes.map(item => ({ ...item }));
+        const [moved] = next.splice(noteIndex, 1);
+        next.splice(target, 0, moved);
+        stepDetailActiveNote = target;
+        commitNotes(next, { refreshPanel: true });
+    };
+
+    const iconButton = (label, title, onClick, disabled, danger) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = danger
+            ? 'step-detail-icon-btn is-danger'
+            : 'step-detail-icon-btn';
+        btn.textContent = label;
+        btn.title = title;
+        btn.setAttribute('aria-label', title);
+        btn.disabled = disabled === true;
+        btn.addEventListener('click', onClick);
+        actions.appendChild(btn);
+    };
+
+    iconButton('↑', 'Move note up', () => moveNote(-1), noteIndex === 0);
+    iconButton('↓', 'Move note down', () => moveNote(1), noteIndex === notes.length - 1);
+    iconButton('×', 'Delete note', () => {
+        stepDetailActiveNote = null;
+        commitStepDetailNotes(
+            notes.filter((_, itemIndex) => itemIndex !== noteIndex),
+            { refreshPanel: true, keepEmpty: true }
+        );
+    }, false, true);
+
+    head.appendChild(actions);
+    card.appendChild(head);
+
+    const blockList = document.createElement('div');
+    blockList.className = 'step-detail-block-list';
+    note.blocks.forEach((block, blockIndex) => {
+        blockList.appendChild(buildNoteBlockRow(block, blockIndex, note, noteIndex, notes, commitNotes));
+    });
+    card.appendChild(blockList);
+
+    const addWrap = document.createElement('div');
+    addWrap.className = 'step-detail-block-add';
+    NOTE_BLOCK_TYPE_ORDER.forEach((type) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'step-detail-block-add-btn';
+        btn.textContent = `+ ${NOTE_BLOCK_META[type].title}`;
+        btn.addEventListener('click', () => {
+            const nextBlocks = note.blocks.concat([createSeedBlock(type)]);
+            stepDetailActiveNote = noteIndex;
+            patchNote({ blocks: nextBlocks }, { refreshPanel: true });
+            const cards = EL.stepDetailNotes?.querySelectorAll('.step-detail-note-card');
+            const rows = cards?.[noteIndex]?.querySelectorAll('.step-detail-block');
+            const field = rows?.[rows.length - 1]?.querySelector('.step-detail-input');
+            if (field) {
+                field.focus();
+                if (typeof field.select === 'function') field.select();
+            }
+        });
+        addWrap.appendChild(btn);
+    });
+    card.appendChild(addWrap);
+
+    return card;
+}
+
+const NOTE_BLOCK_TYPE_ORDER = ['link', 'text', 'code'];
+
+// New blocks start empty so the placeholder is visible; they survive the
+// commit because the panel normalizes with keepEmpty.
+function createSeedBlock(type) {
+    if (type === 'link') return { type: 'link', value: '' };
+    // A new code block reuses the language picked last, which is almost always
+    // the one wanted again.
+    if (type === 'code') return { type: 'code', value: '', lang: readRememberedCodeLang() };
+    return { type: 'text', value: '' };
+}
+
+function getSupportedCodeLanguages() {
+    const languages = window.QaCodeMirror?.SUPPORTED_LANGUAGES;
+    return Array.isArray(languages) ? languages : [];
+}
+
+function readRememberedCodeLang() {
+    let stored = null;
+    try {
+        stored = localStorage.getItem(NOTE_CODE_LANG_STORAGE_KEY);
+    } catch (_) { /* storage unavailable */ }
+
+    if (stored === null) return DEFAULT_NOTE_CODE_LANG;
+    // An empty string is a real choice (plain text), so it is kept as-is.
+    if (stored === '') return '';
+
+    const supported = getSupportedCodeLanguages();
+    // A remembered language can disappear when the bundle changes.
+    if (supported.length > 0 && !supported.includes(stored)) return DEFAULT_NOTE_CODE_LANG;
+    return stored;
+}
+
+function rememberCodeLang(lang) {
+    const next = typeof lang === 'string' ? lang.trim().toLowerCase() : '';
+    if (next && !getSupportedCodeLanguages().includes(next)) return;
+    try {
+        localStorage.setItem(NOTE_CODE_LANG_STORAGE_KEY, next);
+    } catch (_) { /* storage unavailable */ }
+}
+
+function buildNoteBlockRow(block, blockIndex, note, noteIndex, notes, commitNotes) {
+    const meta = NOTE_BLOCK_META[block.type] || NOTE_BLOCK_META.text;
+    const row = document.createElement('div');
+    row.className = `step-detail-block step-detail-block--${block.type}`;
+
+    const patchBlock = (patch, options) => {
+        const nextBlocks = note.blocks.map((item, itemIndex) => (
+            itemIndex === blockIndex ? { ...item, ...patch } : item
+        ));
+        const next = notes.map((item, itemIndex) => (
+            itemIndex === noteIndex ? { ...item, blocks: nextBlocks } : item
+        ));
+        commitNotes(next, options);
+    };
+
+    const head = document.createElement('div');
+    head.className = 'step-detail-block-head';
+
+    const kind = document.createElement('span');
+    kind.className = 'step-detail-block-kind';
+    kind.textContent = meta.title;
+    head.appendChild(kind);
+
+    if (block.type === 'code') {
+        const langSelect = document.createElement('select');
+        langSelect.className = 'step-detail-lang-select';
+        langSelect.setAttribute('aria-label', 'Code language');
+        const languages = window.QaCodeMirror?.SUPPORTED_LANGUAGES || [];
+        [''].concat(languages).forEach((lang) => {
+            const option = document.createElement('option');
+            option.value = lang;
+            option.textContent = lang || 'plain';
+            if ((block.lang || '') === lang) option.selected = true;
+            langSelect.appendChild(option);
+        });
+        langSelect.addEventListener('change', () => {
+            // Language changes the editor extensions, so the row is rebuilt.
+            stepDetailActiveNote = noteIndex;
+            rememberCodeLang(langSelect.value);
+            patchBlock({ lang: langSelect.value }, { refreshPanel: true });
+        });
+        head.appendChild(langSelect);
+    }
+
+    const headSpacer = document.createElement('span');
+    headSpacer.className = 'step-detail-block-head-spacer';
+    head.appendChild(headSpacer);
+
+    // A link block gets an open control so the reference can be checked while
+    // the note is being edited.
+    if (block.type === 'link' && UI.isSafeChecklistRefLink(block.value)) {
+        const openLink = document.createElement('a');
+        openLink.className = 'step-detail-icon-btn step-detail-open-link';
+        openLink.href = block.value;
+        openLink.target = 'qa-scenario-reference';
+        openLink.rel = 'noopener noreferrer';
+        openLink.textContent = '↗';
+        openLink.title = `Open ${block.value}`;
+        openLink.setAttribute('aria-label', 'Open link in a new tab');
+        head.appendChild(openLink);
+    }
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'step-detail-icon-btn is-danger';
+    removeBtn.textContent = '×';
+    removeBtn.title = 'Remove block';
+    removeBtn.setAttribute('aria-label', 'Remove block');
+    removeBtn.addEventListener('click', () => {
+        const nextBlocks = note.blocks.filter((_, itemIndex) => itemIndex !== blockIndex);
+        const next = notes.map((item, itemIndex) => (
+            itemIndex === noteIndex ? { ...item, blocks: nextBlocks } : item
+        ));
+        stepDetailActiveNote = noteIndex;
+        commitNotes(next, { refreshPanel: true });
+    });
+    head.appendChild(removeBtn);
+    row.appendChild(head);
+
+    if (block.type === 'code') {
+        const host = document.createElement('div');
+        host.className = 'step-detail-code-host';
+        row.appendChild(host);
+
+        const factory = window.QaCodeMirror?.createCodeEditor;
+        if (typeof factory === 'function') {
+            let pending = block.value;
+            const editor = factory({
+                parent: host,
+                doc: block.value,
+                lang: block.lang || '',
+                placeholder: 'Paste code here',
+                onChange: (value) => {
+                    pending = value;
+                    patchBlock({ value });
+                }
+            });
+            // `flush` lets the panel persist text if it is torn down before the
+            // editor reports a change (for example when closing with Escape).
+            stepDetailCodeEditors.push({
+                editor,
+                flush: () => {
+                    if (pending !== block.value) patchBlock({ value: pending });
+                }
+            });
+        } else {
+            const fallback = document.createElement('textarea');
+            fallback.className = 'step-detail-input';
+            fallback.rows = 5;
+            fallback.value = block.value;
+            fallback.addEventListener('input', () => patchBlock({ value: fallback.value }));
+            host.appendChild(fallback);
+
+            const warn = document.createElement('p');
+            warn.className = 'step-detail-code-warning';
+            warn.textContent = 'CodeMirror 번들이 없어 일반 textarea로 표시합니다. npm install && npm run build 를 실행하세요.';
+            row.appendChild(warn);
+        }
+        return row;
+    }
+
+    const isMultiline = block.type === 'text';
+    const input = isMultiline
+        ? document.createElement('textarea')
+        : document.createElement('input');
+    if (isMultiline) input.rows = 3;
+    else input.type = 'text';
+    input.className = 'step-detail-input';
+    input.value = block.value;
+    input.placeholder = meta.placeholder;
+    input.addEventListener('input', () => {
+        patchBlock({ value: input.value });
+    });
+    row.appendChild(input);
+
+    if (block.type === 'link') {
+        const labelField = document.createElement('label');
+        labelField.className = 'step-detail-field';
+
+        const caption = document.createElement('span');
+        caption.className = 'step-detail-field-label';
+        caption.textContent = 'Link label (optional)';
+
+        const labelInput = document.createElement('input');
+        labelInput.type = 'text';
+        labelInput.className = 'step-detail-input';
+        labelInput.value = block.label || '';
+        labelInput.placeholder = 'PRD';
+        labelInput.addEventListener('input', () => {
+            patchBlock({ label: labelInput.value });
+        });
+
+        labelField.appendChild(caption);
+        labelField.appendChild(labelInput);
+        row.appendChild(labelField);
+    }
+
+    return row;
+}
+
+function appendNoteFromPanel() {
+    const step = getStepDetailTarget();
+    if (!step) return;
+    const notes = UI.getChecklistNotes(step);
+    notes.push(UI.createEmptyNoteEntry());
+    stepDetailActiveNote = notes.length - 1;
+    commitStepDetailNotes(notes, { refreshPanel: true, keepEmpty: true });
+    focusStepDetailNote(stepDetailActiveNote);
+}
+
+function closeNoteBlockAddMenu() {
+    // Kept for compatibility with the shared Escape handler.
+}
+
+function countVisibleStepNumber(targetIndex) {
+    const steps = currentData?.steps;
+    if (!Array.isArray(steps)) return 1;
+    let visible = 0;
+    for (let i = 0; i <= targetIndex && i < steps.length; i += 1) {
+        if (!UI.isChecklistDividerStep(steps[i])) visible += 1;
+    }
+    return visible;
+}
+
+function applyStepDetailPanelWidth(width, options = {}) {
+    const { persist = true } = options;
+    if (!EL.stepDetailPanel) return;
+
+    // The panel is right-anchored, so the drag handle on its left edge grows
+    // the panel as it moves left.
+    const maxWidth = Math.max(NOTE_PANEL_MIN_WIDTH, window.innerWidth - 80);
+    const next = Math.round(Math.min(Math.max(width, NOTE_PANEL_MIN_WIDTH), maxWidth));
+
+    EL.stepDetailPanel.style.setProperty('--step-detail-panel-width', `${next}px`);
+
+    if (persist) {
+        try {
+            localStorage.setItem(NOTE_PANEL_WIDTH_STORAGE_KEY, String(next));
+        } catch (_) { /* storage unavailable */ }
+    }
+}
+
+function readStoredNotePanelWidth() {
+    let stored = null;
+    try {
+        stored = localStorage.getItem(NOTE_PANEL_WIDTH_STORAGE_KEY);
+    } catch (_) { /* storage unavailable */ }
+
+    const parsed = Number.parseInt(stored ?? '', 10);
+    return Number.isFinite(parsed) ? parsed : NOTE_PANEL_DEFAULT_WIDTH;
+}
+
+function setupStepDetailPanelResizing() {
+    applyStepDetailPanelWidth(readStoredNotePanelWidth(), { persist: false });
+
+    if (!EL.stepDetailResizer) return;
+
+    let isResizing = false;
+    let draggedWidth = null;
+
+    EL.stepDetailResizer.addEventListener('mousedown', (event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        isResizing = true;
+        draggedWidth = null;
+        document.body.classList.add('is-resizing');
+        EL.stepDetailResizer.classList.add('resizing');
+    });
+
+    window.addEventListener('mousemove', (event) => {
+        if (!isResizing) return;
+        draggedWidth = window.innerWidth - event.clientX;
+        applyStepDetailPanelWidth(draggedWidth, { persist: false });
+    });
+
+    const stopResizing = () => {
+        if (!isResizing) return;
+        isResizing = false;
+        document.body.classList.remove('is-resizing');
+        EL.stepDetailResizer.classList.remove('resizing');
+        // Persist once at the end instead of on every mousemove.
+        if (draggedWidth !== null) applyStepDetailPanelWidth(draggedWidth);
+        draggedWidth = null;
+    };
+
+    window.addEventListener('mouseup', stopResizing);
+    window.addEventListener('mouseleave', stopResizing);
+
+    // A width stored on a large screen would overflow a smaller window. The
+    // preference is re-clamped rather than the rendered width, so widening the
+    // window again restores the width the user actually chose.
+    window.addEventListener('resize', () => {
+        if (isResizing) return;
+        applyStepDetailPanelWidth(readStoredNotePanelWidth(), { persist: false });
+    });
+}
+
+function setupStepDetailPanel() {
+    EL.stepDetailClose?.addEventListener('click', closeStepDetailPanel);
+    EL.stepDetailBackdrop?.addEventListener('click', closeStepDetailPanel);
+    EL.stepDetailAddNote?.addEventListener('click', appendNoteFromPanel);
+    setupStepDetailPanelResizing();
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        if (stepDetailIndex === null) return;
+        if (!EL.stepDetailPanel || EL.stepDetailPanel.classList.contains('is-hidden')) return;
+        // A code editor's search panel binds Escape to close itself. Let
+        // CodeMirror handle it instead of closing the whole notes panel.
+        if (EL.stepDetailPanel.querySelector('.cm-panels')) return;
+        event.preventDefault();
+        closeStepDetailPanel();
+    });
 }
 
 function toChecklistArray(value) {
@@ -2919,7 +3581,17 @@ function renderEditorFromCurrentData() {
     updateLineNumbers();
     updateHighlighting();
     setJsonValidationValidState();
+    refreshPassSummary();
+}
+
+/**
+ * The pass toggle and the progress counter read the same data, so they are
+ * refreshed together. Keeping them in one place stops one from going stale
+ * when a new code path changes `pass`.
+ */
+function refreshPassSummary() {
     UI.updatePassHeaderState(EL.passHeaderToggle, currentData);
+    UI.updateChecklistProgressIndicator(EL.checklistProgress, currentData);
 }
 
 function setJsonValidationValidState() {
@@ -3027,6 +3699,14 @@ function setupWindowListeners() {
     }
     if (EL.treeContextDelete) {
         EL.treeContextDelete.addEventListener('click', handleTreeContextDelete);
+    }
+    if (EL.checklistContextDetail) {
+        EL.checklistContextDetail.addEventListener('click', () => {
+            if (checklistContextTarget == null) return;
+            const idx = checklistContextTarget.index;
+            closeChecklistContextMenu();
+            openStepDetailPanel(idx);
+        });
     }
     if (EL.checklistContextDelete) {
         EL.checklistContextDelete.addEventListener('click', handleChecklistContextDelete);
