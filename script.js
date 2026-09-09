@@ -3,7 +3,8 @@ import {
     CHECKLIST_DENSITY_STORAGE_KEY,
     NOTE_PANEL_WIDTH_STORAGE_KEY,
     NOTE_CODE_LANG_STORAGE_KEY,
-    CHECKLIST_FILTER_STORAGE_KEY
+    CHECKLIST_FILTER_STORAGE_KEY,
+    PANEL_VISIBILITY_STORAGE_KEY
 } from './constants/storage.js';
 import { AUTOSAVE_DELAY_MS, WORKSPACE_VERSION, DEFAULT_FILE_NAME } from './configs/workspace.js';
 import { EDITOR_CONFIG } from './configs/editor-config.js';
@@ -3583,7 +3584,9 @@ function persistLineNumberPreference(shouldShow) {
 }
 
 function applyFileTreePreference() {
-    if (!workspace?.uiState || !EL.fileTreePanel) return;
+    // Panel visibility comes from localStorage now, so this no longer waits
+    // for a workspace to exist.
+    if (!EL.fileTreePanel) return;
     applyPanelVisibility({ persist: false });
 }
 
@@ -3605,26 +3608,53 @@ function persistFileTreeWidthPreference(width) {
     Workspace.persistWorkspace(workspace);
 }
 
+/**
+ * Which panels are open is a view preference, not workspace data, so it lives
+ * in localStorage. Keeping it on the workspace meant an import replaced the
+ * object and the panels silently reopened.
+ */
+function readStoredPanelVisibility() {
+    let raw = null;
+    try {
+        raw = localStorage.getItem(PANEL_VISIBILITY_STORAGE_KEY);
+    } catch (_) { /* storage unavailable */ }
+
+    if (raw) {
+        const parsed = tryParseJson(raw);
+        if (parsed && typeof parsed === 'object') return parsed;
+    }
+
+    // First run after the move: adopt whatever the workspace still holds.
+    const legacy = workspace?.uiState?.panelVisibility;
+    if (legacy && typeof legacy === 'object') return legacy;
+    if (typeof workspace?.uiState?.showFileTree === 'boolean') {
+        return { fileTree: workspace.uiState.showFileTree };
+    }
+    return {};
+}
+
 function getPanelVisibilityState() {
-    const saved = workspace?.uiState?.panelVisibility || {};
+    const saved = readStoredPanelVisibility();
+    const pick = key => (
+        typeof saved[key] === 'boolean' ? saved[key] : DEFAULT_PANEL_VISIBILITY[key]
+    );
     return {
-        fileTree: typeof saved.fileTree === 'boolean'
-            ? saved.fileTree
-            : workspace?.uiState?.showFileTree !== false,
-        jsonEditor: typeof saved.jsonEditor === 'boolean'
-            ? saved.jsonEditor
-            : DEFAULT_PANEL_VISIBILITY.jsonEditor,
-        tableEditor: typeof saved.tableEditor === 'boolean'
-            ? saved.tableEditor
-            : DEFAULT_PANEL_VISIBILITY.tableEditor
+        fileTree: pick('fileTree'),
+        jsonEditor: pick('jsonEditor'),
+        tableEditor: pick('tableEditor')
     };
 }
 
 function persistPanelVisibilityState(state) {
-    if (!workspace?.uiState) return;
-    workspace.uiState.panelVisibility = { ...state };
-    workspace.uiState.showFileTree = state.fileTree;
-    Workspace.persistWorkspace(workspace);
+    try {
+        localStorage.setItem(PANEL_VISIBILITY_STORAGE_KEY, JSON.stringify(state));
+    } catch (_) { /* storage unavailable */ }
+
+    // The file tree flag stays mirrored on the workspace for older builds.
+    if (workspace?.uiState) {
+        workspace.uiState.showFileTree = state.fileTree;
+        Workspace.persistWorkspace(workspace);
+    }
 }
 
 function updatePanelToggleButton(button, isActive) {
