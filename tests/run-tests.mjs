@@ -8,6 +8,7 @@ import './step-detail-panel-refresh.test.mjs';
 import './pass-summary-refresh.test.mjs';
 import './note-preferences.test.mjs';
 import './checklist-filter.test.mjs';
+import './checklist-search-manager.test.mjs';
 import './panel-visibility.test.mjs';
 import './shared-notes.test.mjs';
 import './deleted-file-history-manager.test.mjs';

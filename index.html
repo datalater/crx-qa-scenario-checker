@@ -182,6 +182,14 @@
                     <div class="checklist-header-meta">
                         <div class="scenario-meta" id="scenario-title" title="No scenario loaded">No scenario loaded</div>
                         <button
+                            id="checklist-search-toggle"
+                            class="checklist-search-toggle"
+                            type="button"
+                            title="Search table and notes"
+                            aria-label="Search table and notes"
+                            aria-expanded="false"
+                        >Search</button>
+                        <button
                             id="checklist-density-toggle"
                             class="checklist-density-toggle"
                             type="button"
@@ -240,6 +248,24 @@
                             hidden
                         ></span>
                     </div>
+                </div>
+                <div id="checklist-search-panel" class="checklist-search-panel" role="search" hidden>
+                    <div class="checklist-search-toolbar">
+                        <input
+                            id="checklist-search-input"
+                            class="checklist-search-input"
+                            type="search"
+                            placeholder="Search Given, When, Then, and note contents"
+                            aria-label="Search table and note contents"
+                            autocomplete="off"
+                            spellcheck="false"
+                        >
+                        <span id="checklist-search-count" class="checklist-search-count" aria-live="polite">0 results</span>
+                        <button id="checklist-search-prev" class="checklist-search-btn" type="button" title="Previous result" aria-label="Previous result">↑</button>
+                        <button id="checklist-search-next" class="checklist-search-btn" type="button" title="Next result" aria-label="Next result">↓</button>
+                        <button id="checklist-search-close" class="checklist-search-btn" type="button" title="Close search" aria-label="Close search">×</button>
+                    </div>
+                    <div id="checklist-search-results" class="checklist-search-results" role="listbox" aria-label="Table search results"></div>
                 </div>
                 <div class="checklist-container">
                     <div class="spreadsheet-view" id="checklist-view">
@@ -335,7 +361,7 @@
                     <tr><td>Save / Format</td><td><kbd>⌘</kbd> <kbd>S</kbd></td></tr>
                     <tr><td>Undo</td><td><kbd>⌘</kbd> <kbd>Z</kbd></td></tr>
                     <tr><td>Redo</td><td><kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>Z</kbd></td></tr>
-                    <tr><td>Find</td><td><kbd>⌘</kbd> <kbd>F</kbd></td></tr>
+                    <tr><td>Find in active editor</td><td><kbd>⌘</kbd> <kbd>F</kbd></td></tr>
                     <tr><td>Find &amp; Replace</td><td><kbd>⌘</kbd> <kbd>⌥</kbd> <kbd>F</kbd></td></tr>
                     <tr><td>Next match</td><td><kbd>Enter</kbd></td></tr>
                     <tr><td>Previous match</td><td><kbd>⇧</kbd> <kbd>Enter</kbd></td></tr>

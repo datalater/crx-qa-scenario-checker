@@ -13,6 +13,7 @@ QA Scenario Checker는 QA 시나리오 JSON을 편집하고, Given/When/Then 체
 - [사용 방법](#사용-방법)
   - [시나리오 작성](#시나리오-작성)
   - [문장 쓰는 법](#문장-쓰는-법)
+  - [Table Editor 검색](#table-editor-검색)
   - [노트 (notes)](#노트-notes)
     - [노트 색상 (tone)](#노트-색상-tone)
     - [공유 노트](#공유-노트)
@@ -29,6 +30,7 @@ QA Scenario Checker는 QA 시나리오 JSON을 편집하고, Given/When/Then 체
 - 행별 노트(`notes`)로 원문 추적 — 노트 여러 개, 각각 link/text/code 블록을 조합
 - 노트의 code 블록은 CodeMirror 편집기로 문법 강조
 - Note 컬럼을 전환하는 밀도 모드와 `{pass}/{total}` 진척도 표시
+- Table Editor에서 Given/When/Then과 화면에 숨은 노트 원문까지 통합 검색
 - 파일 트리에서 폴더/파일 생성, 이름 변경, 복사, 삭제, 검색 지원
 - 폴더 또는 단일 JSON 파일 가져오기
 - localStorage 자동 저장과 파일/폴더 기반 작업 흐름 지원
@@ -142,6 +144,14 @@ after
 화면에 드러나지 않는 동작은 결과로 바꿔 씁니다. 그래도 확인할 수 없으면 시스템 문장을 두되 `화면 밖 검증` 노트를 답니다.
 
 만들 단위가 눈에 보이도록 컴포넌트 이름을 `tip` 노트로 답니다. `로그인 폼`, `ID 필드`, `계정 목록 표` 처럼 적으면 `단위` 필터로 모아 볼 수 있습니다.
+
+### Table Editor 검색
+
+Table Editor 헤더의 `Search` 버튼으로 현재 시나리오를 검색합니다. Table Editor를 마지막으로 사용한 상태에서는 `⌘F`/`Ctrl+F`로도 열 수 있습니다. JSON Editor에 포커스가 있으면 기존 JSON 검색이 열립니다.
+
+검색 범위는 구분선, Given, When, Then, 노트 label, 그리고 노트의 text/code/link 내용입니다. 여러 키워드는 순서와 관계없이 모두 포함된 항목을 찾고 대소문자를 구분하지 않습니다. 검색은 표시만 바꾸며 원문 JSON을 수정하지 않습니다.
+
+결과에는 Step, 필드, 노트 label과 원문 일부가 표시됩니다. 결과를 선택하면 해당 행으로 이동하고, 노트 내용에서 찾은 경우 노트 패널을 열어 정확한 카드와 블록을 강조합니다. 현재 행 필터가 결과를 숨기고 있으면 `All rows`로 전환합니다. `Enter`/`Shift+Enter` 또는 화살표 버튼으로 다음/이전 결과를 이동하고 `Esc`로 검색을 닫습니다.
 
 ### 노트 (`notes`)
 

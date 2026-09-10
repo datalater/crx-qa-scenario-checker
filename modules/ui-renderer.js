@@ -945,7 +945,7 @@ const CHECKLIST_NOTE_ICON = '<svg viewBox="0 0 16 16" width="11" height="11" ari
 
 function renderChecklistNoteCell(cell, options) {
     if (!cell) return;
-    const { index, chips, activeNoteKey, onOpenStepDetail } = options;
+    const { index, chips, activeNoteKey, matchingNoteIndexes = new Set(), onOpenStepDetail } = options;
 
     const open = (target, event) => {
         event.stopPropagation();
@@ -966,6 +966,7 @@ function renderChecklistNoteCell(cell, options) {
         group.className = 'checklist-note-chip-group';
         if (chip.tone) group.classList.add(`is-tone-${chip.tone}`);
         if (activeNoteKey === chip.noteIndex) group.classList.add('is-active');
+        if (matchingNoteIndexes.has(chip.noteIndex)) group.classList.add('is-search-match');
 
         const chipEl = document.createElement('button');
         chipEl.type = 'button';
@@ -1019,7 +1020,12 @@ function renderChecklistNoteCell(cell, options) {
 }
 
 export function renderChecklist(container, data, options = {}) {
-    const { onUpdatePass, onUpdateStep, onHighlightStep, onScenarioTitleUpdate, onAddStep, onAddDivider, onOpenChecklistContextMenu, onOpenStepDetail, activeNoteIndex = null, activeNoteKey = null, activeFilter = 'all' } = options;
+    const {
+        onUpdatePass, onUpdateStep, onHighlightStep, onScenarioTitleUpdate,
+        onAddStep, onAddDivider, onOpenChecklistContextMenu, onOpenStepDetail,
+        activeNoteIndex = null, activeNoteKey = null, activeFilter = 'all',
+        searchResults = [], activeSearchResult = null
+    } = options;
     if (!container) return;
     const canInsertRows = typeof onAddStep === 'function' || typeof onAddDivider === 'function';
 
@@ -1064,6 +1070,11 @@ export function renderChecklist(container, data, options = {}) {
     container.innerHTML = '';
     const filter = normalizeChecklistFilter(activeFilter);
     const visibility = buildChecklistVisibility(data.steps, filter, data);
+    const searchResultsByStep = new Map();
+    searchResults.forEach((result) => {
+        if (!searchResultsByStep.has(result.stepIndex)) searchResultsByStep.set(result.stepIndex, []);
+        searchResultsByStep.get(result.stepIndex).push(result);
+    });
 
     if (!visibility.some(Boolean)) {
         const emptyRow = document.createElement('tr');
@@ -1082,6 +1093,10 @@ export function renderChecklist(container, data, options = {}) {
         if (isChecklistDividerStep(step)) {
             const dividerRow = document.createElement('tr');
             dividerRow.className = 'checklist-divider-row';
+            dividerRow.dataset.stepIndex = String(index);
+            const dividerSearchResults = searchResultsByStep.get(index) || [];
+            if (dividerSearchResults.length) dividerRow.classList.add('is-search-match');
+            if (activeSearchResult?.stepIndex === index) dividerRow.classList.add('is-search-current');
             const dividerCell = document.createElement('td');
             dividerCell.colSpan = 6;
             const dividerContent = document.createElement('div');
@@ -1166,6 +1181,10 @@ export function renderChecklist(container, data, options = {}) {
         }
 
         const tr = document.createElement('tr');
+        tr.dataset.stepIndex = String(index);
+        const rowSearchResults = searchResultsByStep.get(index) || [];
+        if (rowSearchResults.length) tr.classList.add('is-search-match');
+        if (activeSearchResult?.stepIndex === index) tr.classList.add('is-search-current');
         const isPassed = step.pass === true;
         
         tr.innerHTML = `
@@ -1188,6 +1207,9 @@ export function renderChecklist(container, data, options = {}) {
             index,
             chips: noteChips,
             activeNoteKey: isActiveStep ? activeNoteKey : null,
+            matchingNoteIndexes: new Set(rowSearchResults
+                .filter(result => result.field === 'note')
+                .map(result => result.noteIndex)),
             onOpenStepDetail
         });
         if (noteChips.length > 0) tr.classList.add('has-note');
@@ -1213,6 +1235,11 @@ export function renderChecklist(container, data, options = {}) {
         populateCell('given', normalizeStepFieldForEditor(step.given));
         populateCell('when', normalizeStepFieldForEditor(step.when));
         populateCell('then', normalizeStepFieldForEditor(step.then));
+        rowSearchResults.forEach((result) => {
+            if (result.field === 'given' || result.field === 'when' || result.field === 'then') {
+                tr.querySelector(`[data-field="${result.field}"]`)?.classList.add('is-search-field-match');
+            }
+        });
 
         tr.addEventListener('click', () => {
             const rows = container.querySelectorAll('tr');

@@ -6,6 +6,7 @@
 @import url("styles/feature-loading.css") layer(features);
 @import url("styles/feature-divider-color.css") layer(features);
 @import url("styles/feature-step-note.css") layer(features);
+@import url("styles/feature-checklist-search.css") layer(features);
 
 @layer base {
   body {

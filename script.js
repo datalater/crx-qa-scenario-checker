@@ -52,6 +52,7 @@ import {
 import { createEditorCursorHistoryManager } from './modules/editor-cursor-history-manager.js';
 import { createEditorFindReplaceManager } from './modules/editor-find-replace-manager.js';
 import { createDeletedFileHistoryManager } from './modules/deleted-file-history-manager.js';
+import { searchChecklist, tokenizeChecklistSearchQuery } from './modules/checklist-search-manager.js';
 
 // --- Global State Mirroring the original ---
 const EL = {
@@ -81,6 +82,14 @@ const EL = {
     scenarioTitle: document.getElementById('scenario-title'),
     checklistProgress: document.getElementById('checklist-progress'),
     checklistDensityToggle: document.getElementById('checklist-density-toggle'),
+    checklistSearchToggle: document.getElementById('checklist-search-toggle'),
+    checklistSearchPanel: document.getElementById('checklist-search-panel'),
+    checklistSearchInput: document.getElementById('checklist-search-input'),
+    checklistSearchCount: document.getElementById('checklist-search-count'),
+    checklistSearchResults: document.getElementById('checklist-search-results'),
+    checklistSearchPrev: document.getElementById('checklist-search-prev'),
+    checklistSearchNext: document.getElementById('checklist-search-next'),
+    checklistSearchClose: document.getElementById('checklist-search-close'),
     checklistFilterToggle: document.getElementById('checklist-filter-toggle'),
     checklistFilterLabel: document.getElementById('checklist-filter-label'),
     checklistFilterMenu: document.getElementById('checklist-filter-menu'),
@@ -164,6 +173,9 @@ let checklistShowNote = false;
 let stepDetailIndex = null;
 let stepDetailActiveNote = null;
 let checklistFilter = 'all';
+let checklistSearchResults = [];
+let checklistSearchResultIndex = -1;
+let checklistSearchScopeActive = false;
 let stepDetailCodeEditors = [];
 let autosaveTimer = null;
 let activeFileDirty = false;
@@ -256,6 +268,7 @@ function init() {
     setupDeletedFileHistoryManager();
     setupChecklistDensityToggle();
     setupChecklistFilter();
+    setupChecklistSearch();
     setupStepDetailPanel();
     loadWorkspace();
     setupEventListeners();
@@ -1953,6 +1966,7 @@ function downloadExportPayload(payload) {
 }
 
 function renderChecklist() {
+    refreshChecklistSearch({ renderTable: false });
     const insertChecklistEntry = (insertIndex, entry) => {
         if (!currentData || !Array.isArray(currentData.steps)) return;
         const safeInsertIndex = Math.max(0, Math.min(Number(insertIndex) || 0, currentData.steps.length));
@@ -2000,7 +2014,9 @@ function renderChecklist() {
         onOpenStepDetail: openStepDetailPanel,
         activeNoteIndex: stepDetailIndex,
         activeNoteKey: stepDetailActiveNote,
-        activeFilter: checklistFilter
+        activeFilter: checklistFilter,
+        searchResults: checklistSearchResults,
+        activeSearchResult: checklistSearchResults[checklistSearchResultIndex] || null
     });
     refreshPassSummary();
     refreshStepDetailPanel();
@@ -2193,6 +2209,214 @@ function setupChecklistDensityToggle() {
     }
 }
 
+function isChecklistSearchOpen() {
+    return Boolean(EL.checklistSearchPanel && !EL.checklistSearchPanel.hidden);
+}
+
+function openChecklistSearch() {
+    if (!EL.checklistSearchPanel) return;
+    EL.checklistSearchPanel.hidden = false;
+    EL.checklistSearchToggle?.classList.add('is-active');
+    EL.checklistSearchToggle?.setAttribute('aria-expanded', 'true');
+    refreshChecklistSearch({ renderTable: true });
+    EL.checklistSearchInput?.focus();
+    EL.checklistSearchInput?.select();
+}
+
+function closeChecklistSearch() {
+    if (!EL.checklistSearchPanel) return;
+    EL.checklistSearchPanel.hidden = true;
+    EL.checklistSearchToggle?.classList.remove('is-active');
+    EL.checklistSearchToggle?.setAttribute('aria-expanded', 'false');
+    if (EL.checklistSearchInput) EL.checklistSearchInput.value = '';
+    checklistSearchResults = [];
+    checklistSearchResultIndex = -1;
+    renderChecklistSearchResults();
+    renderChecklist();
+    EL.checklistSearchToggle?.focus();
+}
+
+function appendHighlightedSearchText(container, value, tokens) {
+    const text = String(value || '');
+    if (!text || tokens.length === 0) {
+        container.textContent = text;
+        return;
+    }
+    const escaped = tokens
+        .slice()
+        .sort((a, b) => b.length - a.length)
+        .map(token => token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const pattern = new RegExp(`(${escaped.join('|')})`, 'giu');
+    let cursor = 0;
+    for (const match of text.matchAll(pattern)) {
+        container.append(document.createTextNode(text.slice(cursor, match.index)));
+        const mark = document.createElement('mark');
+        mark.textContent = match[0];
+        container.append(mark);
+        cursor = match.index + match[0].length;
+    }
+    container.append(document.createTextNode(text.slice(cursor)));
+}
+
+function renderChecklistSearchResults() {
+    if (!EL.checklistSearchResults) return;
+    EL.checklistSearchResults.innerHTML = '';
+    const tokens = tokenizeChecklistSearchQuery(EL.checklistSearchInput?.value || '');
+    const total = checklistSearchResults.length;
+    if (EL.checklistSearchCount) {
+        EL.checklistSearchCount.textContent = total
+            ? `${Math.max(1, checklistSearchResultIndex + 1)} / ${total}`
+            : '0 results';
+    }
+    if (EL.checklistSearchPrev) EL.checklistSearchPrev.disabled = total === 0;
+    if (EL.checklistSearchNext) EL.checklistSearchNext.disabled = total === 0;
+    if (tokens.length > 0 && total === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'checklist-search-empty';
+        empty.textContent = 'No matches in this scenario.';
+        EL.checklistSearchResults.append(empty);
+    }
+
+    checklistSearchResults.forEach((result, resultIndex) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'checklist-search-result';
+        button.setAttribute('role', 'option');
+        button.setAttribute('aria-selected', String(resultIndex === checklistSearchResultIndex));
+        if (resultIndex === checklistSearchResultIndex) button.classList.add('is-current');
+
+        const location = document.createElement('span');
+        location.className = 'checklist-search-result__location';
+        const stepLabel = result.visibleStepNumber == null ? 'Section' : `Step ${result.visibleStepNumber}`;
+        const noteLabel = result.field === 'note'
+            ? ` · ${result.isShared ? 'Shared ' : ''}${result.noteLabel}` : '';
+        location.textContent = `${stepLabel} · ${result.fieldLabel}${noteLabel}`;
+
+        const snippet = document.createElement('span');
+        snippet.className = 'checklist-search-result__snippet';
+        appendHighlightedSearchText(snippet, result.snippet, tokens);
+        button.append(location, snippet);
+        button.addEventListener('click', () => navigateChecklistSearchResult(resultIndex));
+        EL.checklistSearchResults.append(button);
+    });
+}
+
+function refreshChecklistSearch(options = {}) {
+    const { renderTable = false } = options;
+    const previous = checklistSearchResults[checklistSearchResultIndex];
+    const query = isChecklistSearchOpen() ? EL.checklistSearchInput?.value || '' : '';
+    checklistSearchResults = searchChecklist(currentData, query);
+    if (checklistSearchResults.length === 0) {
+        checklistSearchResultIndex = -1;
+    } else if (previous) {
+        const preserved = checklistSearchResults.findIndex(result => (
+            result.stepIndex === previous.stepIndex
+            && result.field === previous.field
+            && result.noteIndex === previous.noteIndex
+            && result.blockIndex === previous.blockIndex
+        ));
+        checklistSearchResultIndex = preserved >= 0
+            ? preserved : Math.min(checklistSearchResultIndex, checklistSearchResults.length - 1);
+    } else {
+        checklistSearchResultIndex = 0;
+    }
+    renderChecklistSearchResults();
+    if (renderTable) renderChecklist();
+}
+
+function applyStepDetailSearchHighlight() {
+    EL.stepDetailNotes?.querySelectorAll('.is-search-match').forEach(element => {
+        element.classList.remove('is-search-match');
+    });
+    const result = checklistSearchResults[checklistSearchResultIndex];
+    if (!result || result.field !== 'note' || result.stepIndex !== stepDetailIndex) return;
+    const card = EL.stepDetailNotes?.querySelector(`[data-note-index="${result.noteIndex}"]`);
+    if (!card) return;
+    card.classList.add('is-search-match');
+    const block = Number.isInteger(result.blockIndex)
+        ? card.querySelector(`[data-block-index="${result.blockIndex}"]`) : null;
+    if (block) block.classList.add('is-search-match');
+    (block || card).scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+function navigateChecklistSearchResult(index) {
+    if (checklistSearchResults.length === 0) return;
+    checklistSearchResultIndex = (index + checklistSearchResults.length) % checklistSearchResults.length;
+    const result = checklistSearchResults[checklistSearchResultIndex];
+
+    if (!UI.buildChecklistVisibility(currentData?.steps, checklistFilter, currentData)[result.stepIndex]) {
+        checklistFilter = 'all';
+        applyChecklistFilterToControl();
+        try {
+            localStorage.setItem(CHECKLIST_FILTER_STORAGE_KEY, checklistFilter);
+        } catch (_) { /* storage unavailable */ }
+    }
+
+    if (result.field === 'note') {
+        openStepDetailPanel(result.stepIndex, {
+            type: 'note',
+            noteIndex: result.noteIndex,
+            focus: false
+        });
+    } else {
+        renderChecklist();
+    }
+
+    requestAnimationFrame(() => {
+        renderChecklistSearchResults();
+        EL.checklistSearchResults?.querySelector('.is-current')?.scrollIntoView({ block: 'nearest' });
+        const row = EL.checklistBody?.querySelector(`[data-step-index="${result.stepIndex}"]`);
+        row?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        if (row) {
+            EL.checklistBody.querySelectorAll('.selected-row').forEach(item => item.classList.remove('selected-row'));
+            row.classList.add('selected-row');
+        }
+        const bounds = Editor.findStepBounds(EL.editing.value, result.stepIndex);
+        if (bounds) renderStepHighlight(bounds);
+        applyStepDetailSearchHighlight();
+    });
+}
+
+function setupChecklistSearch() {
+    EL.checklistPane?.addEventListener('pointerdown', () => {
+        checklistSearchScopeActive = true;
+    });
+    EL.editing?.addEventListener('pointerdown', () => {
+        checklistSearchScopeActive = false;
+    });
+    EL.editing?.addEventListener('focus', () => {
+        checklistSearchScopeActive = false;
+    });
+    EL.checklistSearchToggle?.addEventListener('click', () => {
+        if (isChecklistSearchOpen()) closeChecklistSearch();
+        else openChecklistSearch();
+    });
+    EL.checklistSearchInput?.addEventListener('input', () => {
+        checklistSearchResultIndex = -1;
+        refreshChecklistSearch({ renderTable: true });
+    });
+    EL.checklistSearchInput?.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            closeChecklistSearch();
+        } else if (event.key === 'Enter') {
+            event.preventDefault();
+            navigateChecklistSearchResult(checklistSearchResultIndex + (event.shiftKey ? -1 : 1));
+        }
+    });
+    EL.checklistSearchPrev?.addEventListener('click', () => navigateChecklistSearchResult(checklistSearchResultIndex - 1));
+    EL.checklistSearchNext?.addEventListener('click', () => navigateChecklistSearchResult(checklistSearchResultIndex + 1));
+    EL.checklistSearchClose?.addEventListener('click', closeChecklistSearch);
+    document.addEventListener('keydown', (event) => {
+        if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'f') return;
+        if (!checklistSearchScopeActive && !EL.checklistPane?.contains(event.target)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        openChecklistSearch();
+    });
+}
+
 let sharedNoteTarget = null;
 
 function getStepDetailTarget() {
@@ -2237,7 +2461,7 @@ function openStepDetailPanel(index, target = { type: 'panel' }) {
     // renderChecklist repaints the table for the active style and calls
     // refreshStepDetailPanel, which paints the notes.
     renderChecklist();
-    focusStepDetailNote(focusNoteIndex);
+    if (requested.focus !== false) focusStepDetailNote(focusNoteIndex);
 }
 
 function focusStepDetailNote(noteIndex) {
@@ -2367,6 +2591,7 @@ function renderStepDetailContents() {
     notes.forEach((note, noteIndex) => {
         EL.stepDetailNotes.appendChild(buildNoteCard(note, noteIndex, notes));
     });
+    applyStepDetailSearchHighlight();
 }
 
 const NOTE_BLOCK_META = {
@@ -2421,6 +2646,7 @@ function setActiveStepDetailNote(noteIndex) {
 function buildNoteCard(note, noteIndex, notes) {
     const card = document.createElement('section');
     card.className = 'step-detail-note-card';
+    card.dataset.noteIndex = String(noteIndex);
     card.addEventListener('focusin', () => setActiveStepDetailNote(noteIndex));
     card.addEventListener('pointerdown', () => setActiveStepDetailNote(noteIndex));
     const cardTone = UI.normalizeNoteTone(note.tone);
@@ -2633,6 +2859,7 @@ function buildNoteBlockRow(block, blockIndex, note, noteIndex, notes, commitNote
     const meta = NOTE_BLOCK_META[block.type] || NOTE_BLOCK_META.text;
     const row = document.createElement('div');
     row.className = `step-detail-block step-detail-block--${block.type}`;
+    row.dataset.blockIndex = String(blockIndex);
 
     const patchBlock = (patch, options) => {
         const nextBlocks = note.blocks.map((item, itemIndex) => (
