@@ -2912,7 +2912,7 @@ function setupStepDetailPanel() {
                 focusStepDetailNote(notes.length - 1);
             }
         }, false],
-        ['공유 노트 연결', () => openSharedNotePicker(true), true]
+        ['기존 공유 노트 연결', () => openSharedNotePicker(true), true]
     ];
     addActions.forEach(([label, action, needsRow]) => {
         const item = document.createElement('button');
