@@ -27,7 +27,7 @@
   box-shadow: 0 5px 16px rgb(1 4 9 / 24%);
   /* Stay interactive while a matching note is open over the table backdrop. */
   position: relative;
-  z-index: 62;
+  z-index: 61;
 }
 
 .checklist-search-panel[hidden] {

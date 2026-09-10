@@ -277,7 +277,7 @@ tr:hover .checklist-note-add,
   background-color: var(--editor-bg, var(--bg-color));
   border-left: 1px solid var(--border-muted);
   box-shadow: -8px 0 24px rgb(1 4 9 / 40%);
-  z-index: 61;
+  z-index: 62;
 }
 
 .step-detail-resizer {
