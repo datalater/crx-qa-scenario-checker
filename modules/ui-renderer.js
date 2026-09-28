@@ -386,6 +386,10 @@ export function buildChecklistVisibility(steps, filter, scenario) {
 
     if (filter === 'outline') return list.map(step => isChecklistDividerStep(step));
 
+    // The `all` view shows the scenario as authored, so every divider stays put
+    // even when it has no step under it (e.g. two dividers in a row).
+    if (filter === 'all') return list.map(() => true);
+
     list.forEach((step, index) => {
         if (!isChecklistDividerStep(step)) return;
         for (let i = index + 1; i < list.length; i += 1) {

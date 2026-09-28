@@ -1,11 +1,12 @@
 import { buildRequiredScenarioWithDefaults } from '../modules/export-data-manager.js';
 import {
+    buildChecklistVisibility,
     getChecklistDividerTitle,
     isChecklistDividerStep,
     normalizeChecklistDividerValue,
     normalizeEditableChecklistDividerValue
 } from '../modules/ui-renderer.js';
-import { assertEqual, test } from './lib/test-runner.mjs';
+import { assertDeepEqual, assertEqual, test } from './lib/test-runner.mjs';
 
 test('divider value normalization supports true and trimmed non-empty string', () => {
     assertEqual(normalizeChecklistDividerValue(true), true);
@@ -49,4 +50,21 @@ test('editable divider normalization keeps divider step for empty input', () => 
     assertEqual(normalizeEditableChecklistDividerValue('  Group B  '), 'Group B');
     assertEqual(normalizeEditableChecklistDividerValue('   '), true);
     assertEqual(normalizeEditableChecklistDividerValue(null), true);
+});
+
+test('all filter keeps consecutive dividers visible', () => {
+    const steps = [
+        { divider: true },
+        { divider: true },
+        { given: ['x'], when: [], then: [], pass: false }
+    ];
+    assertDeepEqual(buildChecklistVisibility(steps, 'all', {}), [true, true, true]);
+});
+
+test('all filter keeps a trailing divider with no steps after it visible', () => {
+    const steps = [
+        { given: ['x'], when: [], then: [], pass: false },
+        { divider: true }
+    ];
+    assertDeepEqual(buildChecklistVisibility(steps, 'all', {}), [true, true]);
 });
