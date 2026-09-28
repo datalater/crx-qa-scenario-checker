@@ -1105,7 +1105,8 @@ export function renderChecklist(container, data, options = {}) {
             dividerCell.colSpan = 6;
             const dividerContent = document.createElement('div');
             dividerContent.className = 'cell-content checklist-divider-content';
-            dividerContent.contentEditable = 'true';
+            // plaintext-only keeps Enter a single "\n"; see the step cells below.
+            dividerContent.contentEditable = 'plaintext-only';
             dividerContent.dataset.field = 'divider';
 
             const rawDividerText = getChecklistDividerTitle(step);
@@ -1191,11 +1192,14 @@ export function renderChecklist(container, data, options = {}) {
         if (activeSearchResult?.stepIndex === index) tr.classList.add('is-search-current');
         const isPassed = step.pass === true;
         
+        // plaintext-only so Enter inserts a single "\n" text node. Plain
+        // contenteditable builds <br>/<div> on Enter, which innerText then
+        // counts alongside the existing literal "\n", doubling blank lines.
         tr.innerHTML = `
             <td class="col-num">${visibleIndex}</td>
-            <td class="col-given"><div class="cell-content" contenteditable="true" data-index="${index}" data-field="given"></div></td>
-            <td class="col-when"><div class="cell-content" contenteditable="true" data-index="${index}" data-field="when"></div></td>
-            <td class="col-then"><div class="cell-content" contenteditable="true" data-index="${index}" data-field="then"></div></td>
+            <td class="col-given"><div class="cell-content" contenteditable="plaintext-only" data-index="${index}" data-field="given"></div></td>
+            <td class="col-when"><div class="cell-content" contenteditable="plaintext-only" data-index="${index}" data-field="when"></div></td>
+            <td class="col-then"><div class="cell-content" contenteditable="plaintext-only" data-index="${index}" data-field="then"></div></td>
             <td class="col-pass">
                 <label class="checkbox-container">
                     <input type="checkbox" data-index="${index}" ${isPassed ? 'checked' : ''}>
