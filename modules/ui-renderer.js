@@ -1,4 +1,13 @@
 import { getActiveFile } from './workspace-manager.js';
+import {
+    getDividerTitle,
+    isDivider,
+    parseDivider,
+    PLAIN_DIVIDER_LANG,
+    resolveDividerLang,
+    resolveDividerType,
+    serializeDivider
+} from './divider-model.js';
 
 export function createTreeRowActions(actions) {
     if (!Array.isArray(actions) || actions.length === 0) return null;
@@ -423,29 +432,15 @@ function normalizeStepFieldForEditor(value) {
     return String(value).trim();
 }
 
+// Thin wrappers over divider-model so existing callers keep their names.
 export function normalizeChecklistDividerValue(value) {
-    if (value === true) return true;
-    if (typeof value === 'string') {
-        const trimmed = value.trim();
-        return trimmed.length > 0 ? trimmed : null;
-    }
-    if (value && typeof value === 'object' && 'value' in value) {
-        return normalizeChecklistDividerValue(value.value);
-    }
-    return null;
+    const divider = parseDivider(value);
+    if (!divider) return null;
+    return divider.value || true;
 }
 
 export function getChecklistDividerColor(step) {
-    const divider = step?.divider;
-    if (divider && typeof divider === 'object' && typeof divider.color === 'string') {
-        return divider.color.trim() || null;
-    }
-    return null;
-}
-
-export function buildChecklistDividerData(textValue, color) {
-    if (!color) return textValue;
-    return { value: textValue, color };
+    return parseDivider(step?.divider)?.color || null;
 }
 
 export function normalizeEditableChecklistDividerValue(value) {
@@ -454,13 +449,11 @@ export function normalizeEditableChecklistDividerValue(value) {
 }
 
 export function isChecklistDividerStep(step) {
-    return normalizeChecklistDividerValue(step?.divider) !== null;
+    return isDivider(step?.divider);
 }
 
 export function getChecklistDividerTitle(step) {
-    const normalized = normalizeChecklistDividerValue(step?.divider);
-    if (typeof normalized === 'string') return normalized;
-    return normalized === true ? 'divider' : '';
+    return getDividerTitle(step?.divider);
 }
 
 export function updatePassHeaderState(passHeaderToggle, currentData) {
@@ -1023,6 +1016,150 @@ function renderChecklistNoteCell(cell, options) {
     cell.appendChild(wrapper);
 }
 
+function blurOnEscape(editable) {
+    editable.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof event.currentTarget?.blur === 'function') {
+            event.currentTarget.blur();
+        }
+    });
+}
+
+// CodeMirror views hold listeners and observers, so each render destroys the
+// ones it created before the rows are replaced.
+const mountedEditorsByContainer = new WeakMap();
+
+function trackMountedEditor(container, editor) {
+    if (!mountedEditorsByContainer.has(container)) mountedEditorsByContainer.set(container, []);
+    mountedEditorsByContainer.get(container).push(editor);
+}
+
+function destroyMountedEditors(container) {
+    const editors = mountedEditorsByContainer.get(container);
+    if (!editors) return;
+    editors.forEach((editor) => {
+        try {
+            editor.destroy();
+        } catch (_) { /* already gone */ }
+    });
+    mountedEditorsByContainer.delete(container);
+}
+
+/**
+ * Divider editors share one contract: `{ kind, element, destroy? }`, with
+ * edits reported through `commit(value)`. The type registry picks the editor,
+ * so a new divider type needs no new renderer.
+ */
+const DIVIDER_EDITORS = {
+    text: mountTextDividerEditor,
+    code: mountCodeDividerEditor
+};
+
+function mountDividerEditor(dividerType, context) {
+    const mount = DIVIDER_EDITORS[dividerType.editor] || DIVIDER_EDITORS.text;
+    return mount(dividerType, context) || mountTextDividerEditor(dividerType, context);
+}
+
+function mountTextDividerEditor(_dividerType, { rawTitle, commit }) {
+    const element = document.createElement('div');
+    element.className = 'cell-content checklist-divider-content';
+    // plaintext-only keeps Enter a single "\n"; see the step cells.
+    element.contentEditable = 'plaintext-only';
+    element.dataset.field = 'divider';
+
+    let rawValue = rawTitle;
+    element.innerHTML = formatChecklistCellContent(rawValue);
+    element.addEventListener('focus', () => {
+        element.textContent = rawValue;
+    });
+    element.addEventListener('input', () => {
+        commit({ value: element.innerText });
+    });
+    element.addEventListener('blur', () => {
+        rawValue = getDividerTitle(commit({ value: element.innerText }));
+        element.innerHTML = formatChecklistCellContent(rawValue);
+    });
+    blurOnEscape(element);
+    return { kind: 'text', element };
+}
+
+/**
+ * Language picker for a code divider, listed like the note code block one
+ * (plain first, then the bundle's languages). An unknown stored language
+ * stays selectable so opening the row does not silently replace it.
+ */
+function createDividerLangSelect({ selected, languages }) {
+    const select = document.createElement('select');
+    select.className = 'step-detail-lang-select checklist-divider-lang-select';
+    select.setAttribute('aria-label', 'Code language');
+
+    const ids = [PLAIN_DIVIDER_LANG, ...languages];
+    if (selected && !ids.includes(selected)) ids.push(selected);
+    [...new Set(ids)].forEach((lang) => {
+        const option = document.createElement('option');
+        option.value = lang;
+        option.textContent = lang;
+        option.selected = lang === selected;
+        select.appendChild(option);
+    });
+    return select;
+}
+
+/** Returns null without the CodeMirror bundle, which falls back to text. */
+function mountCodeDividerEditor(dividerType, { divider, commit }) {
+    const codeMirror = typeof window !== 'undefined' ? window.QaCodeMirror : null;
+    const factory = codeMirror?.createCodeEditor;
+    if (typeof factory !== 'function') return null;
+
+    const element = document.createElement('div');
+    element.className = 'checklist-divider-code';
+    element.dataset.field = 'divider';
+
+    const host = document.createElement('div');
+    host.className = 'checklist-divider-code-host';
+    const editor = factory({
+        parent: host,
+        doc: divider.value,
+        lang: resolveDividerLang(divider),
+        placeholder: dividerType.placeholder || '',
+        onChange: value => commit({ value })
+    });
+
+    const langSelect = createDividerLangSelect({
+        selected: resolveDividerLang(divider),
+        languages: codeMirror.SUPPORTED_LANGUAGES || []
+    });
+    langSelect.addEventListener('change', () => {
+        commit({ lang: langSelect.value });
+        editor.setLanguage(langSelect.value);
+    });
+    // Picking a language should not select the row or open its menu.
+    langSelect.addEventListener('click', event => event.stopPropagation());
+
+    // Same header as a note code block: kind label, then the language picker.
+    // It sits above the editor because the table is often wider than the
+    // pane, so a control beside the editor could end up off-screen.
+    const head = document.createElement('div');
+    head.className = 'step-detail-block-head checklist-divider-code-head';
+    const kind = document.createElement('span');
+    kind.className = 'step-detail-block-kind';
+    kind.textContent = dividerType.label;
+    head.append(kind, langSelect);
+
+    element.append(head, host);
+    // Escape leaves the editor like the other cells, unless CodeMirror used
+    // it first (closing search or autocomplete).
+    element.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape' || event.defaultPrevented) return;
+        event.preventDefault();
+        event.stopPropagation();
+        editor.blur();
+    });
+    return { kind: 'code', element, destroy: () => editor.destroy() };
+}
+
 export function renderChecklist(container, data, options = {}) {
     const {
         onUpdatePass, onUpdateStep, onHighlightStep, onScenarioTitleUpdate,
@@ -1033,16 +1170,8 @@ export function renderChecklist(container, data, options = {}) {
     if (!container) return;
     const canInsertRows = typeof onAddStep === 'function' || typeof onAddDivider === 'function';
 
-    const blurOnEscape = (editable) => {
-        editable.addEventListener('keydown', (event) => {
-            if (event.key !== 'Escape') return;
-            event.preventDefault();
-            event.stopPropagation();
-            if (typeof event.currentTarget?.blur === 'function') {
-                event.currentTarget.blur();
-            }
-        });
-    };
+    // Rows are rebuilt from scratch, so editors from the last render go first.
+    destroyMountedEditors(container);
 
     if (!data || !data.steps || !Array.isArray(data.steps)) {
         container.innerHTML = '<tr class="empty-state"><td colspan="6">JSON structure must contain a "steps" array.</td></tr>';
@@ -1103,42 +1232,30 @@ export function renderChecklist(container, data, options = {}) {
             if (activeSearchResult?.stepIndex === index) dividerRow.classList.add('is-search-current');
             const dividerCell = document.createElement('td');
             dividerCell.colSpan = 6;
-            const dividerContent = document.createElement('div');
-            dividerContent.className = 'cell-content checklist-divider-content';
-            // plaintext-only keeps Enter a single "\n"; see the step cells below.
-            dividerContent.contentEditable = 'plaintext-only';
-            dividerContent.dataset.field = 'divider';
+            const divider = parseDivider(step.divider);
+            const dividerType = resolveDividerType(divider.type);
+            // An edit patches one attribute on top of the latest state, so
+            // typing or picking a language never drops another attribute.
+            let currentDivider = divider;
+            const commitDivider = (patch) => {
+                currentDivider = { ...currentDivider, ...patch };
+                const stored = serializeDivider(currentDivider);
+                onUpdateStep(index, 'divider', stored);
+                return stored;
+            };
 
-            const rawDividerText = getChecklistDividerTitle(step);
-            const dividerColor = getChecklistDividerColor(step);
-            dividerContent.dataset.rawValue = rawDividerText;
-            if (dividerColor) dividerContent.dataset.dividerColor = dividerColor;
-            dividerContent.innerHTML = formatChecklistCellContent(rawDividerText);
-
-            if (dividerColor) {
-                dividerRow.style.setProperty('--divider-color', dividerColor);
+            if (divider.color) {
+                dividerRow.style.setProperty('--divider-color', divider.color);
                 dividerRow.classList.add('has-custom-color');
             }
 
-            dividerContent.addEventListener('focus', (event) => {
-                event.target.textContent = event.target.dataset.rawValue;
+            const dividerEditor = mountDividerEditor(dividerType, {
+                divider,
+                rawTitle: getChecklistDividerTitle(step),
+                commit: commitDivider
             });
-            dividerContent.addEventListener('input', (event) => {
-                const color = event.target.dataset.dividerColor || '';
-                const text = event.target.innerText;
-                onUpdateStep(index, 'divider', color ? buildChecklistDividerData(text, color) : text);
-            });
-            dividerContent.addEventListener('blur', (event) => {
-                const color = event.target.dataset.dividerColor || '';
-                const nextTextValue = normalizeEditableChecklistDividerValue(event.target.innerText);
-                const nextDividerValue = color ? buildChecklistDividerData(nextTextValue, color) : nextTextValue;
-                onUpdateStep(index, 'divider', nextDividerValue);
-
-                const nextLabel = getChecklistDividerTitle({ divider: nextDividerValue });
-                event.target.dataset.rawValue = nextLabel;
-                event.target.innerHTML = formatChecklistCellContent(nextLabel);
-            });
-            blurOnEscape(dividerContent);
+            dividerRow.classList.add(`is-divider-${dividerEditor.kind}`);
+            if (dividerEditor.destroy) trackMountedEditor(container, dividerEditor);
 
             const dividerInner = document.createElement('div');
             dividerInner.className = 'checklist-divider-inner';
@@ -1148,7 +1265,7 @@ export function renderChecklist(container, data, options = {}) {
             dividerSpacer.setAttribute('aria-hidden', 'true');
 
             dividerInner.appendChild(dividerSpacer);
-            dividerInner.appendChild(dividerContent);
+            dividerInner.appendChild(dividerEditor.element);
             dividerCell.appendChild(dividerInner);
             dividerRow.appendChild(dividerCell);
             dividerRow.addEventListener('click', () => {

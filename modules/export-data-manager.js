@@ -1,3 +1,5 @@
+import { parseDivider, serializeDivider } from './divider-model.js';
+
 export function buildExportPayload(options) {
     const {
         workspace,
@@ -120,18 +122,8 @@ function buildRequiredStepWithDefaults(input) {
 }
 
 function normalizeDividerValue(value) {
-    if (value === true) return true;
-    if (typeof value === 'string') {
-        const trimmed = value.trim();
-        return trimmed.length > 0 ? trimmed : null;
-    }
-    if (value && typeof value === 'object' && 'value' in value) {
-        const inner = normalizeDividerValue(value.value);
-        if (inner === null) return null;
-        const color = typeof value.color === 'string' ? value.color.trim() : '';
-        return color ? { value: inner, color } : inner;
-    }
-    return null;
+    const divider = parseDivider(value);
+    return divider ? serializeDivider(divider) : null;
 }
 
 function toChecklistArray(value) {

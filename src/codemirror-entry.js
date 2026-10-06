@@ -17,7 +17,7 @@ import {
   syntaxHighlighting,
 } from "@codemirror/language";
 import { search, searchKeymap } from "@codemirror/search";
-import { EditorState } from "@codemirror/state";
+import { Compartment, EditorState } from "@codemirror/state";
 import {
   EditorView,
   crosshairCursor,
@@ -44,6 +44,8 @@ const LANGUAGE_EXTENSIONS = {
 
 export const SUPPORTED_LANGUAGES = Object.keys(LANGUAGE_EXTENSIONS);
 
+// Unknown ids (including an explicit "plain") get no language: the editor
+// still works, just without highlighting.
 function resolveLanguage(lang) {
   const factory = LANGUAGE_EXTENSIONS[String(lang || "").toLowerCase()];
   return factory ? [factory()] : [];
@@ -197,6 +199,9 @@ export function createCodeEditor(options) {
     onChange = () => {},
   } = options;
 
+  // The language sits in a compartment so it can change without rebuilding
+  // the editor (and losing focus, history and selection).
+  const languageCompartment = new Compartment();
   const view = new EditorView({
     parent,
     state: EditorState.create({
@@ -216,7 +221,7 @@ export function createCodeEditor(options) {
         crosshairCursor(),
         highlightActiveLine(),
         placeholderExtension(placeholder),
-        ...resolveLanguage(lang),
+        languageCompartment.of(resolveLanguage(lang)),
         search(),
         syntaxHighlighting(darkHighlightStyle, { fallback: true }),
         keymap.of([
@@ -245,6 +250,10 @@ export function createCodeEditor(options) {
       });
     },
     focus: () => view.focus(),
+    blur: () => view.contentDOM.blur(),
+    setLanguage(nextLang) {
+      view.dispatch({ effects: languageCompartment.reconfigure(resolveLanguage(nextLang)) });
+    },
     destroy: () => view.destroy(),
   };
 }

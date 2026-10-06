@@ -12,6 +12,7 @@ import { tryParseJson } from './utils/json.js';
 import { nowTs, nowIso } from './utils/date.js';
 import * as Workspace from './modules/workspace-manager.js';
 import * as UI from './modules/ui-renderer.js';
+import { DIVIDER_TYPE_IDS, DIVIDER_TYPES, parseDivider, serializeDivider } from './modules/divider-model.js';
 import * as Editor from './modules/editor-manager.js';
 import { captureEditorSelectionSnapshot, restoreEditorSelectionSnapshot } from './modules/editor-caret-manager.js';
 import { createResizerLayoutManager } from './modules/resizer-layout-manager.js';
@@ -138,6 +139,7 @@ const EL = {
     btnShortcutsClose: document.getElementById('btn-shortcuts-close'),
     loadingOverlay: document.getElementById('loading-overlay'),
     checklistContextColor: document.getElementById('checklist-context-color'),
+    checklistContextType: document.getElementById('checklist-context-type'),
     fileTreePanel: document.querySelector('.file-tree-panel'),
     fileTreeResizer: document.getElementById('file-tree-resizer'),
     appContent: document.querySelector('.app-content'),
@@ -1332,6 +1334,10 @@ function openChecklistContextMenu(target) {
     if (EL.checklistContextColor) {
         EL.checklistContextColor.hidden = !target.isDivider;
     }
+    if (EL.checklistContextType) {
+        EL.checklistContextType.hidden = !target.isDivider;
+    }
+    if (target.isDivider) markChecklistContextDividerSelection(target.index);
 
     if (EL.checklistContextDetail) {
         EL.checklistContextDetail.hidden = target.isDivider === true;
@@ -1376,20 +1382,58 @@ function handleChecklistContextDelete() {
     closeChecklistContextMenu();
 }
 
+/** Rewrites one divider attribute, keeping the rest via parse/serialize. */
+function patchChecklistDivider(index, patch) {
+    if (!currentData || !Array.isArray(currentData.steps)) return;
+    const step = currentData.steps[index];
+    const divider = parseDivider(step?.divider);
+    if (!divider) return;
+    step.divider = serializeDivider({ ...divider, ...patch });
+    syncToEditor();
+    renderChecklist();
+}
+
 function handleChecklistContextColorClick(event) {
     const btn = event.target.closest('[data-color]');
     if (!btn || checklistContextTarget == null) return;
-    const idx = checklistContextTarget.index;
-    if (!currentData || !Array.isArray(currentData.steps)) return;
-    const step = currentData.steps[idx];
-    if (!step || !UI.isChecklistDividerStep(step)) return;
-
-    const color = btn.dataset.color || '';
-    const textValue = UI.normalizeChecklistDividerValue(step.divider) || true;
-    step.divider = UI.buildChecklistDividerData(textValue, color);
-    syncToEditor();
-    renderChecklist();
+    patchChecklistDivider(checklistContextTarget.index, { color: btn.dataset.color || '' });
     closeChecklistContextMenu();
+}
+
+function handleChecklistContextTypeClick(event) {
+    const btn = event.target.closest('[data-divider-type]');
+    if (!btn || checklistContextTarget == null) return;
+    patchChecklistDivider(checklistContextTarget.index, { type: btn.dataset.dividerType });
+    closeChecklistContextMenu();
+}
+
+/** The type submenu is built from the registry, so new types show up here. */
+function renderChecklistContextTypeMenu() {
+    const menu = EL.checklistContextType?.querySelector('.context-submenu');
+    if (!menu) return;
+    menu.replaceChildren(...DIVIDER_TYPE_IDS.map((type) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'context-color-item';
+        btn.setAttribute('role', 'menuitemradio');
+        btn.dataset.dividerType = type;
+        btn.textContent = DIVIDER_TYPES[type].label;
+        return btn;
+    }));
+}
+
+function markChecklistContextDividerSelection(index) {
+    const divider = parseDivider(currentData?.steps?.[index]?.divider);
+    if (!divider) return;
+    const mark = (items, selectedValue, readValue) => items.forEach((item) => {
+        const selected = readValue(item) === selectedValue;
+        item.classList.toggle('is-selected', selected);
+        item.setAttribute('aria-checked', String(selected));
+    });
+    mark(EL.checklistContextColor?.querySelectorAll('[data-color]') || [],
+        divider.color.toLowerCase(), item => (item.dataset.color || '').toLowerCase());
+    mark(EL.checklistContextType?.querySelectorAll('[data-divider-type]') || [],
+        divider.type, item => item.dataset.dividerType);
 }
 
 async function handleTreeContextRename() {
@@ -2410,6 +2454,8 @@ function setupChecklistSearch() {
     EL.checklistSearchClose?.addEventListener('click', closeChecklistSearch);
     document.addEventListener('keydown', (event) => {
         if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'f') return;
+        // A code divider's CodeMirror already opened its own search panel.
+        if (event.defaultPrevented) return;
         if (!checklistSearchScopeActive && !EL.checklistPane?.contains(event.target)) return;
         event.preventDefault();
         event.stopPropagation();
@@ -4296,6 +4342,10 @@ function setupWindowListeners() {
     }
     if (EL.checklistContextColor) {
         EL.checklistContextColor.addEventListener('click', handleChecklistContextColorClick);
+    }
+    if (EL.checklistContextType) {
+        renderChecklistContextTypeMenu();
+        EL.checklistContextType.addEventListener('click', handleChecklistContextTypeClick);
     }
     if (EL.btnKeyboardShortcuts) {
         EL.btnKeyboardShortcuts.addEventListener('click', openShortcutsModal);

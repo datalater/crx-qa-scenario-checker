@@ -17,7 +17,7 @@ QA Scenario Checker is a Chrome extension for editing QA scenario JSON and revie
 
 - Edit scenarios with a side-by-side JSON Editor and Table Editor
 - Render `given`, `when`, `then`, and `pass` fields as a checklist table
-- Support divider rows and divider colors
+- Support divider rows with colors and types (text / code)
 - Create, rename, copy, delete, and search files and folders in the file tree
 - Import a folder or a single JSON file
 - Autosave to localStorage with file/folder-oriented workflows
@@ -68,6 +68,8 @@ QA Scenario Checker is a Chrome extension for editing QA scenario JSON and revie
   ]
 }
 ```
+
+A divider can also be an object: `{ "value": "...", "type": "code", "color": "#a371f7" }`. `type` (`text` by default, or `code` for a highlighted CodeMirror editor whose language is picked on the row, `tsx` by default and stored as `lang` otherwise) and `color` are independent; change them from the divider's context menu. Unknown types render as text and are preserved.
 
 ## Motivation
 

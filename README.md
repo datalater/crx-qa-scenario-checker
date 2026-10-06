@@ -26,7 +26,7 @@ QA Scenario Checker는 QA 시나리오 JSON을 편집하고, Given/When/Then 체
 
 - JSON Editor와 Table Editor를 나란히 보며 시나리오를 편집
 - `given`, `when`, `then`, `pass` 필드를 체크리스트 테이블로 표시
-- 구분선(`divider`) 행과 구분선 색상 지원
+- 구분선(`divider`) 행과 구분선 색상, 타입(text / code) 지원
 - 행별 노트(`notes`)로 원문 추적 — 노트 여러 개, 각각 link/text/code 블록을 조합
 - 노트의 code 블록은 CodeMirror 편집기로 문법 강조
 - Note 컬럼을 전환하는 밀도 모드와 `{pass}/{total}` 진척도 표시
@@ -116,6 +116,23 @@ demo-private/          전체 제외
   ]
 }
 ```
+
+### 구분선 타입과 색상
+
+구분선은 문자열 하나로 쓰거나, 속성이 필요하면 객체로 씁니다. `type`과 `color`는 서로 독립적이며 생략하면 기본값(text, 기본 색상)입니다. Table Editor에서 구분선을 우클릭해 `타입 변경`, `색상 변경`으로 바꿀 수 있습니다.
+
+```json
+{ "divider": "Error cases" }
+{ "divider": { "value": "Error cases", "color": "#f85149" } }
+{ "divider": { "value": "const canLogin =\n  id.valid() && password.valid()", "type": "code" } }
+```
+
+| type | 편집 |
+| --- | --- |
+| `text` (기본) | 일반 텍스트. 백틱 인라인 코드를 렌더링합니다 |
+| `code` | CodeMirror 에디터. 들여쓰기를 보존합니다. 하이라이팅 언어는 에디터 위 선택 상자에서 고르며 기본값은 `tsx`입니다 |
+
+언어를 기본값(`tsx`) 외의 것으로 고르면 `"lang": "json"`처럼 저장되고, 강조 없이 쓰려면 `plain`을 고릅니다. 알 수 없는 `type`은 text로 표시하되 값은 그대로 보존합니다.
 
 ### 문장 쓰는 법
 
