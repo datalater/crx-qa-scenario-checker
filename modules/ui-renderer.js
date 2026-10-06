@@ -1203,7 +1203,10 @@ export function renderChecklist(container, data, options = {}) {
     if (!container) return;
     const canInsertRows = typeof onAddStep === 'function' || typeof onAddDivider === 'function';
 
-    // Rows are rebuilt from scratch, so editors from the last render go first.
+    // Rows are rebuilt from scratch. Detach the old rows before destroying
+    // their editors: CodeMirror's destroy removes its DOM, and doing that
+    // while the rows are still in the table reset the pane's scroll position.
+    container.replaceChildren();
     destroyMountedEditors(container);
 
     if (!data || !data.steps || !Array.isArray(data.steps)) {

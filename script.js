@@ -215,6 +215,7 @@ let directoryFlushQueued = false;
 let folderWritePermissionRequestInFlight = false;
 let treeContextTarget = null;
 let checklistContextTarget = null;
+let lastRenderedChecklistFileId = null;
 const pendingCopyFileIds = new Set();
 let fileTreeSearchQuery = '';
 let currentFileTreeSearchState = null;
@@ -2020,6 +2021,18 @@ function renderChecklist() {
         renderChecklist();
     };
 
+    // Rebuilding the table empties it for a moment, which lets the browser
+    // clamp the pane's scroll to the top. Keep the reader where they were, so
+    // adding a row or recoloring a divider at the bottom does not jump.
+    // Another file starts from its own top instead.
+    const renderedFileId = Workspace.getActiveFile(workspace)?.id ?? null;
+    const checklistScroller = renderedFileId !== null && renderedFileId === lastRenderedChecklistFileId
+        ? EL.checklistBody?.closest('.checklist-container')
+        : null;
+    const scrollTop = checklistScroller?.scrollTop ?? 0;
+    const scrollLeft = checklistScroller?.scrollLeft ?? 0;
+    lastRenderedChecklistFileId = renderedFileId;
+
     UI.renderChecklist(EL.checklistBody, currentData, {
         onUpdatePass: (idx, val) => {
             currentData.steps[idx].pass = val;
@@ -2063,6 +2076,10 @@ function renderChecklist() {
         searchResults: checklistSearchResults,
         activeSearchResult: checklistSearchResults[checklistSearchResultIndex] || null
     });
+    if (checklistScroller) {
+        checklistScroller.scrollTop = scrollTop;
+        checklistScroller.scrollLeft = scrollLeft;
+    }
     refreshPassSummary();
     refreshStepDetailPanel();
     clearHighlightIfNoSelection();
