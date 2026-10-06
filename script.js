@@ -271,6 +271,7 @@ function init() {
     setupChecklistDensityToggle();
     setupChecklistFilter();
     setupChecklistSearch();
+    setupTableEditorSaveShortcut();
     setupStepDetailPanel();
     loadWorkspace();
     setupEventListeners();
@@ -2421,6 +2422,27 @@ function navigateChecklistSearchResult(index) {
     });
 }
 
+/**
+ * Cmd/Ctrl+S in the Table Editor (or its notes panel) saves right away.
+ * Every cell edit is already synced to the JSON, so saving only has to skip
+ * the autosave delay. The JSON editor handles its own Cmd+S (format + save)
+ * and calls preventDefault, which is why that case is skipped here.
+ */
+function setupTableEditorSaveShortcut() {
+    document.addEventListener('keydown', (event) => {
+        if (event.defaultPrevented || !isEditorSaveShortcut(event)) return;
+        const inTableEditor = EL.checklistPane?.contains(event.target)
+            || EL.stepDetailPanel?.contains(event.target)
+            || checklistSearchScopeActive;
+        if (!inTableEditor) return;
+        // Always block the browser "Save page" dialog inside the Table Editor.
+        event.preventDefault();
+        if (!Workspace.getActiveFile(workspace)) return;
+        flushStepDetailCodeEditors();
+        flushAutosaveAndPersist();
+    });
+}
+
 function setupChecklistSearch() {
     EL.checklistPane?.addEventListener('pointerdown', () => {
         checklistSearchScopeActive = true;
@@ -3377,7 +3399,12 @@ async function flushDirectoryFileIfNeeded() {
     }
 }
 
+/**
+ * Explicit save (Cmd/Ctrl+S). It always shows the same "Saved!" feedback as
+ * autosave, even when autosave already ran and nothing was dirty.
+ */
 function flushAutosaveAndPersist() {
+    topSaveStatusActivated = true;
     if (autosaveTimer) {
         clearTimeout(autosaveTimer);
         autosaveTimer = null;
