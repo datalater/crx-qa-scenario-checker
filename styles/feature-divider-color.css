@@ -102,9 +102,14 @@
     cursor: text;
   }
 
-  .checklist-divider-lang-select {
+  .checklist-divider-select {
     cursor: pointer;
   }
+
+  .checklist-divider-head-label:not(:first-child) {
+    margin-left: 6px;
+  }
+
 
   .context-color-swatch {
     display: inline-block;
@@ -113,4 +118,23 @@
     border-radius: 50%;
     flex-shrink: 0;
   }
+}
+
+/* Outside the block above on purpose. style.css already imports this file
+   into `features`, so the inner `@layer features` is a nested sub-layer
+   that loses to rules sitting directly in `features`, like the note styles
+   in feature-step-note.css. */
+
+/* Lowercase like the select values next to it (notes keep uppercase). Two
+   classes so it beats `.step-detail-block-kind`, imported later. */
+.checklist-divider-code-head .checklist-divider-head-label {
+  text-transform: none;
+}
+
+/* height: auto lifts the editor's 300px cap so the whole block shows.
+   CodeMirror injects its theme unlayered, which beats any normal layered
+   rule; a layered !important is the one thing that outranks it. */
+.checklist-divider-code-host.is-height-auto .cm-editor,
+.checklist-divider-code-host.is-height-auto .cm-scroller {
+  max-height: none !important;
 }

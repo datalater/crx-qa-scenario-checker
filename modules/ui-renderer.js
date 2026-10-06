@@ -3,7 +3,9 @@ import {
     getDividerTitle,
     isDivider,
     parseDivider,
+    DIVIDER_HEIGHTS,
     PLAIN_DIVIDER_LANG,
+    resolveDividerHeight,
     resolveDividerLang,
     resolveDividerType,
     serializeDivider
@@ -1085,26 +1087,42 @@ function mountTextDividerEditor(_dividerType, { rawTitle, commit }) {
     return { kind: 'text', element };
 }
 
-/**
- * Language picker for a code divider, listed like the note code block one
- * (plain first, then the bundle's languages). An unknown stored language
- * stays selectable so opening the row does not silently replace it.
- */
-function createDividerLangSelect({ selected, languages }) {
-    const select = document.createElement('select');
-    select.className = 'step-detail-lang-select checklist-divider-lang-select';
-    select.setAttribute('aria-label', 'Code language');
+function createDividerHeadLabel(text) {
+    const label = document.createElement('span');
+    label.className = 'step-detail-block-kind checklist-divider-head-label';
+    label.textContent = String(text).toLowerCase();
+    return label;
+}
 
-    const ids = [PLAIN_DIVIDER_LANG, ...languages];
+/**
+ * A header select styled like the note code block language picker. An
+ * unknown stored value stays selectable so opening the row does not
+ * silently replace it.
+ */
+function createDividerOptionSelect({ label, options, selected }) {
+    const select = document.createElement('select');
+    select.className = 'step-detail-lang-select checklist-divider-select';
+    select.setAttribute('aria-label', label);
+
+    const ids = [...options];
     if (selected && !ids.includes(selected)) ids.push(selected);
-    [...new Set(ids)].forEach((lang) => {
+    [...new Set(ids)].forEach((id) => {
         const option = document.createElement('option');
-        option.value = lang;
-        option.textContent = lang;
-        option.selected = lang === selected;
+        option.value = id;
+        option.textContent = id;
+        option.selected = id === selected;
         select.appendChild(option);
     });
     return select;
+}
+
+/** Language picker, listed like the note one: plain, then the bundle's. */
+function createDividerLangSelect({ selected, languages }) {
+    return createDividerOptionSelect({
+        label: 'Code language',
+        options: [PLAIN_DIVIDER_LANG, ...languages],
+        selected
+    });
 }
 
 /** Returns null without the CodeMirror bundle, which falls back to text. */
@@ -1119,6 +1137,8 @@ function mountCodeDividerEditor(dividerType, { divider, commit }) {
 
     const host = document.createElement('div');
     host.className = 'checklist-divider-code-host';
+    const applyHeight = (height) => host.classList.toggle('is-height-auto', height === 'auto');
+    applyHeight(resolveDividerHeight(divider));
     const editor = factory({
         parent: host,
         doc: divider.value,
@@ -1138,15 +1158,28 @@ function mountCodeDividerEditor(dividerType, { divider, commit }) {
     // Picking a language should not select the row or open its menu.
     langSelect.addEventListener('click', event => event.stopPropagation());
 
-    // Same header as a note code block: kind label, then the language picker.
-    // It sits above the editor because the table is often wider than the
-    // pane, so a control beside the editor could end up off-screen.
+    const heightSelect = createDividerOptionSelect({
+        label: 'Editor height',
+        options: DIVIDER_HEIGHTS,
+        selected: divider.height || resolveDividerHeight(divider)
+    });
+    heightSelect.addEventListener('change', () => {
+        commit({ height: heightSelect.value });
+        applyHeight(resolveDividerHeight({ type: divider.type, height: heightSelect.value }));
+    });
+    heightSelect.addEventListener('click', event => event.stopPropagation());
+
+    // Same header as a note code block: `label [select]` pairs. It sits above
+    // the editor because the table is often wider than the pane, so controls
+    // beside the editor could end up off-screen.
     const head = document.createElement('div');
     head.className = 'step-detail-block-head checklist-divider-code-head';
-    const kind = document.createElement('span');
-    kind.className = 'step-detail-block-kind';
-    kind.textContent = dividerType.label;
-    head.append(kind, langSelect);
+    head.append(
+        createDividerHeadLabel(dividerType.label),
+        langSelect,
+        createDividerHeadLabel('height'),
+        heightSelect
+    );
 
     element.append(head, host);
     // Escape leaves the editor like the other cells, unless CodeMirror used

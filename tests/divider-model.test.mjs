@@ -5,6 +5,7 @@ import {
     getDividerTitle,
     isDivider,
     parseDivider,
+    resolveDividerHeight,
     resolveDividerLang,
     resolveDividerType,
     serializeDivider
@@ -14,10 +15,10 @@ import { assertDeepEqual, assertEqual, test } from './lib/test-runner.mjs';
 const roundTrip = raw => serializeDivider(parseDivider(raw));
 
 test('divider model reads every legacy shape', () => {
-    assertDeepEqual(parseDivider(true), { value: '', type: 'text', color: '', lang: '' });
-    assertDeepEqual(parseDivider('  Group  '), { value: 'Group', type: 'text', color: '', lang: '' });
-    assertDeepEqual(parseDivider({ value: 'G', color: '#f85149' }), { value: 'G', type: 'text', color: '#f85149', lang: '' });
-    assertDeepEqual(parseDivider({ value: true, color: '#f85149' }), { value: '', type: 'text', color: '#f85149', lang: '' });
+    assertDeepEqual(parseDivider(true), { value: '', type: 'text', color: '', lang: '', height: '' });
+    assertDeepEqual(parseDivider('  Group  '), { value: 'Group', type: 'text', color: '', lang: '', height: '' });
+    assertDeepEqual(parseDivider({ value: 'G', color: '#f85149' }), { value: 'G', type: 'text', color: '#f85149', lang: '', height: '' });
+    assertDeepEqual(parseDivider({ value: true, color: '#f85149' }), { value: '', type: 'text', color: '#f85149', lang: '', height: '' });
     assertEqual(parseDivider(''), null);
     assertEqual(parseDivider(false), null);
     assertEqual(parseDivider({ value: '   ' }), null);
@@ -46,7 +47,7 @@ test('code keeps indentation but drops surrounding blank lines', () => {
     const value = '\n\nconst canLogin =\n  id.valid()\n  && password.valid()\n\n';
     assertDeepEqual(
         parseDivider({ value, type: 'code' }),
-        { value: 'const canLogin =\n  id.valid()\n  && password.valid()', type: 'code', color: '', lang: '' }
+        { value: 'const canLogin =\n  id.valid()\n  && password.valid()', type: 'code', color: '', lang: '', height: '' }
     );
     assertEqual(parseDivider({ value: '  indented', type: 'code' }).value, '  indented');
     assertEqual(parseDivider({ value: '  trimmed  ' }).value, 'trimmed');
@@ -111,4 +112,26 @@ test('lang is dropped for text types and kept for unknown types', () => {
     assertDeepEqual(roundTrip({ value: 'a', type: 'sql', lang: 'pgsql' }), { value: 'a', type: 'sql', lang: 'pgsql' });
     const raw = { value: 'a', type: 'code', lang: 'json' };
     assertDeepEqual(serializeDivider({ ...parseDivider(raw), color: '#3fb950' }), { ...raw, color: '#3fb950' });
+});
+
+test('code divider height defaults to fixed and only stores auto', () => {
+    assertEqual(resolveDividerHeight({ type: 'code' }), 'fixed');
+    assertEqual(resolveDividerHeight({ type: 'code', height: ' AUTO ' }), 'auto');
+    assertEqual(resolveDividerHeight({ type: 'code', height: 'tall' }), 'fixed');
+    assertEqual(resolveDividerHeight({ type: 'text', height: 'auto' }), '');
+    assertDeepEqual(serializeDivider({ value: 'a', type: 'code', height: 'fixed' }), { value: 'a', type: 'code' });
+    assertDeepEqual(
+        serializeDivider({ value: 'a', type: 'code', lang: 'json', height: 'auto', color: '#f85149' }),
+        { value: 'a', type: 'code', lang: 'json', height: 'auto', color: '#f85149' }
+    );
+    assertEqual(serializeDivider({ value: 'a', type: 'text', height: 'auto' }), 'a');
+    assertDeepEqual(roundTrip({ value: 'a', type: 'code', height: 'tall' }), { value: 'a', type: 'code', height: 'tall' });
+});
+
+test('changing height keeps lang and color', () => {
+    const raw = { value: 'a', type: 'code', lang: 'json', color: '#3fb950' };
+    assertDeepEqual(
+        serializeDivider({ ...parseDivider(raw), height: 'auto' }),
+        { value: 'a', type: 'code', lang: 'json', height: 'auto', color: '#3fb950' }
+    );
 });

@@ -69,7 +69,7 @@ QA Scenario Checker is a Chrome extension for editing QA scenario JSON and revie
 }
 ```
 
-A divider can also be an object: `{ "value": "...", "type": "code", "color": "#a371f7" }`. `type` (`text` by default, or `code` for a highlighted CodeMirror editor whose language is picked on the row, `tsx` by default and stored as `lang` otherwise) and `color` are independent; change them from the divider's context menu. Unknown types render as text and are preserved.
+A divider can also be an object: `{ "value": "...", "type": "code", "color": "#a371f7" }`. `type` (`text` by default, or `code` for a highlighted CodeMirror editor whose language is picked on the row, `tsx` by default and stored as `lang` otherwise; `height` is `fixed` (300px max, scrolls) by default or `auto` to show the whole block) and `color` are independent; change them from the divider's context menu. Unknown types render as text and are preserved.
 
 ## Motivation
 
