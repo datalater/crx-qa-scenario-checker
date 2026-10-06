@@ -137,10 +137,19 @@ function editorTheme() {
         borderLeftColor: PALETTE.text,
       },
 
-      "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": {
+      // Selection must match the base theme's selector: its dark rule
+      // (`&dark.cm-focused > .cm-scroller > .cm-selectionLayer ...`, #233) is
+      // more specific than a plain `.cm-selectionBackground` and otherwise
+      // wins, leaving the selection nearly invisible on this background.
+      "& > .cm-scroller > .cm-selectionLayer .cm-selectionBackground": {
+        backgroundColor: "#264f7880",
+      },
+      "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground": {
         backgroundColor: "#264f78",
       },
-      ".cm-activeLine": { backgroundColor: "#161b22" },
+      // The selection layer is drawn *under* the text, so an opaque active
+      // line would hide the selection on the cursor's line. Keep it see-through.
+      ".cm-activeLine": { backgroundColor: "#ffffff0a" },
       ".cm-gutters": {
         backgroundColor: "#0d1117",
         color: PALETTE.muted,
