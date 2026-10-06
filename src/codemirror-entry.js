@@ -9,6 +9,7 @@ import { css } from "@codemirror/lang-css";
 import { html } from "@codemirror/lang-html";
 import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
+import { markdown } from "@codemirror/lang-markdown";
 import {
   HighlightStyle,
   bracketMatching,
@@ -40,7 +41,19 @@ const LANGUAGE_EXTENSIONS = {
   json,
   html,
   css,
+  // Fenced code blocks inside markdown reuse the languages above.
+  markdown: () => markdown({ codeLanguages: resolveFencedLanguage }),
 };
+
+const FENCE_ALIASES = { js: "javascript", ts: "typescript", md: "markdown" };
+
+function resolveFencedLanguage(info) {
+  const key = String(info || "").trim().toLowerCase();
+  const id = FENCE_ALIASES[key] || key;
+  if (id === "markdown") return null;
+  const factory = LANGUAGE_EXTENSIONS[id];
+  return factory ? factory().language : null;
+}
 
 export const SUPPORTED_LANGUAGES = Object.keys(LANGUAGE_EXTENSIONS);
 
@@ -85,6 +98,9 @@ const darkHighlightStyle = HighlightStyle.define(
     { tag: [t.meta, t.comment], color: PALETTE.comment, fontStyle: "italic" },
     { tag: t.link, color: PALETTE.number, textDecoration: "underline" },
     { tag: t.heading, color: PALETTE.keyword, fontWeight: "bold" },
+    { tag: t.url, color: PALETTE.number },
+    { tag: t.monospace, color: PALETTE.string },
+    { tag: t.quote, color: PALETTE.comment },
     { tag: [t.atom, t.bool, t.special(t.variableName)], color: PALETTE.type },
     { tag: t.invalid, color: PALETTE.invalid },
     { tag: t.strikethrough, textDecoration: "line-through" },

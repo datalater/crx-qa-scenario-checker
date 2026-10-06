@@ -231,6 +231,7 @@ Table Editor 헤더의 `Search` 버튼으로 현재 시나리오를 검색합니
 | `json` | |
 | `html` | |
 | `css` | |
+| `markdown` | 펜스 코드 블록(```` ```ts ````)은 위 언어로 하이라이팅 |
 
 편집기는 다크 테마로 등록하고(`dark: true`) 하이라이팅 색은 JSON Editor와 같은 팔레트를 씁니다. CodeMirror 기본 `defaultHighlightStyle` 은 밝은 배경용이라 이 배경에서는 읽기 어렵고, 다크로 등록하지 않으면 캐럿이 검은색으로 남아 보이지 않습니다.
 
