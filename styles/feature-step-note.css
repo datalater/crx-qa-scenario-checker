@@ -558,7 +558,8 @@ tr:hover .checklist-note-add,
 .step-detail-block-kind {
   font-size: 9px;
   font-weight: 700;
-  text-transform: uppercase;
+  /* Lowercase to match the select values beside it (`code [tsx]`). */
+  text-transform: lowercase;
   letter-spacing: 0.05em;
   color: var(--accent-primary);
 }

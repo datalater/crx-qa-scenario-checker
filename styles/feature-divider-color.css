@@ -122,14 +122,7 @@
 
 /* Outside the block above on purpose. style.css already imports this file
    into `features`, so the inner `@layer features` is a nested sub-layer
-   that loses to rules sitting directly in `features`, like the note styles
-   in feature-step-note.css. */
-
-/* Lowercase like the select values next to it (notes keep uppercase). Two
-   classes so it beats `.step-detail-block-kind`, imported later. */
-.checklist-divider-code-head .checklist-divider-head-label {
-  text-transform: none;
-}
+   that loses to rules sitting directly in `features`. */
 
 /* height: auto lifts the editor's 300px cap so the whole block shows.
    CodeMirror injects its theme unlayered, which beats any normal layered
