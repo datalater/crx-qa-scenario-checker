@@ -1,4 +1,5 @@
 import {
+  acceptCompletion,
   autocompletion,
   closeBrackets,
   closeBracketsKeymap,
@@ -251,6 +252,9 @@ export function createCodeEditor(options) {
         syntaxHighlighting(darkHighlightStyle, { fallback: true }),
         keymap.of([
           ...searchKeymap,
+          // Tab accepts an open completion first; acceptCompletion returns
+          // false when none is open, so Tab falls through to indentation.
+          { key: "Tab", run: acceptCompletion },
           indentWithTab,
           ...closeBracketsKeymap,
           ...defaultKeymap,
