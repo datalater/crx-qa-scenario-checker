@@ -15,6 +15,12 @@
     display: none;
   }
 
+  /* The overlay is up from the first paint, but most startups finish in a
+     blink. Fade its content in late so a fast start does not flash a spinner. */
+  .loading-overlay > * {
+    animation: loading-fade-in 150ms ease-out 200ms both;
+  }
+
   .loading-spinner {
     width: 32px;
     height: 32px;
@@ -81,6 +87,10 @@
 
   .loading-step.is-warning::before {
     background: var(--warning);
+  }
+
+  @keyframes loading-fade-in {
+    from { opacity: 0; }
   }
 
   @keyframes loading-spin {

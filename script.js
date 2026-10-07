@@ -138,6 +138,7 @@ const EL = {
     shortcutsBackdrop: document.getElementById('keyboard-shortcuts-backdrop'),
     btnShortcutsClose: document.getElementById('btn-shortcuts-close'),
     loadingOverlay: document.getElementById('loading-overlay'),
+    appContainer: document.querySelector('.app-container'),
     checklistContextColor: document.getElementById('checklist-context-color'),
     checklistContextType: document.getElementById('checklist-context-type'),
     fileTreePanel: document.querySelector('.file-tree-panel'),
@@ -451,8 +452,12 @@ function loadWorkspace() {
 
 async function attemptRestoreBoundDirectoryConnection() {
     const boundMeta = workspace?.uiState?.boundFile;
-    if (!boundMeta || boundMeta.kind !== 'directory') return;
-    if (boundDirectoryHandle) return;
+    // Nothing to restore: close the startup overlay. This runs in the same
+    // task as init(), so the UI never paints between the two.
+    if (!boundMeta || boundMeta.kind !== 'directory' || boundDirectoryHandle) {
+        hideLoadingOverlay();
+        return;
+    }
 
     showLoadingOverlay('Restoring folder connection…');
     setLoadingSteps([
@@ -505,6 +510,8 @@ function showLoadingOverlay(label = 'Loading…') {
         EL.loadingOverlay.classList.remove('is-hidden');
         EL.loadingOverlay.setAttribute('aria-hidden', 'false');
     }
+    // The overlay blocks the mouse; inert also keeps keyboard focus out.
+    if (EL.appContainer) EL.appContainer.inert = true;
 }
 
 async function hideLoadingOverlayAfterMinimum() {
@@ -521,6 +528,7 @@ function hideLoadingOverlay() {
         EL.loadingOverlay.classList.add('is-hidden');
         EL.loadingOverlay.setAttribute('aria-hidden', 'true');
     }
+    if (EL.appContainer) EL.appContainer.inert = false;
     loadingStepState = [];
     renderLoadingSteps();
 }
@@ -4493,7 +4501,13 @@ function isTextEditingElement(element) {
     return element.isContentEditable === true;
 }
 
-init();
+try {
+    init();
+} catch (error) {
+    // A startup error must not leave the app locked behind the overlay.
+    hideLoadingOverlay();
+    throw error;
+}
 
 
 function sharedNoteUsage(id) {

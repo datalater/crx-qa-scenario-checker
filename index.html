@@ -7,7 +7,8 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="app-container">
+    <!-- inert until script.js finishes starting up; see the loading overlay. -->
+    <div class="app-container" inert>
         <header class="app-header">
             <div class="logo">
                 <h1 title="QA Scenario Checker">QA Scenario Checker</h1>
@@ -376,7 +377,9 @@
             </table>
         </div>
     </div>
-    <div id="loading-overlay" class="loading-overlay is-hidden" aria-hidden="true">
+    <!-- Visible from the first paint: the module script loads after the HTML,
+         and the UI must not take input before it is wired up. -->
+    <div id="loading-overlay" class="loading-overlay" aria-hidden="false">
         <div class="loading-spinner"></div>
         <span id="loading-label" class="loading-label">Starting…</span>
         <ol id="loading-steps" class="loading-steps" aria-label="Startup progress"></ol>
