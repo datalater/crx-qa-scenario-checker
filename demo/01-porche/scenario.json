@@ -571,6 +571,21 @@
     },
     {
       "divider": {
+        "value": "#7 구성 링크를 만들고 다시 불러온다\n\n## 시나리오\n- 사용자가 Coupe, Racing Yellow, 21-inch Sport Wheel, Black Leather를 선택한 상태에서 ‘구성 링크 만들기’를 누른다.\n- 생성된 링크를 복사해 새 브라우저에서 연다.\n- 선택한 모델과 옵션을 복원하고 현재 가격 요약을 표시한다.\n\n## 예외 상황\n- 필수 모델을 고르지 않았으면 링크 생성 버튼을 비활성화하고 필요한 선택을 안내한다.\n- 선택한 옵션이 더 이상 제공되지 않으면 해당 옵션을 표시해 다시 고르게 하고, 다른 선택은 유지한다.\n- 링크 생성에 실패하면 현재 구성을 유지하고 오류 안내와 재시도를 제공한다.\n- 공유 링크에는 이름이나 연락처 등 개인 정보를 포함하지 않는다.",
+        "type": "code",
+        "lang": "markdown",
+        "color": "#d29922"
+      }
+    },
+    {
+      "divider": {
+        "value": "type ConfigurationSelection = {\n  model: string | null;\n  exteriorColor: string | null;\n  wheel: string | null;\n  interior: string | null;\n  packages: string[];\n};\n\ntype ShareResult =\n  | { status: 'ready'; url: string }\n  | { status: 'unavailable' };\n\nasync function createShareLink(\n  selection: ConfigurationSelection\n): Promise<ShareResult> {\n  if (!selection.model) return { status: 'unavailable' };\n  return configurationService.createShareLink(selection);\n}\n\nexport function ShareConfiguration({ selection }) {\n  const [url, setUrl] = useState<string | null>(null);\n  const [error, setError] = useState(false);\n  const [saving, setSaving] = useState(false);\n\n  async function handleShare() {\n    setSaving(true);\n    setError(false);\n    try {\n      const result = await createShareLink(selection);\n      if (result.status === 'ready') setUrl(result.url);\n      else setError(true);\n    } catch {\n      setError(true);\n    } finally {\n      setSaving(false);\n    }\n  }\n\n  return (\n    <>\n      <button disabled={!selection.model || saving} onClick={handleShare}>\n        구성 링크 만들기\n      </button>\n      {url && <ShareLink value={url} />}\n      {error && <p role=\"alert\">링크를 만들지 못했습니다. 다시 시도해주세요.</p>}\n    </>\n  );\n}",
+        "type": "code",
+        "color": "#3fb950"
+      }
+    },
+    {
+      "divider": {
         "value": "todo\n- 옵션 충돌 모달에서 대체 옵션을 바로 추천할지 확인한다.\n- 모바일 화면에서 가격 요약 패널을 하단 고정 영역으로 표시할지 확인한다.\n- 상담 요청 완료 후 구성 내역을 이메일로 발송할지 확인한다.",
         "color": "#d29922"
       }
