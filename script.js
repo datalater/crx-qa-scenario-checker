@@ -2086,12 +2086,12 @@ async function ensureChildFolder(parentId, name) {
     return folder;
 }
 
-async function createEntryFromPalette({ folders, file }) {
+async function createEntryFromPalette({ folders, file, absolute }) {
     if (!treeMutationsEnabled) {
         alert('Folder mode is read-only in this version.');
         return;
     }
-    let parentId = getPaletteBaseFolderId();
+    let parentId = absolute ? getRootFolderId() : getPaletteBaseFolderId();
     if (!parentId) return;
 
     const expanded = new Set(workspace.uiState.expandedFolderIds);
@@ -2129,6 +2129,7 @@ function setupCommandPalette() {
     const commands = [
         createNewFileCommand({
             getBaseFolderLabel: () => Workspace.getFolderById(workspace, getPaletteBaseFolderId())?.name || '',
+            getRootFolderLabel: () => Workspace.getFolderById(workspace, getRootFolderId())?.name || '',
             create: createEntryFromPalette
         })
     ];

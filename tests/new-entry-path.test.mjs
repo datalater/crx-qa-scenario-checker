@@ -17,9 +17,19 @@ test('trailing slash means folders only; stray slashes and spaces are ignored', 
     const folderOnly = parseNewEntryPath('a/b/');
     assertEqual(folderOnly.folders.join('|'), 'a|b');
     assertEqual(folderOnly.file, null);
-    const messy = parseNewEntryPath('/a// b /file');
+    const messy = parseNewEntryPath('a// b /file');
     assertEqual(messy.folders.join('|'), 'a|b');
     assertEqual(messy.file, 'file');
+});
+
+test('leading slash anchors the path at the root', () => {
+    const parsed = parseNewEntryPath('/new-folder/new-file');
+    assertEqual(parsed.absolute, true);
+    assertEqual(parsed.folders.join('|'), 'new-folder');
+    assertEqual(parsed.file, 'new-file');
+    assertEqual(parseNewEntryPath('/file').folders.length, 0);
+    assertEqual(parseNewEntryPath('/a/').file, null);
+    assertEqual(parseNewEntryPath('a/file').absolute, false);
 });
 
 test('invalid input is rejected with an error code', () => {
