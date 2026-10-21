@@ -23,7 +23,22 @@ export function closeOpenFileTab(workspace, fileId) {
     return ids[Math.min(index, ids.length - 1)];
 }
 
-export function renderOpenFileTabs(container, workspace, { isDirty, onSelect, onClose } = {}) {
+/**
+ * Closes every tab for which shouldClose(id, index) is true.
+ * Returns the file id that should be active afterwards (null if nothing would remain).
+ * `keepActiveId` becomes active when the current active tab gets closed.
+ */
+export function closeTabsWhere(workspace, shouldClose, keepActiveId = null) {
+    const ids = syncOpenFileIds(workspace);
+    const kept = ids.filter((id, index) => !shouldClose(id, index));
+    if (!kept.length) return null;
+    workspace.uiState.openFileIds = kept;
+    const activeId = workspace.uiState.activeFileId;
+    if (kept.includes(activeId)) return activeId;
+    return kept.includes(keepActiveId) ? keepActiveId : kept[0];
+}
+
+export function renderOpenFileTabs(container, workspace, { isDirty, onSelect, onClose, onContextMenu } = {}) {
     if (!container) return;
     const ids = syncOpenFileIds(workspace);
     container.hidden = ids.length === 0;
@@ -68,6 +83,10 @@ export function renderOpenFileTabs(container, workspace, { isDirty, onSelect, on
             if (event.button !== 1) return;
             event.preventDefault();
             onClose?.(id);
+        });
+        tab.addEventListener('contextmenu', (event) => {
+            event.preventDefault();
+            onContextMenu?.(id, event.clientX, event.clientY);
         });
         container.appendChild(tab);
         if (isActive) tab.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });

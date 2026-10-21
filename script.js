@@ -41,11 +41,12 @@ import { runNativeEditCommand } from './modules/editor-shortcut-manager.js';
 import { matchShortcut, renderShortcutRows } from './modules/shortcut-registry.js';
 import { createCommandPalette } from './modules/command-palette.js';
 import { createNewFileCommand } from './modules/new-file-command.js';
+import { createContextMenu } from './modules/tab-context-menu.js';
 import { createEditorCursorHistoryManager } from './modules/editor-cursor-history-manager.js';
 import { createEditorFindReplaceManager } from './modules/editor-find-replace-manager.js';
 import { createDeletedFileHistoryManager } from './modules/deleted-file-history-manager.js';
 import { searchChecklist, tokenizeChecklistSearchQuery } from './modules/checklist-search-manager.js';
-import { renderOpenFileTabs, closeOpenFileTab, syncOpenFileIds } from './modules/open-file-tabs.js';
+import { renderOpenFileTabs, closeOpenFileTab, closeTabsWhere, syncOpenFileIds } from './modules/open-file-tabs.js';
 
 // --- Global State Mirroring the original ---
 const EL = {
@@ -201,6 +202,7 @@ let boundFileName = '';
 let boundFileReadonly = false;
 let treeMutationsEnabled = true;
 let commandPalette = null;
+let tabContextMenu = null;
 let directDiskSyncAvailable = false;
 let lastSaveIndicatorState = 'saved';
 let diskFlushInFlight = false;
@@ -1176,7 +1178,8 @@ function renderTree() {
     renderOpenFileTabs(EL.openFileTabs, workspace, {
         isDirty: () => activeFileDirty,
         onSelect: activateFileFromTab,
-        onClose: closeFileTab
+        onClose: closeFileTab,
+        onContextMenu: openTabContextMenu
     });
     updateTreeSearchMeta(fileSearchState);
     updateFolderToggleButtonState();
@@ -1201,6 +1204,64 @@ function closeFileTab(id) {
         persist();
     } else {
         activateFileFromTab(nextActiveId);
+    }
+}
+
+function applyTabClosure(shouldClose, keepActiveId) {
+    const nextActiveId = closeTabsWhere(workspace, shouldClose, keepActiveId);
+    if (!nextActiveId) return;
+    if (nextActiveId === workspace.uiState.activeFileId) {
+        persist();
+    } else {
+        activateFileFromTab(nextActiveId);
+    }
+}
+
+function openTabContextMenu(fileId, x, y) {
+    const file = Workspace.getFileById(workspace, fileId);
+    if (!file) return;
+    if (!tabContextMenu) tabContextMenu = createContextMenu();
+    const ids = syncOpenFileIds(workspace);
+    const index = ids.indexOf(fileId);
+    const canMutate = treeMutationsEnabled;
+    tabContextMenu.open([
+        {
+            label: '새 파일',
+            disabled: !canMutate,
+            onSelect: () => {
+                // The palette creates files relative to the selected folder.
+                workspace.uiState.selectedFolderId = file.folderId;
+                commandPalette?.open({ commandId: 'newFile' });
+            }
+        },
+        { separator: true },
+        { label: '탭 닫기', disabled: ids.length < 2, onSelect: () => closeFileTab(fileId) },
+        {
+            label: '다른 탭 모두 닫기',
+            disabled: ids.length < 2,
+            onSelect: () => applyTabClosure((id) => id !== fileId, fileId)
+        },
+        {
+            label: '오른쪽 탭 모두 닫기',
+            disabled: index < 0 || index >= ids.length - 1,
+            onSelect: () => applyTabClosure((id, i) => i > index, fileId)
+        },
+        { separator: true },
+        { label: '이름 변경', disabled: !canMutate, onSelect: () => renameFileById(fileId) },
+        { label: '파일 복사', disabled: !canMutate, onSelect: () => duplicateFileById(fileId) },
+        { label: '경로 복사', onSelect: () => copyFilePath(file) },
+        { separator: true },
+        { label: '삭제', danger: true, disabled: !canMutate, onSelect: () => deleteFileById(fileId) }
+    ], x, y);
+}
+
+async function copyFilePath(file) {
+    const path = buildFileLocation(file)?.path || file.name;
+    try {
+        await navigator.clipboard.writeText(path);
+    } catch (error) {
+        console.error('[qa-scenario] failed to copy file path', error);
+        alert('경로 복사에 실패했습니다.');
     }
 }
 

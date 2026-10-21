@@ -2,6 +2,7 @@ import './editor-selection-manager.test.mjs';
 import './editor-shortcut-manager.test.mjs';
 import './shortcut-registry.test.mjs';
 import './new-entry-path.test.mjs';
+import './open-file-tabs.test.mjs';
 import './editor-find-replace-manager.test.mjs';
 import './editor-manager.test.mjs';
 import './checklist-divider-support.test.mjs';
