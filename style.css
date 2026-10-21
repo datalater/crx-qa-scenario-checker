@@ -9,6 +9,7 @@
 @import url("styles/feature-checklist-search.css") layer(features);
 @import url("styles/feature-open-file-tabs.css") layer(features);
 @import url("styles/feature-command-palette.css") layer(features);
+@import url("styles/feature-sticky-headings.css") layer(features);
 
 @layer base {
   body {
@@ -1312,17 +1313,25 @@
   }
 
   /* Checklist Table */
+  /* No top padding: position: sticky pins inside the scroller's padding box, so a top
+     padding would leave a gap above the pinned header where scrolling rows show through.
+     The top spacing lives on .spreadsheet-view as a margin instead. */
   .checklist-container {
     flex: 1;
     overflow: auto;
-    padding: 16px;
+    padding: 0 16px 16px;
   }
 
+  /* No overflow here: an overflow container would become the scroll parent for
+     position: sticky, and it never scrolls vertically, so the header and pinned
+     titles would not stick. .checklist-container scrolls in both directions instead. */
   .spreadsheet-view {
     background: var(--editor-bg);
     border: 1px solid var(--border-color);
     border-radius: 6px;
-    overflow-x: auto;
+    box-sizing: content-box;
+    margin-top: 16px;
+    min-width: 800px; /* matches the table's min-width */
   }
 
   table {
@@ -1343,6 +1352,8 @@
     position: sticky;
     top: 0;
     z-index: 5;
+    /* Collapsed borders do not travel with a sticky cell. */
+    box-shadow: inset 0 -1px 0 var(--border-color);
   }
 
   td {

@@ -5,7 +5,8 @@ import {
     NOTE_CODE_LANG_STORAGE_KEY,
     CHECKLIST_FILTER_STORAGE_KEY,
     PANEL_VISIBILITY_STORAGE_KEY,
-    SCROLL_POSITIONS_STORAGE_KEY
+    SCROLL_POSITIONS_STORAGE_KEY,
+    CHECKLIST_STICKY_STORAGE_KEY
 } from './constants/storage.js';
 import { AUTOSAVE_DELAY_MS, WORKSPACE_VERSION, DEFAULT_FILE_NAME } from './configs/workspace.js';
 import { EDITOR_CONFIG } from './configs/editor-config.js';
@@ -80,6 +81,7 @@ const EL = {
     scenarioTitle: document.getElementById('scenario-title'),
     checklistProgress: document.getElementById('checklist-progress'),
     checklistDensityToggle: document.getElementById('checklist-density-toggle'),
+    checklistStickyToggle: document.getElementById('checklist-sticky-toggle'),
     checklistSearchToggle: document.getElementById('checklist-search-toggle'),
     checklistSearchPanel: document.getElementById('checklist-search-panel'),
     checklistSearchInput: document.getElementById('checklist-search-input'),
@@ -206,6 +208,8 @@ let boundFileName = '';
 let boundFileReadonly = false;
 let treeMutationsEnabled = true;
 let commandPalette = null;
+let checklistStickyEnabled = true;
+let stickyUpdateFrame = 0;
 // Scroll positions per file path (paths survive reloads and folder re-reads, ids do not).
 // Kept in memory for tab switches and mirrored to localStorage for reloads.
 const MAX_SAVED_SCROLL_POSITIONS = 200;
@@ -277,6 +281,7 @@ function init() {
     setupEditorFindReplaceManager();
     setupDeletedFileHistoryManager();
     setupChecklistDensityToggle();
+    setupChecklistStickyHeadings();
     setupChecklistFilter();
     setupChecklistSearch();
     setupTableEditorSaveShortcut();
@@ -2418,6 +2423,11 @@ function setupCommandPalette() {
             create: createEntryFromPalette
         }),
         {
+            id: 'toggleStickyHeadings',
+            label: 'Sticky 제목 토글',
+            run: () => setChecklistStickyEnabled(!checklistStickyEnabled)
+        },
+        {
             id: 'toggleFileTree',
             label: '파일 트리 토글',
             shortcutId: 'toggleFileTree',
@@ -2574,6 +2584,7 @@ function renderChecklist() {
     refreshPassSummary();
     refreshStepDetailPanel();
     clearHighlightIfNoSelection();
+    scheduleStickyHeadingUpdate();
 }
 
 function isStepArrayField(field) {
@@ -2745,6 +2756,95 @@ function setupChecklistFilter() {
         event.stopPropagation();
         closeChecklistFilterMenu({ restoreFocus: true });
     });
+}
+
+/**
+ * Sticky section titles: plain text dividers pin under the table header while their
+ * section scrolls, and the next one covers the previous (CSS `position: sticky` does the
+ * pinning; this code only measures the header, marks the pinned row and handles the jump icon).
+ */
+function setChecklistStickyEnabled(enabled, { persist = true } = {}) {
+    checklistStickyEnabled = enabled === true;
+    getChecklistScroller()?.classList.toggle('is-sticky-headings', checklistStickyEnabled);
+    if (EL.checklistStickyToggle) {
+        EL.checklistStickyToggle.setAttribute('aria-pressed', String(checklistStickyEnabled));
+        EL.checklistStickyToggle.classList.toggle('is-active', checklistStickyEnabled);
+    }
+    if (persist) {
+        try {
+            localStorage.setItem(CHECKLIST_STICKY_STORAGE_KEY, checklistStickyEnabled ? 'on' : 'off');
+        } catch (_) { /* storage unavailable */ }
+    }
+    scheduleStickyHeadingUpdate();
+}
+
+function scheduleStickyHeadingUpdate() {
+    if (stickyUpdateFrame) return;
+    stickyUpdateFrame = requestAnimationFrame(() => {
+        stickyUpdateFrame = 0;
+        updateStickyHeadings();
+    });
+}
+
+function updateStickyHeadings() {
+    const scroller = getChecklistScroller();
+    if (!scroller) return;
+    const headCell = scroller.querySelector('thead th');
+    // The whole thead (borders included) so pinned titles start exactly where it ends.
+    const headHeight = scroller.querySelector('thead')?.getBoundingClientRect().height || 0;
+    if (headHeight > 0) scroller.style.setProperty('--checklist-head-height', `${headHeight}px`);
+
+    const rows = scroller.querySelectorAll('tr.is-sticky-heading');
+    let lastStuck = null;
+    if (checklistStickyEnabled && headCell) {
+        const headBottom = headCell.getBoundingClientRect().bottom;
+        rows.forEach((row) => {
+            if (row.getBoundingClientRect().top <= headBottom + 0.5) lastStuck = row;
+        });
+    }
+    rows.forEach((row) => row.classList.toggle('is-stuck', row === lastStuck));
+}
+
+/** Scrolls so the pinned heading returns to its natural position just below the header. */
+function scrollStickyHeadingToOrigin(row) {
+    const scroller = getChecklistScroller();
+    const headCell = scroller?.querySelector('thead th');
+    if (!scroller || !headCell) return;
+    // A pinned row reports its pinned position, so measure from the row before it instead.
+    let skippedHeight = 0;
+    let previous = row.previousElementSibling;
+    while (previous && previous.classList.contains('is-sticky-heading')) {
+        skippedHeight += previous.offsetHeight;
+        previous = previous.previousElementSibling;
+    }
+    const naturalTop = (previous
+        ? previous.getBoundingClientRect().bottom
+        : row.parentElement.getBoundingClientRect().top) + skippedHeight;
+    scroller.scrollTop += naturalTop - headCell.getBoundingClientRect().bottom;
+}
+
+function setupChecklistStickyHeadings() {
+    let stored = null;
+    try {
+        stored = localStorage.getItem(CHECKLIST_STICKY_STORAGE_KEY);
+    } catch (_) { /* storage unavailable */ }
+    setChecklistStickyEnabled(stored !== 'off', { persist: false });
+
+    EL.checklistStickyToggle?.addEventListener('click', () => setChecklistStickyEnabled(!checklistStickyEnabled));
+
+    const scroller = getChecklistScroller();
+    if (!scroller) return;
+    scroller.addEventListener('scroll', scheduleStickyHeadingUpdate, { passive: true });
+    if (typeof ResizeObserver === 'function') {
+        new ResizeObserver(scheduleStickyHeadingUpdate).observe(scroller);
+    }
+    scroller.addEventListener('click', (event) => {
+        const button = event.target.closest?.('.checklist-sticky-jump');
+        if (!button) return;
+        event.stopPropagation();
+        const row = button.closest('tr.is-sticky-heading');
+        if (row) scrollStickyHeadingToOrigin(row);
+    }, true);
 }
 
 function setupChecklistDensityToggle() {

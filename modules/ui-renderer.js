@@ -3,6 +3,7 @@ import {
     getDividerTitle,
     isDivider,
     parseDivider,
+    DEFAULT_DIVIDER_TYPE,
     DIVIDER_HEIGHTS,
     PLAIN_DIVIDER_LANG,
     resolveDividerHeight,
@@ -452,6 +453,23 @@ export function normalizeEditableChecklistDividerValue(value) {
 
 export function isChecklistDividerStep(step) {
     return isDivider(step?.divider);
+}
+
+/** Section headings: type text, default color, non-empty title. */
+export function isStickyHeadingDivider(divider, title) {
+    return divider?.type === DEFAULT_DIVIDER_TYPE
+        && !divider.color
+        && String(title ?? '').trim().length > 0;
+}
+
+function createStickyJumpButton() {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'checklist-sticky-jump';
+    button.title = '원래 위치로 이동';
+    button.setAttribute('aria-label', '원래 위치로 이동');
+    button.innerHTML = '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M3 2.75A.75.75 0 0 1 3.75 2h8.5a.75.75 0 0 1 0 1.5h-8.5A.75.75 0 0 1 3 2.75Zm4.47 2.72a.75.75 0 0 1 1.06 0l3.25 3.25a.75.75 0 1 1-1.06 1.06L8.75 7.81v5.44a.75.75 0 0 1-1.5 0V7.81L5.28 9.78a.75.75 0 0 1-1.06-1.06l3.25-3.25Z"></path></svg>';
+    return button;
 }
 
 export function getChecklistDividerTitle(step) {
@@ -1392,6 +1410,11 @@ export function renderChecklist(container, data, options = {}) {
 
             dividerInner.appendChild(dividerSpacer);
             dividerInner.appendChild(dividerEditor.element);
+            // A plain text divider with a title acts as a section heading that can pin to the top.
+            if (isStickyHeadingDivider(divider, getChecklistDividerTitle(step))) {
+                dividerRow.classList.add('is-sticky-heading');
+                dividerInner.appendChild(createStickyJumpButton());
+            }
             dividerCell.appendChild(dividerInner);
             dividerRow.appendChild(dividerCell);
             dividerRow.addEventListener('click', () => {

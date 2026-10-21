@@ -5,3 +5,4 @@ export const NOTE_CODE_LANG_STORAGE_KEY = 'qa-scenarios-note-code-lang-v1';
 export const CHECKLIST_FILTER_STORAGE_KEY = 'qa-scenarios-checklist-filter-v1';
 export const PANEL_VISIBILITY_STORAGE_KEY = 'qa-scenarios-panel-visibility-v1';
 export const SCROLL_POSITIONS_STORAGE_KEY = 'qa-scenarios-scroll-positions-v1';
+export const CHECKLIST_STICKY_STORAGE_KEY = 'qa-scenarios-checklist-sticky-v1';

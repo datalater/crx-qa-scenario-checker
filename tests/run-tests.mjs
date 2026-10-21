@@ -5,6 +5,7 @@ import './new-entry-path.test.mjs';
 import './open-file-tabs.test.mjs';
 import './open-file-command.test.mjs';
 import './folder-move.test.mjs';
+import './sticky-heading.test.mjs';
 import './editor-find-replace-manager.test.mjs';
 import './editor-manager.test.mjs';
 import './checklist-divider-support.test.mjs';
