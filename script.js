@@ -2131,7 +2131,13 @@ function setupCommandPalette() {
             getBaseFolderLabel: () => Workspace.getFolderById(workspace, getPaletteBaseFolderId())?.name || '',
             getRootFolderLabel: () => Workspace.getFolderById(workspace, getRootFolderId())?.name || '',
             create: createEntryFromPalette
-        })
+        }),
+        {
+            id: 'toggleFileTree',
+            label: '파일 트리 토글',
+            shortcutId: 'toggleFileTree',
+            run: () => togglePanelVisibility('fileTree')
+        }
     ];
     commandPalette = createCommandPalette({
         root: document.getElementById('command-palette'),
@@ -2149,6 +2155,9 @@ function setupCommandPalette() {
         } else if (matchShortcut(event, 'newFile')) {
             event.preventDefault();
             commandPalette.open({ commandId: 'newFile' });
+        } else if (matchShortcut(event, 'toggleFileTree')) {
+            event.preventDefault();
+            togglePanelVisibility('fileTree');
         }
     });
 }

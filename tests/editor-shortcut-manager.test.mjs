@@ -74,3 +74,9 @@ test('palette and new-file shortcuts need exact modifiers', () => {
     assertEqual(matchShortcut(createEvent({ metaKey: true, altKey: true, key: 'Dead', code: 'KeyE' }), 'newFile'), false);
     assertEqual(matchShortcut(createEvent({ metaKey: true, key: 'n', code: 'KeyN' }), 'newFile'), false);
 });
+
+test('toggle file tree shortcut is cmd+b only (ctrl+b stays a caret move)', () => {
+    assertEqual(matchShortcut(createEvent({ metaKey: true, key: 'b', code: 'KeyB' }), 'toggleFileTree'), true);
+    assertEqual(matchShortcut(createEvent({ ctrlKey: true, key: 'b', code: 'KeyB' }), 'toggleFileTree'), false);
+    assertEqual(matchShortcut(createEvent({ metaKey: true, shiftKey: true, key: 'b', code: 'KeyB' }), 'toggleFileTree'), false);
+});

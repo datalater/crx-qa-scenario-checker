@@ -77,6 +77,12 @@ export const SHORTCUTS = [
         bindings: [{ codes: ['KeyN'], keys: ['n'], meta: true, ctrl: false, shift: false, alt: true, platform: 'mac' }]
     },
     {
+        id: 'toggleFileTree',
+        label: 'Toggle file tree',
+        // meta only: Ctrl+B moves the caret back one character in macOS text fields.
+        bindings: [{ codes: ['KeyB'], keys: ['b'], meta: true, ctrl: false, shift: false, alt: false, platform: 'mac' }]
+    },
+    {
         id: 'indent',
         label: 'Indent (JSON Editor)',
         bindings: [{ codes: ['Tab'], keys: ['tab'], shift: false }]
