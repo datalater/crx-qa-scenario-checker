@@ -354,6 +354,12 @@
             <p id="step-detail-notes-empty" class="step-detail-empty">아직 노트가 없습니다. + Add로 추가하세요.</p>
         </div>
     </aside>
+    <div id="command-palette-backdrop" class="command-palette-backdrop is-hidden" aria-hidden="true"></div>
+    <div id="command-palette" class="command-palette is-hidden" role="dialog" aria-label="Command palette" aria-modal="true">
+        <input id="command-palette-input" class="command-palette-input" type="text" autocomplete="off" spellcheck="false" placeholder="명령 검색..." aria-label="Command palette">
+        <ul id="command-palette-list" class="command-palette-list" role="listbox" aria-label="Commands"></ul>
+        <div id="command-palette-preview" class="command-palette-preview is-hidden" aria-live="polite"></div>
+    </div>
     <div id="keyboard-shortcuts-backdrop" class="shortcuts-backdrop is-hidden" aria-hidden="true"></div>
     <div id="keyboard-shortcuts-modal" class="shortcuts-modal is-hidden" role="dialog" aria-label="Keyboard shortcuts" aria-modal="true">
         <div class="shortcuts-modal-header">

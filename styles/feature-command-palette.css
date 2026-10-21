@@ -1,0 +1,104 @@
+@layer features {
+  .command-palette-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 1000;
+  }
+
+  .command-palette {
+    position: fixed;
+    top: 18%;
+    left: 50%;
+    translate: -50% 0;
+    width: min(560px, calc(100vw - 32px));
+    background: var(--pane-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+    z-index: 1001;
+    padding: 12px;
+  }
+
+  .command-palette.is-hidden,
+  .command-palette-backdrop.is-hidden {
+    display: none;
+  }
+
+  .command-palette-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    font: inherit;
+    font-size: 14px;
+    color: var(--text-primary);
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    outline: none;
+  }
+
+  .command-palette-input:focus {
+    border-color: #58a6ff;
+  }
+
+  .command-palette-preview {
+    margin-top: 8px;
+    padding: 0 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    min-height: 1.4em;
+    overflow-wrap: anywhere;
+  }
+
+  .command-palette-preview.is-error {
+    color: #f85149;
+  }
+
+  .command-palette-preview.is-hidden,
+  .command-palette-list.is-hidden {
+    display: none;
+  }
+
+  .command-palette-list {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  .command-palette-item,
+  .command-palette-empty {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--text-primary);
+  }
+
+  .command-palette-item {
+    cursor: pointer;
+  }
+
+  .command-palette-item.is-active {
+    background: rgba(88, 166, 255, 0.18);
+  }
+
+  .command-palette-empty {
+    color: var(--text-secondary);
+  }
+
+  .command-palette-shortcut kbd {
+    margin-left: 4px;
+    padding: 1px 6px;
+    font: inherit;
+    font-size: 11px;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+  }
+}

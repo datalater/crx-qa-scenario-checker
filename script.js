@@ -39,6 +39,8 @@ import { buildTreeRenderOptions } from './modules/tree-actions-manager.js';
 import { createEditorHighlightManager } from './modules/editor-highlight-manager.js';
 import { runNativeEditCommand } from './modules/editor-shortcut-manager.js';
 import { matchShortcut, renderShortcutRows } from './modules/shortcut-registry.js';
+import { createCommandPalette } from './modules/command-palette.js';
+import { createNewFileCommand } from './modules/new-file-command.js';
 import { createEditorCursorHistoryManager } from './modules/editor-cursor-history-manager.js';
 import { createEditorFindReplaceManager } from './modules/editor-find-replace-manager.js';
 import { createDeletedFileHistoryManager } from './modules/deleted-file-history-manager.js';
@@ -198,6 +200,7 @@ let directoryHandleByFolderId = new Map();
 let boundFileName = '';
 let boundFileReadonly = false;
 let treeMutationsEnabled = true;
+let commandPalette = null;
 let directDiskSyncAvailable = false;
 let lastSaveIndicatorState = 'saved';
 let diskFlushInFlight = false;
@@ -266,6 +269,7 @@ function init() {
     setupChecklistSearch();
     setupTableEditorSaveShortcut();
     setupOpenFileTabShortcuts();
+    setupCommandPalette();
     setupStepDetailPanel();
     loadWorkspace();
     setupEventListeners();
@@ -1955,7 +1959,12 @@ async function createFileFromUi(options = {}) {
     const name = window.prompt('File name', defaultName);
     const trimmedName = name ? name.trim() : '';
     if (!trimmedName) return;
-    const nextName = Workspace.getNextAvailableFileName(workspace, folderId, trimmedName);
+    await createFileInFolder(folderId, trimmedName);
+}
+
+/** Creates a file (on disk too when a writable folder is bound) and opens it. */
+async function createFileInFolder(folderId, fileName) {
+    const nextName = Workspace.getNextAvailableFileName(workspace, folderId, fileName);
     const file = Workspace.createFileRecord(folderId, nextName);
 
     if (isDirectoryWritableMode()) {
@@ -1987,6 +1996,99 @@ async function createFileFromUi(options = {}) {
     lastTreeSelectionType = 'file';
     persist();
     loadActiveFile();
+}
+
+function getPaletteBaseFolderId() {
+    const selected = workspace.uiState.selectedFolderId;
+    if (selected && Workspace.getFolderById(workspace, selected)) return selected;
+    const activeFile = Workspace.getActiveFile(workspace);
+    if (activeFile && Workspace.getFolderById(workspace, activeFile.folderId)) return activeFile.folderId;
+    return getRootFolderId();
+}
+
+/** Finds a child folder by name under parentId, creating it (and on disk) if missing. */
+async function ensureChildFolder(parentId, name) {
+    const existing = workspace.folders.find((folder) => folder.parentId === parentId && folder.name === name);
+    if (existing) return existing;
+
+    const parentFolder = Workspace.getFolderById(workspace, parentId);
+    const nextPath = parentFolder?.path ? `${parentFolder.path}/${name}` : name;
+    let childHandle = null;
+    if (isDirectoryWritableMode()) {
+        const parentHandle = directoryHandleByFolderId.get(parentId);
+        if (!parentHandle) throw new Error('missing parent directory handle');
+        childHandle = await parentHandle.getDirectoryHandle(name, { create: true });
+    }
+    const folder = Workspace.createFolderRecord(name, parentId, nextPath);
+    workspace.folders.push(folder);
+    if (childHandle) directoryHandleByFolderId.set(folder.id, childHandle);
+    return folder;
+}
+
+async function createEntryFromPalette({ folders, file }) {
+    if (!treeMutationsEnabled) {
+        alert('Folder mode is read-only in this version.');
+        return;
+    }
+    let parentId = getPaletteBaseFolderId();
+    if (!parentId) return;
+
+    const expanded = new Set(workspace.uiState.expandedFolderIds);
+    expanded.add(parentId);
+    try {
+        for (const name of folders) {
+            const folder = await ensureChildFolder(parentId, name);
+            parentId = folder.id;
+            expanded.add(parentId);
+        }
+    } catch (error) {
+        console.error('[qa-scenario] failed to create folder from palette', error);
+        alert('폴더 생성에 실패했습니다.');
+        workspace.uiState.expandedFolderIds = Array.from(expanded);
+        persist();
+        return;
+    }
+    workspace.uiState.expandedFolderIds = Array.from(expanded);
+
+    if (file) {
+        await createFileInFolder(parentId, file);
+        return;
+    }
+    workspace.uiState.selectedFolderId = parentId;
+    workspace.uiState.selectedFileId = null;
+    workspace.uiState.lastSelectionType = 'folder';
+    lastTreeSelectionType = 'folder';
+    persist();
+}
+
+function setupCommandPalette() {
+    const input = document.getElementById('command-palette-input');
+    if (!input) return;
+    // Catalog of palette commands: add an entry here to list a new command.
+    const commands = [
+        createNewFileCommand({
+            getBaseFolderLabel: () => Workspace.getFolderById(workspace, getPaletteBaseFolderId())?.name || '',
+            create: createEntryFromPalette
+        })
+    ];
+    commandPalette = createCommandPalette({
+        root: document.getElementById('command-palette'),
+        backdrop: document.getElementById('command-palette-backdrop'),
+        input,
+        list: document.getElementById('command-palette-list'),
+        preview: document.getElementById('command-palette-preview'),
+        commands
+    });
+    commandPalette.setup();
+    document.addEventListener('keydown', (event) => {
+        if (matchShortcut(event, 'commandPalette')) {
+            event.preventDefault();
+            commandPalette.open();
+        } else if (matchShortcut(event, 'newFile')) {
+            event.preventDefault();
+            commandPalette.open({ commandId: 'newFile' });
+        }
+    });
 }
 
 function setupExportMenu() {

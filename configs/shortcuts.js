@@ -67,6 +67,16 @@ export const SHORTCUTS = [
         bindings: [{ codes: ['Minus', 'NumpadSubtract'], keys: ['_', '-'], primary: true, shift: true, alt: false, display: '-' }]
     },
     {
+        id: 'commandPalette',
+        label: 'Command palette (new file / folder)',
+        bindings: [{ codes: ['KeyP'], keys: ['p'], meta: true, ctrl: false, shift: true, alt: false, platform: 'mac' }]
+    },
+    {
+        id: 'newFile',
+        label: 'New file',
+        bindings: [{ codes: ['KeyN'], keys: ['n'], meta: true, ctrl: false, shift: false, alt: true, platform: 'mac' }]
+    },
+    {
         id: 'indent',
         label: 'Indent (JSON Editor)',
         bindings: [{ codes: ['Tab'], keys: ['tab'], shift: false }]

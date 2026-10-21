@@ -66,3 +66,11 @@ test('indent/outdent shortcuts follow shift state; unknown ids never match', () 
     assertEqual(matchShortcut(createEvent({ key: 'Tab', code: 'Tab', shiftKey: true }), 'outdent'), true);
     assertEqual(matchShortcut(createEvent({ key: 'Tab', code: 'Tab' }), 'nope'), false);
 });
+
+test('palette and new-file shortcuts need exact modifiers', () => {
+    assertEqual(matchShortcut(createEvent({ metaKey: true, shiftKey: true, key: 'p', code: 'KeyP' }), 'commandPalette'), true);
+    assertEqual(matchShortcut(createEvent({ metaKey: true, key: 'p', code: 'KeyP' }), 'commandPalette'), false);
+    assertEqual(matchShortcut(createEvent({ metaKey: true, altKey: true, key: 'Dead', code: 'KeyN' }), 'newFile'), true);
+    assertEqual(matchShortcut(createEvent({ metaKey: true, altKey: true, key: 'Dead', code: 'KeyE' }), 'newFile'), false);
+    assertEqual(matchShortcut(createEvent({ metaKey: true, key: 'n', code: 'KeyN' }), 'newFile'), false);
+});

@@ -8,6 +8,7 @@
 @import url("styles/feature-step-note.css") layer(features);
 @import url("styles/feature-checklist-search.css") layer(features);
 @import url("styles/feature-open-file-tabs.css") layer(features);
+@import url("styles/feature-command-palette.css") layer(features);
 
 @layer base {
   body {
