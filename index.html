@@ -20,6 +20,7 @@
                         <button id="btn-panel-json-editor" class="panel-toggle-btn" type="button" title="Toggle JSON Editor" aria-label="Toggle JSON Editor" aria-pressed="true">JSON Editor</button>
                         <button id="btn-panel-table-editor" class="panel-toggle-btn" type="button" title="Toggle Table Editor" aria-label="Toggle Table Editor" aria-pressed="true">Table Editor</button>
                     </div>
+                    <button id="btn-keyboard-shortcuts" class="btn-help" type="button" title="Keyboard shortcuts" aria-label="Keyboard shortcuts">?</button>
                     <div class="bound-file-group">
                         <span id="bound-file-status" class="bound-file-status" aria-live="polite">No file bound</span>
                         <span id="top-save-status" class="top-save-status is-hidden" aria-live="polite"></span>
@@ -86,12 +87,12 @@
             </div>
         </header>
 
+        <div id="open-file-tabs" class="open-file-tabs" role="tablist" aria-label="Open files" hidden></div>
         <main class="app-content">
             <section class="pane editor-pane" id="editor-pane">
                 <div class="pane-header">
                     <div class="pane-title-group">
                         <h2>JSON Editor</h2>
-                        <button id="btn-keyboard-shortcuts" class="btn-help" type="button" title="Keyboard shortcuts">?</button>
                     </div>
                     <div class="editor-header-controls">
                         <div id="save-indicator" class="save-indicator is-saved" role="status" aria-live="polite">
@@ -373,6 +374,9 @@
                     <tr><td>Close find</td><td><kbd>Esc</kbd></td></tr>
                     <tr><td>Cursor back</td><td><kbd>⌘</kbd> <kbd>-</kbd></td></tr>
                     <tr><td>Cursor forward</td><td><kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>-</kbd></td></tr>
+                    <tr><td>Indent / Outdent (JSON Editor)</td><td><kbd>Tab</kbd> / <kbd>⇧</kbd> <kbd>Tab</kbd></td></tr>
+                    <tr><td>Previous open file tab</td><td><kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>[</kbd> or <kbd>⌘</kbd> <kbd>⌥</kbd> <kbd>←</kbd></td></tr>
+                    <tr><td>Next open file tab</td><td><kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>]</kbd> or <kbd>⌘</kbd> <kbd>⌥</kbd> <kbd>→</kbd></td></tr>
                 </tbody>
             </table>
         </div>

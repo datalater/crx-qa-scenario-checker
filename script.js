@@ -54,6 +54,7 @@ import { createEditorCursorHistoryManager } from './modules/editor-cursor-histor
 import { createEditorFindReplaceManager } from './modules/editor-find-replace-manager.js';
 import { createDeletedFileHistoryManager } from './modules/deleted-file-history-manager.js';
 import { searchChecklist, tokenizeChecklistSearchQuery } from './modules/checklist-search-manager.js';
+import { renderOpenFileTabs, closeOpenFileTab, syncOpenFileIds } from './modules/open-file-tabs.js';
 
 // --- Global State Mirroring the original ---
 const EL = {
@@ -123,6 +124,7 @@ const EL = {
     treeSearchMeta: document.getElementById('tree-search-meta'),
     btnTreeSearchClear: document.getElementById('btn-tree-search-clear'),
     fileTree: document.getElementById('file-tree'),
+    openFileTabs: document.getElementById('open-file-tabs'),
     treeContextMenu: document.getElementById('tree-context-menu'),
     treeContextNewFolder: document.getElementById('tree-context-new-folder'),
     treeContextNewFile: document.getElementById('tree-context-new-file'),
@@ -274,6 +276,7 @@ function init() {
     setupChecklistFilter();
     setupChecklistSearch();
     setupTableEditorSaveShortcut();
+    setupOpenFileTabShortcuts();
     setupStepDetailPanel();
     loadWorkspace();
     setupEventListeners();
@@ -1176,8 +1179,35 @@ function renderTree() {
     treeOptions.pendingCopyFileIds = pendingCopyFileIds;
     treeOptions.fileSearchState = fileSearchState;
     UI.renderFileTree(EL.fileTree, workspace, treeOptions);
+    renderOpenFileTabs(EL.openFileTabs, workspace, {
+        isDirty: () => activeFileDirty,
+        onSelect: activateFileFromTab,
+        onClose: closeFileTab
+    });
     updateTreeSearchMeta(fileSearchState);
     updateFolderToggleButtonState();
+}
+
+function activateFileFromTab(id) {
+    const file = Workspace.getFileById(workspace, id);
+    if (!file) return;
+    workspace.uiState.activeFileId = id;
+    workspace.uiState.selectedFolderId = file.folderId;
+    workspace.uiState.selectedFileId = id;
+    workspace.uiState.lastSelectionType = 'file';
+    lastTreeSelectionType = 'file';
+    persist();
+    loadActiveFile();
+}
+
+function closeFileTab(id) {
+    const nextActiveId = closeOpenFileTab(workspace, id);
+    if (!nextActiveId) return;
+    if (nextActiveId === workspace.uiState.activeFileId) {
+        persist();
+    } else {
+        activateFileFromTab(nextActiveId);
+    }
 }
 
 function updateFolderToggleButtonState() {
@@ -2444,6 +2474,32 @@ function navigateChecklistSearchResult(index) {
         const bounds = Editor.findStepBounds(EL.editing.value, result.stepIndex);
         if (bounds) renderStepHighlight(bounds);
         applyStepDetailSearchHighlight();
+    });
+}
+
+/**
+ * Switch open-file tabs: Cmd+Shift+[ / ] (macOS tab convention) or
+ * Cmd+Option+Left/Right as a fallback in case the browser swallows the first.
+ * event.code is used because Shift turns "[" into "{" in event.key.
+ */
+function setupOpenFileTabShortcuts() {
+    document.addEventListener('keydown', (event) => {
+        if (!event.metaKey || event.ctrlKey || event.isComposing) return;
+        let step = 0;
+        if (event.shiftKey && !event.altKey) {
+            if (event.code === 'BracketLeft') step = -1;
+            else if (event.code === 'BracketRight') step = 1;
+        } else if (event.altKey && !event.shiftKey) {
+            if (event.code === 'ArrowLeft') step = -1;
+            else if (event.code === 'ArrowRight') step = 1;
+        }
+        if (!step) return;
+        const ids = syncOpenFileIds(workspace);
+        if (ids.length < 2) return;
+        event.preventDefault();
+        const index = ids.indexOf(workspace.uiState.activeFileId);
+        const next = ids[(index + step + ids.length) % ids.length];
+        activateFileFromTab(next);
     });
 }
 
