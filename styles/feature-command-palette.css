@@ -101,4 +101,30 @@
     border: 1px solid var(--border-color);
     border-radius: 4px;
   }
+
+  .command-palette-item-main {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .command-palette-item-label {
+    white-space: nowrap;
+  }
+
+  .command-palette-item-description {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  .command-palette-badge {
+    flex: 0 0 auto;
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
 }

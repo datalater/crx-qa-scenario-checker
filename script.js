@@ -41,6 +41,7 @@ import { runNativeEditCommand } from './modules/editor-shortcut-manager.js';
 import { matchShortcut, renderShortcutRows } from './modules/shortcut-registry.js';
 import { createCommandPalette } from './modules/command-palette.js';
 import { createNewFileCommand } from './modules/new-file-command.js';
+import { createOpenFileCommand } from './modules/open-file-command.js';
 import { createContextMenu } from './modules/tab-context-menu.js';
 import { createEditorCursorHistoryManager } from './modules/editor-cursor-history-manager.js';
 import { createEditorFindReplaceManager } from './modules/editor-find-replace-manager.js';
@@ -2169,6 +2170,21 @@ function setupCommandPalette() {
     if (!input) return;
     // Catalog of palette commands: add an entry here to list a new command.
     const commands = [
+        createOpenFileCommand({
+            getFiles: () => {
+                const openIds = new Set(syncOpenFileIds(workspace));
+                return workspace.files.map((file) => ({
+                    id: file.id,
+                    name: file.name,
+                    path: buildFileLocation(file)?.path || file.name,
+                    isOpen: openIds.has(file.id),
+                    isActive: file.id === workspace.uiState.activeFileId
+                }));
+            },
+            open: (fileId) => {
+                if (fileId !== workspace.uiState.activeFileId) activateFileFromTab(fileId);
+            }
+        }),
         createNewFileCommand({
             getBaseFolderLabel: () => Workspace.getFolderById(workspace, getPaletteBaseFolderId())?.name || '',
             getRootFolderLabel: () => Workspace.getFolderById(workspace, getRootFolderId())?.name || '',
@@ -2197,6 +2213,9 @@ function setupCommandPalette() {
         } else if (matchShortcut(event, 'newFile')) {
             event.preventDefault();
             commandPalette.open({ commandId: 'newFile' });
+        } else if (matchShortcut(event, 'openFile')) {
+            event.preventDefault();
+            commandPalette.open({ commandId: 'openFile' });
         } else if (matchShortcut(event, 'toggleFileTree')) {
             event.preventDefault();
             togglePanelVisibility('fileTree');

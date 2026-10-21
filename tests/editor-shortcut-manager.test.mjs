@@ -80,3 +80,8 @@ test('toggle file tree shortcut is cmd+b only (ctrl+b stays a caret move)', () =
     assertEqual(matchShortcut(createEvent({ ctrlKey: true, key: 'b', code: 'KeyB' }), 'toggleFileTree'), false);
     assertEqual(matchShortcut(createEvent({ metaKey: true, shiftKey: true, key: 'b', code: 'KeyB' }), 'toggleFileTree'), false);
 });
+
+test('open file shortcut is cmd+p, distinct from the command palette', () => {
+    assertEqual(matchShortcut(createEvent({ metaKey: true, key: 'p', code: 'KeyP' }), 'openFile'), true);
+    assertEqual(matchShortcut(createEvent({ metaKey: true, shiftKey: true, key: 'p', code: 'KeyP' }), 'openFile'), false);
+});

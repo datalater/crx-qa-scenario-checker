@@ -72,6 +72,11 @@ export const SHORTCUTS = [
         bindings: [{ codes: ['KeyP'], keys: ['p'], meta: true, ctrl: false, shift: true, alt: false, platform: 'mac' }]
     },
     {
+        id: 'openFile',
+        label: 'Open file (search)',
+        bindings: [{ codes: ['KeyP'], keys: ['p'], meta: true, ctrl: false, shift: false, alt: false, platform: 'mac' }]
+    },
+    {
         id: 'newFile',
         label: 'New file',
         bindings: [{ codes: ['KeyN'], keys: ['n'], meta: true, ctrl: false, shift: false, alt: true, platform: 'mac' }]

@@ -2,27 +2,43 @@ import { formatBinding, getDisplayBindings } from './shortcut-registry.js';
 import { SHORTCUTS } from '../configs/shortcuts.js';
 
 /**
- * Command palette: a filterable catalog of commands.
- * Choosing a command either runs it or calls api.prompt() to ask for input in the same box.
+ * Command palette: one input box with two kinds of views.
+ *   list   - a filterable list of items (the command catalog, the file picker, ...)
+ *   prompt - free text input with a live preview line
  *
  * command: { id, label, shortcutId?, run(api) }
+ * api.pick({ placeholder, getItems(query), onSelect(item), emptyText? })
+ *     item: { label, description?, badge?, shortcutId? }
  * api.prompt({ placeholder, getPreview(value) -> { text, error }, onSubmit(value) })
+ * A command that opens neither view is considered done and closes the palette.
  */
 export function createCommandPalette({ root, backdrop, input, list, preview, commands }) {
-    let mode = 'commands'; // 'commands' | 'prompt'
-    let filtered = [];
+    let view = null;
+    let items = [];
     let activeIndex = 0;
-    let promptConfig = null;
 
     const isOpen = () => Boolean(root) && !root.classList.contains('is-hidden');
 
-    function matchCommands(query) {
-        const q = query.trim().toLowerCase();
-        return commands.filter((command) => !q || command.label.toLowerCase().includes(q));
+    const api = {
+        pick: (config) => showList(config),
+        prompt: (config) => showPrompt(config)
+    };
+
+    function commandCatalogView() {
+        return {
+            type: 'list',
+            placeholder: '명령 검색...',
+            emptyText: '일치하는 명령이 없습니다.',
+            getItems: (query) => {
+                const q = query.trim().toLowerCase();
+                return commands.filter((command) => !q || command.label.toLowerCase().includes(q));
+            },
+            onSelect: (command) => command.run(api)
+        };
     }
 
-    function renderShortcutHint(command) {
-        const entry = SHORTCUTS.find((item) => item.id === command.shortcutId);
+    function shortcutHint(shortcutId) {
+        const entry = SHORTCUTS.find((item) => item.id === shortcutId);
         const binding = entry ? getDisplayBindings(entry)[0] : null;
         if (!binding) return null;
         const hint = document.createElement('span');
@@ -39,104 +55,132 @@ export function createCommandPalette({ root, backdrop, input, list, preview, com
         list.replaceChildren();
         list.classList.remove('is-hidden');
         preview.classList.add('is-hidden');
-        if (!filtered.length) {
+        if (!items.length) {
             const empty = document.createElement('li');
             empty.className = 'command-palette-empty';
-            empty.textContent = '일치하는 명령이 없습니다.';
+            empty.textContent = view.emptyText || '결과가 없습니다.';
             list.append(empty);
             return;
         }
-        filtered.forEach((command, index) => {
-            const item = document.createElement('li');
-            item.className = 'command-palette-item' + (index === activeIndex ? ' is-active' : '');
-            item.setAttribute('role', 'option');
-            item.setAttribute('aria-selected', String(index === activeIndex));
+        items.forEach((item, index) => {
+            const row = document.createElement('li');
+            row.className = 'command-palette-item' + (index === activeIndex ? ' is-active' : '');
+            row.setAttribute('role', 'option');
+            row.setAttribute('aria-selected', String(index === activeIndex));
+
+            const main = document.createElement('span');
+            main.className = 'command-palette-item-main';
             const label = document.createElement('span');
-            label.textContent = command.label;
-            item.append(label);
-            const hint = renderShortcutHint(command);
-            if (hint) item.append(hint);
-            item.addEventListener('mousemove', () => {
+            label.className = 'command-palette-item-label';
+            label.textContent = item.label;
+            main.append(label);
+            if (item.description) {
+                const description = document.createElement('span');
+                description.className = 'command-palette-item-description';
+                description.textContent = item.description;
+                main.append(description);
+            }
+            row.append(main);
+
+            if (item.badge) {
+                const badge = document.createElement('span');
+                badge.className = 'command-palette-badge';
+                badge.textContent = item.badge;
+                row.append(badge);
+            }
+            const hint = shortcutHint(item.shortcutId);
+            if (hint) row.append(hint);
+
+            row.addEventListener('mousemove', () => {
                 if (activeIndex === index) return;
                 activeIndex = index;
                 renderList();
             });
-            item.addEventListener('mousedown', (event) => event.preventDefault());
-            item.addEventListener('click', () => runCommand(command));
-            list.append(item);
+            row.addEventListener('mousedown', (event) => event.preventDefault());
+            row.addEventListener('click', () => selectItem(item));
+            list.append(row);
         });
         list.querySelector('.is-active')?.scrollIntoView?.({ block: 'nearest' });
     }
 
+    function refreshItems() {
+        items = view.getItems(input.value);
+        activeIndex = 0;
+        renderList();
+    }
+
+    function showList(config) {
+        view = { type: 'list', ...config };
+        input.value = '';
+        input.placeholder = view.placeholder || '';
+        refreshItems();
+        input.focus();
+    }
+
     function renderPreview() {
-        const result = promptConfig.getPreview?.(input.value) || { text: '', error: false };
+        const result = view.getPreview?.(input.value) || { text: '', error: false };
         preview.textContent = result.text || '';
         preview.classList.toggle('is-error', Boolean(result.error));
     }
 
-    function startPrompt(config) {
-        mode = 'prompt';
-        promptConfig = config;
+    function showPrompt(config) {
+        view = { type: 'prompt', ...config };
         input.value = '';
-        input.placeholder = config.placeholder || '';
+        input.placeholder = view.placeholder || '';
         list.classList.add('is-hidden');
         preview.classList.remove('is-hidden');
         renderPreview();
         input.focus();
     }
 
-    function showCommands() {
-        mode = 'commands';
-        promptConfig = null;
-        input.value = '';
-        input.placeholder = '명령 검색...';
-        filtered = matchCommands('');
-        activeIndex = 0;
-        renderList();
-        input.focus();
-    }
-
-    function runCommand(command) {
-        command.run({ prompt: startPrompt });
-        // A command that did not ask for input is done: close the palette.
-        if (mode === 'commands') close();
+    function selectItem(item) {
+        const current = view;
+        current.onSelect(item);
+        // Selecting something that did not open another view finishes the interaction.
+        if (view === current) close();
     }
 
     function open({ commandId } = {}) {
         if (!root) return;
         root.classList.remove('is-hidden');
         backdrop?.classList.remove('is-hidden');
-        showCommands();
         const direct = commandId && commands.find((command) => command.id === commandId);
-        if (direct) runCommand(direct);
+        if (direct) {
+            // Start from the catalog so a command that opens no view still closes cleanly.
+            view = commandCatalogView();
+            const catalogView = view;
+            direct.run(api);
+            if (view === catalogView) close();
+        } else {
+            showList(commandCatalogView());
+        }
     }
 
     function close() {
         if (!isOpen()) return;
         root.classList.add('is-hidden');
         backdrop?.classList.add('is-hidden');
-        mode = 'commands';
-        promptConfig = null;
+        view = null;
     }
 
     async function submitPrompt() {
-        const result = promptConfig.getPreview?.(input.value);
+        const result = view.getPreview?.(input.value);
         if (!input.value.trim() || result?.error) return;
-        const { onSubmit } = promptConfig;
+        const { onSubmit } = view;
         const value = input.value;
         close();
         await onSubmit(value);
     }
 
     function handleKeydown(event) {
-        if (event.isComposing) return;
+        if (event.isComposing || !view) return;
         if (event.key === 'Escape') {
             event.preventDefault();
             event.stopPropagation();
             close();
             return;
         }
-        if (mode === 'prompt') {
+        if (view.type === 'prompt') {
             if (event.key === 'Enter') {
                 event.preventDefault();
                 submitPrompt();
@@ -145,26 +189,22 @@ export function createCommandPalette({ root, backdrop, input, list, preview, com
         }
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
             event.preventDefault();
-            if (!filtered.length) return;
+            if (!items.length) return;
             const step = event.key === 'ArrowDown' ? 1 : -1;
-            activeIndex = (activeIndex + step + filtered.length) % filtered.length;
+            activeIndex = (activeIndex + step + items.length) % items.length;
             renderList();
         } else if (event.key === 'Enter') {
             event.preventDefault();
-            const command = filtered[activeIndex];
-            if (command) runCommand(command);
+            const item = items[activeIndex];
+            if (item) selectItem(item);
         }
     }
 
     function setup() {
         input.addEventListener('input', () => {
-            if (mode === 'prompt') {
-                renderPreview();
-                return;
-            }
-            filtered = matchCommands(input.value);
-            activeIndex = 0;
-            renderList();
+            if (!view) return;
+            if (view.type === 'prompt') renderPreview();
+            else refreshItems();
         });
         input.addEventListener('keydown', handleKeydown);
         backdrop?.addEventListener('click', close);
