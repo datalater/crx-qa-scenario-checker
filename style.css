@@ -1771,4 +1771,9 @@
   ::-webkit-scrollbar-thumb:hover {
     background: var(--text-secondary);
   }
+
+  /* Where a horizontal and a vertical bar meet; unstyled it shows up as a white square. */
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
 }

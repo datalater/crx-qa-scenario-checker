@@ -85,6 +85,11 @@
   .checklist-divider-code {
     flex: 1 1 auto;
     min-width: 0;
+    /* A long code line must scroll inside its own editor. Without this the
+       table's auto layout sizes the column to the code's full width and
+       stretches the whole Table Editor. Inline-size containment makes the
+       block's intrinsic width 0; flex-grow then fills the row. */
+    contain: inline-size;
     margin: 6px 12px 6px 0;
     display: flex;
     flex-direction: column;
