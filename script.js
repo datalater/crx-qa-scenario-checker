@@ -1305,7 +1305,8 @@ function renderTree() {
         isDirty: () => activeFileDirty,
         onSelect: activateFileFromTab,
         onClose: closeFileTab,
-        onContextMenu: openTabContextMenu
+        onContextMenu: openTabContextMenu,
+        onReorder: persist
     });
     updateTreeSearchMeta(fileSearchState);
     updateFolderToggleButtonState();

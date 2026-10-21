@@ -40,3 +40,9 @@
   border-radius: 3px;
 }
 .open-file-tab-close:hover { background: rgba(128, 128, 128, 0.3); }
+
+.open-file-tab.is-dragging { opacity: 0.4; }
+/* Drop position markers: a thin line on the side the tab will land. */
+.open-file-tab.drop-before { box-shadow: inset 2px 0 0 #58a6ff; }
+.open-file-tab.drop-after { box-shadow: inset -2px 0 0 #58a6ff; }
+.open-file-tabs.is-drop-end { box-shadow: inset -2px 0 0 #58a6ff; }

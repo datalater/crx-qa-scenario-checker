@@ -38,12 +38,75 @@ export function closeTabsWhere(workspace, shouldClose, keepActiveId = null) {
     return kept.includes(keepActiveId) ? keepActiveId : kept[0];
 }
 
-export function renderOpenFileTabs(container, workspace, { isDirty, onSelect, onClose, onContextMenu } = {}) {
+/**
+ * Moves a tab next to another one. `targetId: null` moves it to the end.
+ * Returns true when the order changed.
+ */
+export function reorderOpenFileIds(workspace, fileId, targetId, placeAfter = false) {
+    const ids = [...syncOpenFileIds(workspace)];
+    const from = ids.indexOf(fileId);
+    if (from < 0 || fileId === targetId) return false;
+    ids.splice(from, 1);
+    let to = ids.length;
+    if (targetId !== null) {
+        const targetIndex = ids.indexOf(targetId);
+        if (targetIndex < 0) return false;
+        to = placeAfter ? targetIndex + 1 : targetIndex;
+    }
+    ids.splice(to, 0, fileId);
+    if (ids.every((id, index) => id === workspace.uiState.openFileIds[index])) return false;
+    workspace.uiState.openFileIds = ids;
+    return true;
+}
+
+export function renderOpenFileTabs(container, workspace, { isDirty, onSelect, onClose, onContextMenu, onReorder } = {}) {
     if (!container) return;
     const ids = syncOpenFileIds(workspace);
     container.hidden = ids.length === 0;
     container.replaceChildren();
     const activeId = workspace.uiState.activeFileId;
+    const canReorder = ids.length > 1 && typeof onReorder === 'function';
+    let draggingId = '';
+
+    const clearDropMarks = () => {
+        container.classList.remove('is-drop-end');
+        container.querySelectorAll('.drop-before, .drop-after').forEach((node) => {
+            node.classList.remove('drop-before', 'drop-after');
+        });
+    };
+    const finishDrag = () => {
+        draggingId = '';
+        container.querySelectorAll('.is-dragging').forEach((node) => node.classList.remove('is-dragging'));
+        clearDropMarks();
+    };
+    const commitReorder = (targetId, placeAfter) => {
+        const movedId = draggingId;
+        finishDrag();
+        if (movedId && reorderOpenFileIds(workspace, movedId, targetId, placeAfter)) onReorder();
+    };
+
+    if (canReorder) {
+        // Dropping on the empty part of the bar (right of the last tab) moves the tab to the end.
+        container.ondragover = (event) => {
+            if (!draggingId || event.target !== container) return;
+            event.preventDefault();
+            clearDropMarks();
+            container.classList.add('is-drop-end');
+        };
+        container.ondragleave = (event) => {
+            if (event.target === container) container.classList.remove('is-drop-end');
+        };
+        container.ondrop = (event) => {
+            if (!draggingId || event.target !== container) return;
+            event.preventDefault();
+            commitReorder(null, false);
+        };
+    } else {
+        container.ondragover = null;
+        container.ondragleave = null;
+        container.ondrop = null;
+    }
+
     ids.forEach((id) => {
         const file = workspace.files.find((item) => item.id === id);
         if (!file) return;
@@ -72,11 +135,45 @@ export function renderOpenFileTabs(container, workspace, { isDirty, onSelect, on
             close.className = 'open-file-tab-close';
             close.setAttribute('aria-label', `Close ${file.name}`);
             close.textContent = '×';
+            // Pressing the close button must never turn into a tab drag.
+            close.draggable = false;
+            close.addEventListener('mousedown', () => {
+                tab.draggable = false;
+                window.addEventListener('mouseup', () => { tab.draggable = canReorder; }, { once: true });
+            });
             close.addEventListener('click', (event) => {
                 event.stopPropagation();
                 onClose?.(id);
             });
             tab.appendChild(close);
+        }
+        if (canReorder) {
+            tab.draggable = true;
+            tab.addEventListener('dragstart', (event) => {
+                if (!event.dataTransfer) return;
+                draggingId = id;
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('application/x-qa-scenario-tab-id', id);
+                tab.classList.add('is-dragging');
+            });
+            tab.addEventListener('dragend', finishDrag);
+            tab.addEventListener('dragover', (event) => {
+                if (!draggingId || draggingId === id) return;
+                event.preventDefault();
+                event.stopPropagation();
+                const rect = tab.getBoundingClientRect();
+                const after = event.clientX > rect.left + rect.width / 2;
+                clearDropMarks();
+                tab.classList.add(after ? 'drop-after' : 'drop-before');
+            });
+            tab.addEventListener('dragleave', () => tab.classList.remove('drop-before', 'drop-after'));
+            tab.addEventListener('drop', (event) => {
+                if (!draggingId || draggingId === id) return;
+                event.preventDefault();
+                event.stopPropagation();
+                const rect = tab.getBoundingClientRect();
+                commitReorder(id, event.clientX > rect.left + rect.width / 2);
+            });
         }
         tab.addEventListener('click', () => { if (!isActive) onSelect?.(id); });
         tab.addEventListener('auxclick', (event) => {
