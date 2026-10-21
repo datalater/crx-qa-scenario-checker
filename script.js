@@ -202,6 +202,9 @@ let boundFileName = '';
 let boundFileReadonly = false;
 let treeMutationsEnabled = true;
 let commandPalette = null;
+// Scroll positions per file, kept in memory so switching tabs returns to where you were.
+const fileScrollPositions = new Map();
+let scrollOwnerFileId = null;
 let tabContextMenu = null;
 let directDiskSyncAvailable = false;
 let lastSaveIndicatorState = 'saved';
@@ -565,7 +568,42 @@ function persist() {
     renderTree();
 }
 
+function getChecklistScroller() {
+    return EL.checklistBody?.closest('.checklist-container') || null;
+}
+
+function saveScrollPositionForCurrentFile() {
+    if (!scrollOwnerFileId) return;
+    const previous = fileScrollPositions.get(scrollOwnerFileId) || {};
+    const checklistScroller = getChecklistScroller();
+    // A hidden pane reports scrollTop 0; keep the last known value instead.
+    const editorVisible = EL.editing.clientHeight > 0;
+    const checklistVisible = Boolean(checklistScroller) && checklistScroller.clientHeight > 0;
+    fileScrollPositions.set(scrollOwnerFileId, {
+        editorTop: editorVisible ? EL.editing.scrollTop : (previous.editorTop ?? 0),
+        editorLeft: editorVisible ? EL.editing.scrollLeft : (previous.editorLeft ?? 0),
+        checklistTop: checklistVisible ? checklistScroller.scrollTop : (previous.checklistTop ?? 0),
+        checklistLeft: checklistVisible ? checklistScroller.scrollLeft : (previous.checklistLeft ?? 0)
+    });
+}
+
+function restoreScrollPositionForFile(fileId, { restoreEditor = true } = {}) {
+    const saved = fileScrollPositions.get(fileId);
+    const checklistScroller = getChecklistScroller();
+    if (checklistScroller) {
+        checklistScroller.scrollTop = saved?.checklistTop ?? 0;
+        checklistScroller.scrollLeft = saved?.checklistLeft ?? 0;
+    }
+    if (restoreEditor) {
+        EL.editing.scrollTop = saved?.editorTop ?? 0;
+        EL.editing.scrollLeft = saved?.editorLeft ?? 0;
+        syncScroll();
+    }
+}
+
 function loadActiveFile() {
+    // The DOM still shows the previous file here; remember where it was scrolled.
+    saveScrollPositionForCurrentFile();
     // Input handlers already save drafts. Never flush old editors into a new file.
     destroyStepDetailCodeEditors();
     sharedNoteTarget = null;
@@ -583,11 +621,15 @@ function loadActiveFile() {
         const searchMatch = applyEditorSearchHighlightForFile(activeFile.id);
         EL.editing.value = activeFile.content;
         validateAndRender();
-        if (searchMatch && Number.isFinite(searchMatch.firstMatchIndex) && searchMatch.firstMatchIndex >= 0) {
+        const hasSearchJump = Boolean(searchMatch)
+            && Number.isFinite(searchMatch.firstMatchIndex) && searchMatch.firstMatchIndex >= 0;
+        restoreScrollPositionForFile(activeFile.id, { restoreEditor: !hasSearchJump });
+        if (hasSearchJump) {
             scrollToLine(searchMatch.firstMatchIndex);
             syncScroll();
         }
     }
+    scrollOwnerFileId = activeFile?.id ?? null;
     renderTree();
     updateSaveIndicator('saved');
     activeFileDirty = false;
