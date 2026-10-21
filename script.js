@@ -37,19 +37,8 @@ import { setupMainEventListeners } from './modules/event-listener-manager.js';
 import { updateFolderToggleButtonStateView, toggleAllFoldersState } from './modules/tree-folder-state-manager.js';
 import { buildTreeRenderOptions } from './modules/tree-actions-manager.js';
 import { createEditorHighlightManager } from './modules/editor-highlight-manager.js';
-import {
-    isEditorSaveShortcut,
-    isEditorUndoShortcut,
-    isEditorRedoShortcut,
-    isEditorCursorHistoryBackShortcut,
-    isEditorCursorHistoryForwardShortcut,
-    isEditorFindOpenShortcut,
-    isEditorReplaceOpenShortcut,
-    isEditorFindNextShortcut,
-    isEditorFindPreviousShortcut,
-    isEditorFindCloseShortcut,
-    runNativeEditCommand
-} from './modules/editor-shortcut-manager.js';
+import { runNativeEditCommand } from './modules/editor-shortcut-manager.js';
+import { matchShortcut, renderShortcutRows } from './modules/shortcut-registry.js';
 import { createEditorCursorHistoryManager } from './modules/editor-cursor-history-manager.js';
 import { createEditorFindReplaceManager } from './modules/editor-find-replace-manager.js';
 import { createDeletedFileHistoryManager } from './modules/deleted-file-history-manager.js';
@@ -736,27 +725,27 @@ function handleEditorSelectionChange() {
 }
 
 function handleEditorKeydown(event) {
-    if (isEditorFindOpenShortcut(event, EDITOR_CONFIG)) {
+    if (matchShortcut(event, 'findOpen')) {
         event.preventDefault();
         openFindWidget(false);
         return;
     }
 
-    if (isEditorReplaceOpenShortcut(event, EDITOR_CONFIG)) {
+    if (matchShortcut(event, 'replaceOpen')) {
         event.preventDefault();
         openFindWidget(true);
         return;
     }
 
     const findState = editorFindReplaceManager.getState();
-    if (findState.isOpen && isEditorFindCloseShortcut(event, EDITOR_CONFIG)) {
+    if (findState.isOpen && matchShortcut(event, 'findClose')) {
         event.preventDefault();
         closeFindWidget();
         return;
     }
 
-    const isCursorHistoryBack = isEditorCursorHistoryBackShortcut(event, EDITOR_CONFIG);
-    const isCursorHistoryForward = isEditorCursorHistoryForwardShortcut(event, EDITOR_CONFIG);
+    const isCursorHistoryBack = matchShortcut(event, 'cursorHistoryBack');
+    const isCursorHistoryForward = matchShortcut(event, 'cursorHistoryForward');
     if (isCursorHistoryBack || isCursorHistoryForward) {
         event.preventDefault();
         const handled = isCursorHistoryForward
@@ -766,15 +755,15 @@ function handleEditorKeydown(event) {
         return;
     }
 
-    if (isEditorSaveShortcut(event)) {
+    if (matchShortcut(event, 'save')) {
         event.preventDefault();
         runFormatAndSave();
         return;
     }
 
-    if (isEditorUndoShortcut(event) || isEditorRedoShortcut(event)) {
+    if (matchShortcut(event, 'undo') || matchShortcut(event, 'redo')) {
         event.preventDefault();
-        const command = isEditorRedoShortcut(event) ? 'redo' : 'undo';
+        const command = matchShortcut(event, 'redo') ? 'redo' : 'undo';
         const handled = runNativeEditCommand(document, command);
         if (handled) {
             setTimeout(handleEditorInput, 0);
@@ -782,10 +771,11 @@ function handleEditorKeydown(event) {
         return;
     }
 
-    if (event.key !== 'Tab' && event.code !== 'Tab') return;
+    const isIndent = matchShortcut(event, 'indent');
+    const isOutdent = !isIndent && matchShortcut(event, 'outdent');
+    if (!isIndent && !isOutdent) return;
     event.preventDefault();
-    const isShift = event.shiftKey || event.getModifierState('Shift');
-    if (isShift) {
+    if (isOutdent) {
         editorSelectionManager.unindentSelection();
     } else {
         editorSelectionManager.indentSelection();
@@ -821,18 +811,18 @@ function handleFindInput() {
 }
 
 function handleFindInputKeydown(event) {
-    if (isEditorFindCloseShortcut(event, EDITOR_CONFIG)) {
+    if (matchShortcut(event, 'findClose')) {
         event.preventDefault();
         closeFindWidget();
         return;
     }
-    if (isEditorFindPreviousShortcut(event, EDITOR_CONFIG)) {
+    if (matchShortcut(event, 'findPrevious')) {
         event.preventDefault();
         editorFindReplaceManager.findPrevious({ focusEditor: false });
         syncScrollToActiveMatch();
         return;
     }
-    if (isEditorFindNextShortcut(event, EDITOR_CONFIG)) {
+    if (matchShortcut(event, 'findNext')) {
         event.preventDefault();
         editorFindReplaceManager.findNext({ focusEditor: false });
         syncScrollToActiveMatch();
@@ -844,12 +834,12 @@ function handleReplaceInput() {
 }
 
 function handleReplaceInputKeydown(event) {
-    if (isEditorFindCloseShortcut(event, EDITOR_CONFIG)) {
+    if (matchShortcut(event, 'findClose')) {
         event.preventDefault();
         closeFindWidget();
         return;
     }
-    if (!isEditorFindNextShortcut(event, EDITOR_CONFIG)) return;
+    if (!matchShortcut(event, 'findNext')) return;
     event.preventDefault();
     editorFindReplaceManager.replaceCurrent();
     syncScrollToActiveMatch();
@@ -1402,6 +1392,8 @@ function closeChecklistContextMenu() {
 }
 
 function openShortcutsModal() {
+    const tbody = EL.shortcutsModal?.querySelector('tbody');
+    if (tbody) renderShortcutRows(tbody);
     if (EL.shortcutsModal) EL.shortcutsModal.classList.remove('is-hidden');
     if (EL.shortcutsBackdrop) EL.shortcutsBackdrop.classList.remove('is-hidden');
 }
@@ -2484,15 +2476,9 @@ function navigateChecklistSearchResult(index) {
  */
 function setupOpenFileTabShortcuts() {
     document.addEventListener('keydown', (event) => {
-        if (!event.metaKey || event.ctrlKey || event.isComposing) return;
         let step = 0;
-        if (event.shiftKey && !event.altKey) {
-            if (event.code === 'BracketLeft') step = -1;
-            else if (event.code === 'BracketRight') step = 1;
-        } else if (event.altKey && !event.shiftKey) {
-            if (event.code === 'ArrowLeft') step = -1;
-            else if (event.code === 'ArrowRight') step = 1;
-        }
+        if (matchShortcut(event, 'tabPrevious')) step = -1;
+        else if (matchShortcut(event, 'tabNext')) step = 1;
         if (!step) return;
         const ids = syncOpenFileIds(workspace);
         if (ids.length < 2) return;
@@ -2511,7 +2497,7 @@ function setupOpenFileTabShortcuts() {
  */
 function setupTableEditorSaveShortcut() {
     document.addEventListener('keydown', (event) => {
-        if (event.defaultPrevented || !isEditorSaveShortcut(event)) return;
+        if (event.defaultPrevented || !matchShortcut(event, 'save')) return;
         const inTableEditor = EL.checklistPane?.contains(event.target)
             || EL.stepDetailPanel?.contains(event.target)
             || checklistSearchScopeActive;
@@ -2556,7 +2542,7 @@ function setupChecklistSearch() {
     EL.checklistSearchNext?.addEventListener('click', () => navigateChecklistSearchResult(checklistSearchResultIndex + 1));
     EL.checklistSearchClose?.addEventListener('click', closeChecklistSearch);
     document.addEventListener('keydown', (event) => {
-        if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'f') return;
+        if (!matchShortcut(event, 'findOpen')) return;
         // A code divider's CodeMirror already opened its own search panel.
         if (event.defaultPrevented) return;
         if (!checklistSearchScopeActive && !EL.checklistPane?.contains(event.target)) return;
@@ -4542,7 +4528,7 @@ function setupEventListeners() {
 }
 
 function handleDocumentKeydown(event) {
-    if (!isEditorUndoShortcut(event, EDITOR_CONFIG)) return;
+    if (!matchShortcut(event, 'undo')) return;
     const activeElement = document.activeElement;
     if (activeElement === EL.editing) return;
     if (isTextEditingElement(activeElement)) return;

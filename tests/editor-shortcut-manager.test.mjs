@@ -1,14 +1,5 @@
-import {
-    isEditorSaveShortcut,
-    isEditorUndoShortcut,
-    isEditorRedoShortcut,
-    isEditorFindOpenShortcut,
-    isEditorReplaceOpenShortcut,
-    isEditorFindNextShortcut,
-    isEditorFindPreviousShortcut,
-    isEditorFindCloseShortcut,
-    runNativeEditCommand
-} from '../modules/editor-shortcut-manager.js';
+import { runNativeEditCommand } from '../modules/editor-shortcut-manager.js';
+import { matchShortcut } from '../modules/shortcut-registry.js';
 import { assertEqual, test } from './lib/test-runner.mjs';
 
 function createEvent(overrides = {}) {
@@ -25,31 +16,31 @@ function createEvent(overrides = {}) {
 }
 
 test('save shortcut detection: cmd/ctrl+s only', () => {
-    assertEqual(isEditorSaveShortcut(createEvent({ metaKey: true, key: 's', code: 'KeyS' })), true);
-    assertEqual(isEditorSaveShortcut(createEvent({ ctrlKey: true, key: 'S', code: 'KeyS' })), true);
-    assertEqual(isEditorSaveShortcut(createEvent({ metaKey: true, shiftKey: true, key: 's', code: 'KeyS' })), false);
+    assertEqual(matchShortcut(createEvent({ metaKey: true, key: 's', code: 'KeyS' }), 'save'), true);
+    assertEqual(matchShortcut(createEvent({ ctrlKey: true, key: 'S', code: 'KeyS' }), 'save'), true);
+    assertEqual(matchShortcut(createEvent({ metaKey: true, shiftKey: true, key: 's', code: 'KeyS' }), 'save'), false);
 });
 
 test('undo/redo shortcut detection works for mac and windows patterns', () => {
-    assertEqual(isEditorUndoShortcut(createEvent({ metaKey: true, key: 'z', code: 'KeyZ' })), true);
-    assertEqual(isEditorUndoShortcut(createEvent({ ctrlKey: true, key: 'Z', code: 'KeyZ' })), true);
-    assertEqual(isEditorRedoShortcut(createEvent({ metaKey: true, shiftKey: true, key: 'z', code: 'KeyZ' })), true);
-    assertEqual(isEditorRedoShortcut(createEvent({ ctrlKey: true, key: 'y', code: 'KeyY' })), true);
+    assertEqual(matchShortcut(createEvent({ metaKey: true, key: 'z', code: 'KeyZ' }), 'undo'), true);
+    assertEqual(matchShortcut(createEvent({ ctrlKey: true, key: 'Z', code: 'KeyZ' }), 'undo'), true);
+    assertEqual(matchShortcut(createEvent({ metaKey: true, shiftKey: true, key: 'z', code: 'KeyZ' }), 'redo'), true);
+    assertEqual(matchShortcut(createEvent({ ctrlKey: true, key: 'y', code: 'KeyY' }), 'redo'), true);
 });
 
 test('find/replace shortcut detection works for mac and windows patterns', () => {
-    assertEqual(isEditorFindOpenShortcut(createEvent({ metaKey: true, key: 'f', code: 'KeyF' })), true);
-    assertEqual(isEditorFindOpenShortcut(createEvent({ ctrlKey: true, key: 'f', code: 'KeyF' })), true);
-    assertEqual(isEditorReplaceOpenShortcut(createEvent({ metaKey: true, altKey: true, key: 'f', code: 'KeyF' })), true);
-    assertEqual(isEditorReplaceOpenShortcut(createEvent({ ctrlKey: true, key: 'h', code: 'KeyH' })), true);
-    assertEqual(isEditorReplaceOpenShortcut(createEvent({ metaKey: true, key: 'f', code: 'KeyF' })), false);
+    assertEqual(matchShortcut(createEvent({ metaKey: true, key: 'f', code: 'KeyF' }), 'findOpen'), true);
+    assertEqual(matchShortcut(createEvent({ ctrlKey: true, key: 'f', code: 'KeyF' }), 'findOpen'), true);
+    assertEqual(matchShortcut(createEvent({ metaKey: true, altKey: true, key: 'f', code: 'KeyF' }), 'replaceOpen'), true);
+    assertEqual(matchShortcut(createEvent({ ctrlKey: true, key: 'h', code: 'KeyH' }), 'replaceOpen'), true);
+    assertEqual(matchShortcut(createEvent({ metaKey: true, key: 'f', code: 'KeyF' }), 'replaceOpen'), false);
 });
 
 test('find navigation and close key detection', () => {
-    assertEqual(isEditorFindNextShortcut(createEvent({ key: 'Enter', code: 'Enter' })), true);
-    assertEqual(isEditorFindPreviousShortcut(createEvent({ key: 'Enter', code: 'Enter', shiftKey: true })), true);
-    assertEqual(isEditorFindCloseShortcut(createEvent({ key: 'Escape', code: 'Escape' })), true);
-    assertEqual(isEditorFindNextShortcut(createEvent({ ctrlKey: true, key: 'Enter', code: 'Enter' })), false);
+    assertEqual(matchShortcut(createEvent({ key: 'Enter', code: 'Enter' }), 'findNext'), true);
+    assertEqual(matchShortcut(createEvent({ key: 'Enter', code: 'Enter', shiftKey: true }), 'findPrevious'), true);
+    assertEqual(matchShortcut(createEvent({ key: 'Escape', code: 'Escape' }), 'findClose'), true);
+    assertEqual(matchShortcut(createEvent({ ctrlKey: true, key: 'Enter', code: 'Enter' }), 'findNext'), false);
 });
 
 test('native edit command wrapper handles missing/throwing execCommand safely', () => {
@@ -58,4 +49,20 @@ test('native edit command wrapper handles missing/throwing execCommand safely', 
     assertEqual(runNativeEditCommand({ execCommand: () => true }, 'undo'), true);
     assertEqual(runNativeEditCommand({ execCommand: () => false }, 'undo'), false);
     assertEqual(runNativeEditCommand({ execCommand: () => { throw new Error('boom'); } }, 'undo'), false);
+});
+
+test('open-file tab shortcuts: cmd+shift+[ ] and cmd+option+arrows, not plain brackets', () => {
+    assertEqual(matchShortcut(createEvent({ metaKey: true, shiftKey: true, key: '{', code: 'BracketLeft' }), 'tabPrevious'), true);
+    assertEqual(matchShortcut(createEvent({ metaKey: true, shiftKey: true, key: '}', code: 'BracketRight' }), 'tabNext'), true);
+    assertEqual(matchShortcut(createEvent({ metaKey: true, altKey: true, key: 'ArrowLeft', code: 'ArrowLeft' }), 'tabPrevious'), true);
+    assertEqual(matchShortcut(createEvent({ metaKey: true, altKey: true, key: 'ArrowRight', code: 'ArrowRight' }), 'tabNext'), true);
+    assertEqual(matchShortcut(createEvent({ metaKey: true, key: '[', code: 'BracketLeft' }), 'tabPrevious'), false);
+    assertEqual(matchShortcut(createEvent({ ctrlKey: true, shiftKey: true, key: '{', code: 'BracketLeft' }), 'tabPrevious'), false);
+});
+
+test('indent/outdent shortcuts follow shift state; unknown ids never match', () => {
+    assertEqual(matchShortcut(createEvent({ key: 'Tab', code: 'Tab' }), 'indent'), true);
+    assertEqual(matchShortcut(createEvent({ key: 'Tab', code: 'Tab', shiftKey: true }), 'indent'), false);
+    assertEqual(matchShortcut(createEvent({ key: 'Tab', code: 'Tab', shiftKey: true }), 'outdent'), true);
+    assertEqual(matchShortcut(createEvent({ key: 'Tab', code: 'Tab' }), 'nope'), false);
 });
