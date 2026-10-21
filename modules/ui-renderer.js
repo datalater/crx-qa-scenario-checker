@@ -511,6 +511,8 @@ export function renderFileTree(container, workspace, options = {}) {
         showInlineActions,
         onOpenContextMenu,
         onMoveFile,
+        onMoveFolder,
+        canDropFolder,
         pendingCopyFileIds,
         fileSearchState,
         onToggleFolder, 
@@ -556,8 +558,13 @@ export function renderFileTree(container, workspace, options = {}) {
         ? fileSearchState.matchesByFileId
         : new Map();
     const canDragMove = Boolean(canMutateTree && typeof onMoveFile === 'function');
+    const canDragFolders = Boolean(canMutateTree && typeof onMoveFolder === 'function');
     const DRAG_FILE_MIME = 'application/x-qa-scenario-file-id';
+    const DRAG_FOLDER_MIME = 'application/x-qa-scenario-folder-id';
     let draggingFileId = '';
+    let draggingFolderId = '';
+    const canDropDraggedFolder = (targetFolderId) => Boolean(draggingFolderId)
+        && (typeof canDropFolder !== 'function' || canDropFolder(draggingFolderId, targetFolderId));
 
     const folderById = new Map(workspace.folders.map(folder => [folder.id, folder]));
     const rootFolders = [];
@@ -639,6 +646,17 @@ export function renderFileTree(container, workspace, options = {}) {
         container.querySelectorAll('.tree-folder-row.is-drop-target').forEach((node) => {
             node.classList.remove('is-drop-target');
         });
+        container.classList.remove('is-drop-target-root');
+    };
+
+    const moveFolderToFolder = (folderId, targetFolderId) => {
+        if (!canDragFolders) return;
+        const maybePromise = onMoveFolder(folderId, targetFolderId);
+        if (maybePromise && typeof maybePromise.catch === 'function') {
+            maybePromise.catch((error) => {
+                console.error('[qa-scenario] failed to move folder by drag and drop', error);
+            });
+        }
     };
 
     const moveFileToFolder = (fileId, folderId) => {
@@ -696,12 +714,16 @@ export function renderFileTree(container, workspace, options = {}) {
             folderRow.appendChild(folderActions);
         }
 
-        if (canDragMove) {
+        if (canDragMove || canDragFolders) {
             folderRow.addEventListener('dragover', (event) => {
-                const draggedFileId = getCurrentDraggedFileId(event.dataTransfer);
-                if (!draggedFileId) return;
-                const draggedFile = workspace.files.find((item) => item.id === draggedFileId);
-                if (!draggedFile || draggedFile.folderId === folder.id) return;
+                if (draggingFolderId) {
+                    if (!canDropDraggedFolder(folder.id)) return;
+                } else {
+                    const draggedFileId = getCurrentDraggedFileId(event.dataTransfer);
+                    if (!draggedFileId || !canDragMove) return;
+                    const draggedFile = workspace.files.find((item) => item.id === draggedFileId);
+                    if (!draggedFile || draggedFile.folderId === folder.id) return;
+                }
                 event.preventDefault();
                 if (event.dataTransfer) {
                     event.dataTransfer.dropEffect = 'move';
@@ -715,8 +737,18 @@ export function renderFileTree(container, workspace, options = {}) {
 
             folderRow.addEventListener('drop', (event) => {
                 folderRow.classList.remove('is-drop-target');
+                if (draggingFolderId) {
+                    if (!canDropDraggedFolder(folder.id)) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const movedFolderId = draggingFolderId;
+                    draggingFolderId = '';
+                    clearDropTargets();
+                    moveFolderToFolder(movedFolderId, folder.id);
+                    return;
+                }
                 const draggedFileId = getCurrentDraggedFileId(event.dataTransfer);
-                if (!draggedFileId) return;
+                if (!draggedFileId || !canDragMove) return;
                 const draggedFile = workspace.files.find((item) => item.id === draggedFileId);
                 if (!draggedFile || draggedFile.folderId === folder.id) return;
                 event.preventDefault();
@@ -724,6 +756,23 @@ export function renderFileTree(container, workspace, options = {}) {
                 draggingFileId = '';
                 clearDropTargets();
                 moveFileToFolder(draggedFileId, folder.id);
+            });
+        }
+
+        // The root folder itself stays put; every other folder can be dragged.
+        if (canDragFolders && folder.parentId && folderById.has(folder.parentId)) {
+            folderRow.draggable = true;
+            folderRow.addEventListener('dragstart', (event) => {
+                if (!event.dataTransfer) return;
+                draggingFolderId = folder.id;
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData(DRAG_FOLDER_MIME, folder.id);
+                folderRow.classList.add('is-dragging');
+            });
+            folderRow.addEventListener('dragend', () => {
+                draggingFolderId = '';
+                folderRow.classList.remove('is-dragging');
+                clearDropTargets();
             });
         }
 
@@ -880,6 +929,47 @@ export function renderFileTree(container, workspace, options = {}) {
         }
         return folderWrap;
     };
+
+    // Dropping on the empty area of the tree (not on any row) moves the item to the root folder.
+    // Only a drop directly on the container counts, so gaps between nested rows never trigger it.
+    const rootFolderForDrop = rootFolders[0] || null;
+    if ((canDragMove || canDragFolders) && rootFolderForDrop) {
+        const canDropAtRoot = () => {
+            if (draggingFolderId) return canDropDraggedFolder(rootFolderForDrop.id);
+            if (!draggingFileId || !canDragMove) return false;
+            const draggedFile = workspace.files.find((item) => item.id === draggingFileId);
+            return Boolean(draggedFile) && draggedFile.folderId !== rootFolderForDrop.id;
+        };
+        container.ondragover = (event) => {
+            if (event.target !== container || !canDropAtRoot()) return;
+            event.preventDefault();
+            if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+            container.classList.add('is-drop-target-root');
+        };
+        container.ondragleave = (event) => {
+            if (event.target === container) container.classList.remove('is-drop-target-root');
+        };
+        container.ondrop = (event) => {
+            container.classList.remove('is-drop-target-root');
+            if (event.target !== container || !canDropAtRoot()) return;
+            event.preventDefault();
+            if (draggingFolderId) {
+                const movedFolderId = draggingFolderId;
+                draggingFolderId = '';
+                clearDropTargets();
+                moveFolderToFolder(movedFolderId, rootFolderForDrop.id);
+                return;
+            }
+            const movedFileId = draggingFileId;
+            draggingFileId = '';
+            clearDropTargets();
+            moveFileToFolder(movedFileId, rootFolderForDrop.id);
+        };
+    } else {
+        container.ondragover = null;
+        container.ondragleave = null;
+        container.ondrop = null;
+    }
 
     if (hasSearchQuery && searchMatchesByFileId.size === 0) {
         const empty = document.createElement('div');

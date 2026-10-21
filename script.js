@@ -43,6 +43,8 @@ import { matchShortcut, renderShortcutRows } from './modules/shortcut-registry.j
 import { createCommandPalette } from './modules/command-palette.js';
 import { createNewFileCommand } from './modules/new-file-command.js';
 import { createOpenFileCommand } from './modules/open-file-command.js';
+import { canMoveFolder, applyFolderMove, joinFolderPath, remapPathPrefix } from './modules/folder-move.js';
+import { directoriesMatch, directoryHasEntry } from './modules/directory-verify.js';
 import { createContextMenu } from './modules/tab-context-menu.js';
 import { createEditorCursorHistoryManager } from './modules/editor-cursor-history-manager.js';
 import { createEditorFindReplaceManager } from './modules/editor-find-replace-manager.js';
@@ -1287,7 +1289,9 @@ function renderTree() {
         onDeleteFile: (deletedFile, deletedIndex) => {
             deletedFileHistoryManager.recordDeletedFile(deletedFile, deletedIndex);
         },
-        onMoveFile: (fileId, targetFolderId) => moveFileById(fileId, targetFolderId)
+        onMoveFile: (fileId, targetFolderId) => moveFileById(fileId, targetFolderId),
+        onMoveFolder: (folderId, targetFolderId) => moveFolderById(folderId, targetFolderId),
+        canDropFolder: (folderId, targetFolderId) => canMoveFolder(workspace, folderId, targetFolderId).ok
     });
     treeOptions.pendingCopyFileIds = pendingCopyFileIds;
     treeOptions.fileSearchState = fileSearchState;
@@ -1914,6 +1918,153 @@ async function deleteFileById(id) {
     loadActiveFile();
 }
 
+/** Moves saved scroll state (and the live owner key) when a path changes. */
+function remapScrollKey(oldKey, newKey) {
+    if (!oldKey || !newKey || oldKey === newKey) return;
+    if (fileScrollPositions.has(oldKey)) {
+        fileScrollPositions.set(newKey, fileScrollPositions.get(oldKey));
+        fileScrollPositions.delete(oldKey);
+    }
+    if (scrollOwnerKey === oldKey) scrollOwnerKey = newKey;
+}
+
+function remapScrollKeysByPrefix(oldPrefix, newPrefix) {
+    [...fileScrollPositions.keys(), scrollOwnerKey].forEach((key) => {
+        if (key) remapScrollKey(key, remapPathPrefix(key, oldPrefix, newPrefix));
+    });
+}
+
+/** Lets the pending edit reach the disk so a folder copy never uses stale content. */
+async function settlePendingDiskWrites() {
+    if (autosaveTimer || activeFileDirty) {
+        if (autosaveTimer) {
+            clearTimeout(autosaveTimer);
+            autosaveTimer = null;
+        }
+        persist();
+    }
+    for (let attempt = 0; attempt < 100 && (directoryFlushQueued || directoryFlushInFlight); attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    return directDiskSyncAvailable;
+}
+
+async function moveFolderOnDisk(folder, target) {
+    const sourceHandle = directoryHandleByFolderId.get(folder.id);
+    const oldParentHandle = directoryHandleByFolderId.get(folder.parentId);
+    const targetHandle = directoryHandleByFolderId.get(target.id);
+    if (!sourceHandle || !oldParentHandle || !targetHandle) {
+        alert('디스크 폴더 이동에 필요한 핸들을 찾지 못했습니다.');
+        return false;
+    }
+
+    if (!(await settlePendingDiskWrites())) {
+        alert('저장되지 않은 변경 사항을 디스크에 쓰지 못해 폴더 이동을 취소했습니다.');
+        return false;
+    }
+
+    try {
+        if (await directoryHasEntry(targetHandle, folder.name)) {
+            alert(`이동할 위치에 같은 이름이 이미 있습니다: ${folder.name}`);
+            return false;
+        }
+    } catch (error) {
+        console.error('[qa-scenario] failed to inspect target folder', error);
+        alert('이동할 폴더를 확인하지 못했습니다.');
+        return false;
+    }
+
+    let copiedHandle = null;
+    try {
+        copiedHandle = await targetHandle.getDirectoryHandle(folder.name, { create: true });
+        await copyDirectoryEntries(sourceHandle, copiedHandle);
+        // Delete the original only after the copy is confirmed to match it.
+        if (!(await directoriesMatch(sourceHandle, copiedHandle))) {
+            throw new Error('copied folder does not match the original');
+        }
+        await oldParentHandle.removeEntry(folder.name, { recursive: true });
+    } catch (error) {
+        console.error('[qa-scenario] failed to move folder on disk', error);
+        if (copiedHandle) {
+            try {
+                await targetHandle.removeEntry(folder.name, { recursive: true });
+            } catch (rollbackError) {
+                console.warn('[qa-scenario] failed to roll back copied folder', rollbackError);
+            }
+        }
+        alert('디스크 폴더 이동에 실패했습니다. 원본 폴더는 그대로 남아 있습니다.');
+        return false;
+    }
+    return true;
+}
+
+async function moveFolderById(id, targetFolderId) {
+    if (!treeMutationsEnabled) return;
+    const check = canMoveFolder(workspace, id, targetFolderId);
+    if (!check.ok) {
+        if (check.reason === 'name-conflict') alert('이동할 위치에 같은 이름의 폴더가 이미 있습니다.');
+        return;
+    }
+
+    const folder = Workspace.getFolderById(workspace, id);
+    const target = Workspace.getFolderById(workspace, targetFolderId);
+    const oldPath = folder.path;
+    const newPath = joinFolderPath(target.path, folder.name);
+
+    if (isDirectoryWritableMode()) {
+        if (!(await moveFolderOnDisk(folder, target))) return;
+
+        // Folder ids are regenerated when the directory is re-read, so carry the
+        // path-based state (active file, open tabs, scroll) over to the new paths.
+        const uiState = workspace.uiState;
+        const location = uiState.lastActiveFileLocation;
+        if (location) {
+            const movedPath = remapPathPrefix(location.path, oldPath, newPath);
+            if (movedPath !== location.path) {
+                const fileName = location.fileName || movedPath.split('/').pop();
+                uiState.lastActiveFileLocation = {
+                    folderPath: movedPath.includes('/') ? movedPath.slice(0, movedPath.lastIndexOf('/')) : '',
+                    fileName,
+                    path: movedPath
+                };
+            }
+        }
+        if (Array.isArray(uiState.openFilePaths)) {
+            uiState.openFilePaths = uiState.openFilePaths.map((path) => remapPathPrefix(path, oldPath, newPath));
+        }
+        remapScrollKeysByPrefix(oldPath, newPath);
+
+        try {
+            await bindAndLoadFromDirectoryHandle(boundDirectoryHandle, { isRestore: true });
+        } catch (error) {
+            console.error('[qa-scenario] failed to reload folder after move', error);
+            alert('폴더는 이동했지만 목록을 다시 읽지 못했습니다. 폴더를 다시 열어 주세요.');
+            return;
+        }
+        const movedFolder = workspace.folders.find((item) => item.path === newPath);
+        if (movedFolder) {
+            workspace.uiState.selectedFolderId = movedFolder.id;
+            workspace.uiState.lastSelectionType = 'folder';
+            lastTreeSelectionType = 'folder';
+            persist();
+        }
+        updateBoundFilePathInput('', 'bound');
+        return;
+    }
+
+    applyFolderMove(workspace, id, targetFolderId, nowTs);
+    remapScrollKeysByPrefix(oldPath, newPath);
+    const expanded = new Set(workspace.uiState.expandedFolderIds || []);
+    expanded.add(targetFolderId);
+    expanded.add(id);
+    workspace.uiState.expandedFolderIds = Array.from(expanded);
+    workspace.uiState.selectedFolderId = id;
+    workspace.uiState.selectedFileId = null;
+    workspace.uiState.lastSelectionType = 'folder';
+    lastTreeSelectionType = 'folder';
+    persist();
+}
+
 async function moveFileById(id, targetFolderId) {
     if (!treeMutationsEnabled) return;
 
@@ -1960,9 +2111,11 @@ async function moveFileById(id, targetFolderId) {
         }
     }
 
+    const previousScrollKey = getScrollKey(file);
     file.folderId = targetFolderId;
     file.name = nextName;
     file.updatedAt = nowTs();
+    remapScrollKey(previousScrollKey, getScrollKey(file));
 
     workspace.uiState.selectedFolderId = targetFolderId;
     workspace.uiState.selectedFileId = file.id;
