@@ -4,7 +4,8 @@ import {
     NOTE_PANEL_WIDTH_STORAGE_KEY,
     NOTE_CODE_LANG_STORAGE_KEY,
     CHECKLIST_FILTER_STORAGE_KEY,
-    PANEL_VISIBILITY_STORAGE_KEY
+    PANEL_VISIBILITY_STORAGE_KEY,
+    SCROLL_POSITIONS_STORAGE_KEY
 } from './constants/storage.js';
 import { AUTOSAVE_DELAY_MS, WORKSPACE_VERSION, DEFAULT_FILE_NAME } from './configs/workspace.js';
 import { EDITOR_CONFIG } from './configs/editor-config.js';
@@ -203,9 +204,12 @@ let boundFileName = '';
 let boundFileReadonly = false;
 let treeMutationsEnabled = true;
 let commandPalette = null;
-// Scroll positions per file, kept in memory so switching tabs returns to where you were.
+// Scroll positions per file path (paths survive reloads and folder re-reads, ids do not).
+// Kept in memory for tab switches and mirrored to localStorage for reloads.
+const MAX_SAVED_SCROLL_POSITIONS = 200;
 const fileScrollPositions = new Map();
-let scrollOwnerFileId = null;
+let scrollOwnerKey = null;
+let scrollPersistTimer = null;
 let tabContextMenu = null;
 let directDiskSyncAvailable = false;
 let lastSaveIndicatorState = 'saved';
@@ -275,8 +279,10 @@ function init() {
     setupChecklistSearch();
     setupTableEditorSaveShortcut();
     setupOpenFileTabShortcuts();
+    setupScrollPersistence();
     setupCommandPalette();
     setupStepDetailPanel();
+    loadScrollPositions();
     loadWorkspace();
     setupEventListeners();
     resizerLayout.setupResizing();
@@ -561,6 +567,7 @@ function renderLoadingSteps() {
 
 function persist() {
     updateLastActiveFileLocation();
+    updateOpenFilePaths();
     Workspace.persistWorkspace(workspace);
     activeFileDirty = false;
     updateSaveIndicator('saved');
@@ -573,23 +580,61 @@ function getChecklistScroller() {
     return EL.checklistBody?.closest('.checklist-container') || null;
 }
 
+function getScrollKey(file) {
+    return buildFileLocation(file)?.path || null;
+}
+
+function loadScrollPositions() {
+    try {
+        const stored = tryParseJson(localStorage.getItem(SCROLL_POSITIONS_STORAGE_KEY) || '');
+        Object.entries(stored && typeof stored === 'object' ? stored : {}).forEach(([key, value]) => {
+            if (value && typeof value === 'object') fileScrollPositions.set(key, value);
+        });
+    } catch (_) { /* storage unavailable */ }
+}
+
+function persistScrollPositions() {
+    clearTimeout(scrollPersistTimer);
+    scrollPersistTimer = null;
+    saveScrollPositionForCurrentFile();
+    try {
+        localStorage.setItem(SCROLL_POSITIONS_STORAGE_KEY, JSON.stringify(Object.fromEntries(fileScrollPositions)));
+    } catch (_) { /* storage unavailable or full */ }
+}
+
+function schedulePersistScrollPositions() {
+    clearTimeout(scrollPersistTimer);
+    scrollPersistTimer = setTimeout(persistScrollPositions, 300);
+}
+
+function setupScrollPersistence() {
+    EL.editing?.addEventListener('scroll', schedulePersistScrollPositions, { passive: true });
+    getChecklistScroller()?.addEventListener('scroll', schedulePersistScrollPositions, { passive: true });
+    window.addEventListener('pagehide', persistScrollPositions);
+}
+
 function saveScrollPositionForCurrentFile() {
-    if (!scrollOwnerFileId) return;
-    const previous = fileScrollPositions.get(scrollOwnerFileId) || {};
+    if (!scrollOwnerKey) return;
+    const previous = fileScrollPositions.get(scrollOwnerKey) || {};
     const checklistScroller = getChecklistScroller();
     // A hidden pane reports scrollTop 0; keep the last known value instead.
     const editorVisible = EL.editing.clientHeight > 0;
     const checklistVisible = Boolean(checklistScroller) && checklistScroller.clientHeight > 0;
-    fileScrollPositions.set(scrollOwnerFileId, {
+    // Re-insert so the Map stays ordered by recency; trim the oldest entries.
+    fileScrollPositions.delete(scrollOwnerKey);
+    fileScrollPositions.set(scrollOwnerKey, {
         editorTop: editorVisible ? EL.editing.scrollTop : (previous.editorTop ?? 0),
         editorLeft: editorVisible ? EL.editing.scrollLeft : (previous.editorLeft ?? 0),
         checklistTop: checklistVisible ? checklistScroller.scrollTop : (previous.checklistTop ?? 0),
         checklistLeft: checklistVisible ? checklistScroller.scrollLeft : (previous.checklistLeft ?? 0)
     });
+    while (fileScrollPositions.size > MAX_SAVED_SCROLL_POSITIONS) {
+        fileScrollPositions.delete(fileScrollPositions.keys().next().value);
+    }
 }
 
-function restoreScrollPositionForFile(fileId, { restoreEditor = true } = {}) {
-    const saved = fileScrollPositions.get(fileId);
+function restoreScrollPositionForFile(key, { restoreEditor = true } = {}) {
+    const saved = key ? fileScrollPositions.get(key) : null;
     const checklistScroller = getChecklistScroller();
     if (checklistScroller) {
         checklistScroller.scrollTop = saved?.checklistTop ?? 0;
@@ -624,13 +669,21 @@ function loadActiveFile() {
         validateAndRender();
         const hasSearchJump = Boolean(searchMatch)
             && Number.isFinite(searchMatch.firstMatchIndex) && searchMatch.firstMatchIndex >= 0;
-        restoreScrollPositionForFile(activeFile.id, { restoreEditor: !hasSearchJump });
+        const scrollKey = getScrollKey(activeFile);
+        const isFirstLoad = scrollOwnerKey === null;
+        restoreScrollPositionForFile(scrollKey, { restoreEditor: !hasSearchJump });
+        // On startup the first layout may not be final yet; apply once more after it settles.
+        if (isFirstLoad) {
+            requestAnimationFrame(() => {
+                if (scrollOwnerKey === scrollKey) restoreScrollPositionForFile(scrollKey, { restoreEditor: !hasSearchJump });
+            });
+        }
         if (hasSearchJump) {
             scrollToLine(searchMatch.firstMatchIndex);
             syncScroll();
         }
     }
-    scrollOwnerFileId = activeFile?.id ?? null;
+    scrollOwnerKey = activeFile ? getScrollKey(activeFile) : null;
     renderTree();
     updateSaveIndicator('saved');
     activeFileDirty = false;
@@ -657,6 +710,27 @@ function updateLastActiveFileLocation() {
     const location = buildFileLocation(activeFile);
     if (!location) return;
     workspace.uiState.lastActiveFileLocation = location;
+}
+
+/** Mirrors the open tabs as paths: ids change when a folder is re-read, paths do not. */
+function updateOpenFilePaths() {
+    if (!workspace?.uiState) return;
+    const ids = syncOpenFileIds(workspace);
+    workspace.uiState.openFilePaths = ids
+        .map((id) => getScrollKey(Workspace.getFileById(workspace, id)))
+        .filter(Boolean);
+}
+
+function restoreOpenFilesFromPaths(targetWorkspace, paths) {
+    if (!targetWorkspace?.uiState || !Array.isArray(paths) || !paths.length) return;
+    const folderById = new Map((targetWorkspace.folders || []).map((folder) => [folder.id, folder]));
+    const idByPath = new Map();
+    (targetWorkspace.files || []).forEach((file) => {
+        const folderPath = String(folderById.get(file.folderId)?.path || '').trim();
+        idByPath.set(folderPath ? `${folderPath}/${file.name}` : file.name, file.id);
+    });
+    targetWorkspace.uiState.openFileIds = paths.map((path) => idByPath.get(path)).filter(Boolean);
+    syncOpenFileIds(targetWorkspace);
 }
 
 function getLastActiveFileLocation() {
@@ -3716,6 +3790,7 @@ function flushAutosaveAndPersist() {
 function applyImportedWorkspace(data, options = {}) {
     workspace = Workspace.normalizeWorkspace(data);
     restoreActiveFileFromLocation(workspace, options.lastActiveFileLocation);
+    restoreOpenFilesFromPaths(workspace, options.openFilePaths);
     persist();
     loadActiveFile();
     syncExportOptionUiFromWorkspace();
@@ -3859,6 +3934,7 @@ async function bindAndLoadFromDirectoryHandle(handle, options = {}) {
     }
 
     const lastActiveFileLocation = getLastActiveFileLocation();
+    const openFilePaths = workspace?.uiState?.openFilePaths;
     reportProgress('read', 'done');
     reportProgress('apply', 'active');
     clearBoundFile({ clearPersistedDirectoryHandle: false });
@@ -3872,7 +3948,7 @@ async function bindAndLoadFromDirectoryHandle(handle, options = {}) {
     setDirectDiskSyncAvailable(writeGranted);
     updateFolderWritePermissionUi();
 
-    applyImportedWorkspace(loaded.workspace, { lastActiveFileLocation });
+    applyImportedWorkspace(loaded.workspace, { lastActiveFileLocation, openFilePaths });
     setWorkspaceBoundFileMeta(loaded.rootName, 'directory');
     try {
         await setBoundDirectoryHandleInDb(handle, loaded.rootName);
