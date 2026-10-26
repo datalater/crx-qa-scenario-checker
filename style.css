@@ -1,5 +1,6 @@
 @layer reset, base, components, features, overrides;
 @import url("styles/reset-layer.css") layer(reset);
+@import url("styles/z-index.css") layer(base);
 @import url("styles/feature-export.css") layer(features);
 @import url("styles/feature-resizer.css") layer(features);
 @import url("styles/feature-shortcuts.css") layer(features);
@@ -38,7 +39,7 @@
     justify-content: space-between;
     padding: 5px 12px;
     position: relative;
-    z-index: 40;
+    z-index: var(--z-app-header);
   }
 
   .logo {
@@ -630,7 +631,7 @@
     box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
     padding: 6px;
     display: none;
-    z-index: 20;
+    z-index: var(--z-dropdown);
   }
 
   .tree-menu.is-open {
@@ -999,7 +1000,7 @@
     border-radius: 8px;
     box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
     padding: 6px;
-    z-index: 120;
+    z-index: var(--z-context-menu);
   }
 
   .tree-context-menu[hidden] {
@@ -1065,7 +1066,7 @@
     position: absolute;
     top: 10px;
     right: 12px;
-    z-index: 4;
+    z-index: var(--z-editor-find);
     min-width: 320px;
     display: flex;
     flex-direction: column;
@@ -1152,7 +1153,7 @@
     overflow: hidden;
     pointer-events: none;
     user-select: none;
-    z-index: 3;
+    z-index: var(--z-editor-line-numbers);
   }
 
   .line-number {
@@ -1183,7 +1184,7 @@
     right: 3px;
     bottom: var(--editor-padding);
     width: 6px;
-    z-index: 4;
+    z-index: var(--z-editor-scroll-markers);
     pointer-events: none;
   }
 
@@ -1204,7 +1205,7 @@
     min-height: 4px;
     background: var(--danger);
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--editor-bg) 80%, transparent);
-    z-index: 1;
+    z-index: var(--z-editor-error-marker);
   }
 
   #editing,
@@ -1231,7 +1232,7 @@
     background: transparent;
     color: transparent;
     caret-color: var(--text-primary);
-    z-index: 2;
+    z-index: var(--z-editor-input);
     resize: none;
     outline: none;
   }
@@ -1239,7 +1240,7 @@
   #highlighting {
     background: transparent;
     color: var(--text-primary);
-    z-index: 1;
+    z-index: var(--z-editor-highlight-text);
     pointer-events: none;
   }
 
@@ -1260,7 +1261,7 @@
     white-space: pre;
     word-wrap: normal;
     overflow: hidden; /* Overlay doesn't scroll, it just contains positioned elements? No, it should mirror */
-    z-index: 0;
+    z-index: var(--z-editor-highlight-background);
     pointer-events: none;
   }
 
@@ -1271,7 +1272,7 @@
     background-color: rgba(56, 139, 253, 0.12);
     border-left: 2px solid var(--accent-primary);
     pointer-events: none;
-    z-index: 0;
+    z-index: var(--z-editor-highlight-background);
   }
 
   /* Syntax Highlighting */
@@ -1351,7 +1352,7 @@
     border-bottom: 1px solid var(--border-color);
     position: sticky;
     top: 0;
-    z-index: 5;
+    z-index: var(--z-table-header);
     /* Collapsed borders do not travel with a sticky cell. */
     box-shadow: inset 0 -1px 0 var(--border-color);
   }
@@ -1698,7 +1699,7 @@
   .checklist-add-row-zone {
     height: 0;
     position: relative;
-    z-index: 5;
+    z-index: var(--z-table-insert);
     border: none;
   }
 
@@ -1715,7 +1716,6 @@
     left: 10px;
     top: -1px;
     transform: translateY(-50%);
-    z-index: 6;
     display: flex;
     align-items: center;
     gap: 6px;

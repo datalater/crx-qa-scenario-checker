@@ -132,6 +132,8 @@ const EL = {
     treeContextReadonly: document.getElementById('tree-context-readonly'),
     checklistContextMenu: document.getElementById('checklist-context-menu'),
     checklistContextDelete: document.getElementById('checklist-context-delete'),
+    checklistContextPin: document.getElementById('checklist-context-pin'),
+    checklistPinnedBody: document.getElementById('checklist-pinned-body'),
     checklistContextDetail: document.getElementById('checklist-context-detail'),
     btnKeyboardShortcuts: document.getElementById('btn-keyboard-shortcuts'),
     shortcutsModal: document.getElementById('keyboard-shortcuts-modal'),
@@ -210,6 +212,7 @@ let treeMutationsEnabled = true;
 let commandPalette = null;
 let checklistStickyEnabled = true;
 let stickyUpdateFrame = 0;
+let pinnedRowsResizeObserver = null;
 // Scroll positions per file path (paths survive reloads and folder re-reads, ids do not).
 // Kept in memory for tab switches and mirrored to localStorage for reloads.
 const MAX_SAVED_SCROLL_POSITIONS = 200;
@@ -1552,6 +1555,8 @@ function getContextTargetFolderId() {
 function openChecklistContextMenu(target) {
     if (!EL.checklistContextMenu || target == null) return;
     checklistContextTarget = target;
+    EL.checklistContextPin.textContent = currentData?.steps?.[target.index]?.pinned === true
+        ? '행 고정 해제' : '행 고정';
 
     if (EL.checklistContextColor) {
         EL.checklistContextColor.hidden = !target.isDivider;
@@ -1575,6 +1580,7 @@ function openChecklistContextMenu(target) {
     EL.checklistContextMenu.style.left = `${left}px`;
     EL.checklistContextMenu.style.top = `${top}px`;
     EL.checklistContextMenu.hidden = false;
+    EL.checklistContextMenu.style.top = `${Math.max(8, Math.min(top, window.innerHeight - EL.checklistContextMenu.offsetHeight - 8))}px`;
 }
 
 function closeChecklistContextMenu() {
@@ -1593,6 +1599,16 @@ function openShortcutsModal() {
 function closeShortcutsModal() {
     if (EL.shortcutsModal) EL.shortcutsModal.classList.add('is-hidden');
     if (EL.shortcutsBackdrop) EL.shortcutsBackdrop.classList.add('is-hidden');
+}
+
+function handleChecklistContextPin() {
+    const step = currentData?.steps?.[checklistContextTarget?.index];
+    if (!step) return;
+    if (step.pinned === true) delete step.pinned;
+    else step.pinned = true;
+    closeChecklistContextMenu();
+    syncToEditor();
+    renderChecklist();
 }
 
 function handleChecklistContextDelete() {
@@ -2535,49 +2551,66 @@ function renderChecklist() {
     const scrollLeft = checklistScroller?.scrollLeft ?? 0;
     lastRenderedChecklistFileId = renderedFileId;
 
-    UI.renderChecklist(EL.checklistBody, currentData, {
-        onUpdatePass: (idx, val) => {
-            currentData.steps[idx].pass = val;
-            syncToEditor();
-        },
-        onUpdateStep: (idx, field, val) => {
-            if (field === 'divider') {
-                currentData.steps[idx].divider = val;
+    const refreshPeer = (pinnedOnly) => {
+        const scroller = getChecklistScroller();
+        const top = scroller?.scrollTop || 0;
+        renderRows(pinnedOnly ? EL.checklistBody : EL.checklistPinnedBody, !pinnedOnly);
+        if (scroller) scroller.scrollTop = top;
+        scheduleStickyHeadingUpdate();
+    };
+    const renderRows = (container, pinnedOnly) => {
+        UI.renderChecklist(container, currentData, {
+            pinnedOnly,
+            onUpdatePass: (idx, val) => {
+                currentData.steps[idx].pass = val;
                 syncToEditor();
-                return;
-            }
-            if (isStepArrayField(field)) {
-                currentData.steps[idx][field] = toChecklistArray(val);
-            } else {
-                currentData.steps[idx][field] = val;
-            }
-            syncToEditor();
-        },
-        onHighlightStep: (idx) => {
-            const bounds = Editor.findStepBounds(EL.editing.value, idx);
-            if (!bounds) return clearStepHighlight();
-            renderStepHighlight(bounds);
-            scrollToLine(bounds.start);
-        },
-        onScenarioTitleUpdate: (title, isPrimary) => {
-            EL.scenarioTitle.textContent = title;
-            EL.scenarioTitle.title = title;
-            EL.scenarioTitle.classList.toggle('is-primary', isPrimary);
-        },
-        onAddStep: (insertIndex) => {
-            insertChecklistEntry(insertIndex, JSON.parse('{"given":[],"when":[],"then":[],"pass":false}'));
-        },
-        onAddDivider: (insertIndex) => {
-            insertChecklistEntry(insertIndex, { divider: true });
-        },
-        onOpenChecklistContextMenu: openChecklistContextMenu,
-        onOpenStepDetail: openStepDetailPanel,
-        activeNoteIndex: stepDetailIndex,
-        activeNoteKey: stepDetailActiveNote,
-        activeFilter: checklistFilter,
-        searchResults: checklistSearchResults,
-        activeSearchResult: checklistSearchResults[checklistSearchResultIndex] || null
-    });
+                refreshPeer(pinnedOnly);
+            },
+            onUpdateStep: (idx, field, val) => {
+                if (field === 'divider') {
+                    currentData.steps[idx].divider = val;
+                    syncToEditor();
+                    refreshPeer(pinnedOnly);
+                    return;
+                }
+                if (isStepArrayField(field)) {
+                    currentData.steps[idx][field] = toChecklistArray(val);
+                } else {
+                    currentData.steps[idx][field] = val;
+                }
+                syncToEditor();
+                refreshPeer(pinnedOnly);
+            },
+            onHighlightStep: (idx) => {
+                const bounds = Editor.findStepBounds(EL.editing.value, idx);
+                if (!bounds) return clearStepHighlight();
+                renderStepHighlight(bounds);
+                scrollToLine(bounds.start);
+            },
+            onScenarioTitleUpdate: (title, isPrimary) => {
+                EL.scenarioTitle.textContent = title;
+                EL.scenarioTitle.title = title;
+                EL.scenarioTitle.classList.toggle('is-primary', isPrimary);
+            },
+            onAddStep: pinnedOnly ? undefined : (insertIndex) => {
+                insertChecklistEntry(insertIndex, JSON.parse('{"given":[],"when":[],"then":[],"pass":false}'));
+            },
+            onAddDivider: pinnedOnly ? undefined : (insertIndex) => {
+                insertChecklistEntry(insertIndex, { divider: true });
+            },
+            onOpenChecklistContextMenu: openChecklistContextMenu,
+            onOpenStepDetail: openStepDetailPanel,
+            activeNoteIndex: stepDetailIndex,
+            activeNoteKey: stepDetailActiveNote,
+            activeFilter: checklistFilter,
+            searchResults: checklistSearchResults,
+            activeSearchResult: checklistSearchResults[checklistSearchResultIndex] || null
+        });
+        if (pinnedOnly) observePinnedChecklistRows();
+    };
+    renderRows(EL.checklistPinnedBody, true);
+    renderRows(EL.checklistBody, false);
+    updateStickyHeadings();
     if (checklistScroller) {
         checklistScroller.scrollTop = scrollTop;
         checklistScroller.scrollLeft = scrollLeft;
@@ -2760,9 +2793,9 @@ function setupChecklistFilter() {
 }
 
 /**
- * Sticky section titles: plain text dividers pin under the table header while their
- * section scrolls, and the next one covers the previous (CSS `position: sticky` does the
- * pinning; this code only measures the header, marks the pinned row and handles the jump icon).
+ * Pinned rows stack below the header; section titles share the slot below them.
+ * CSS keeps each row sticky while layout supplies offsets and the same 1px overlap
+ * at every boundary, including after editor height changes.
  */
 function setChecklistStickyEnabled(enabled, { persist = true } = {}) {
     checklistStickyEnabled = enabled === true;
@@ -2791,14 +2824,11 @@ function updateStickyHeadings() {
     const scroller = getChecklistScroller();
     if (!scroller) return;
     const headCell = scroller.querySelector('thead th');
-    // The whole thead (borders included) so pinned titles start exactly where it ends.
-    const headHeight = scroller.querySelector('thead')?.getBoundingClientRect().height || 0;
-    if (headHeight > 0) scroller.style.setProperty('--checklist-head-height', `${headHeight}px`);
-
+    const pinnedHeight = layoutChecklistStickyRows(scroller);
     const rows = scroller.querySelectorAll('tr.is-sticky-heading');
     let lastStuck = null;
     if (checklistStickyEnabled && headCell) {
-        const headBottom = headCell.getBoundingClientRect().bottom;
+        const headBottom = headCell.getBoundingClientRect().bottom + pinnedHeight;
         rows.forEach((row) => {
             if (row.getBoundingClientRect().top <= headBottom + 0.5) lastStuck = row;
         });
@@ -2806,22 +2836,40 @@ function updateStickyHeadings() {
     rows.forEach((row) => row.classList.toggle('is-stuck', row === lastStuck));
 }
 
-/** Scrolls so the pinned heading returns to its natural position just below the header. */
+function layoutChecklistStickyRows(scroller) {
+    const headHeight = scroller.querySelector('thead')?.getBoundingClientRect().height || 0;
+    const pinnedRows = [...(EL.checklistPinnedBody?.querySelectorAll('tr.is-pinned-row') || [])];
+    const heights = pinnedRows.map(row => row.getBoundingClientRect().height);
+    let edge = headHeight;
+    pinnedRows.forEach((row, index) => {
+        const top = edge - 1;
+        row.style.setProperty('--checklist-sticky-top', `${top}px`);
+        edge = top + heights[index];
+    });
+    // Section headings share the final slot; each pinned row has its own slot.
+    scroller.style.setProperty('--checklist-sticky-top', `${edge - 1}px`);
+    return edge - headHeight;
+}
+
+/** Scrolls the original row just below the occupied sticky stack. */
 function scrollStickyHeadingToOrigin(row) {
     const scroller = getChecklistScroller();
     const headCell = scroller?.querySelector('thead th');
     if (!scroller || !headCell) return;
-    // A pinned row reports its pinned position, so measure from the row before it instead.
-    let skippedHeight = 0;
-    let previous = row.previousElementSibling;
-    while (previous && previous.classList.contains('is-sticky-heading')) {
-        skippedHeight += previous.offsetHeight;
-        previous = previous.previousElementSibling;
+    const index = row.dataset.stepIndex;
+    let origin = EL.checklistBody.querySelector(`tr[data-step-index="${index}"]`);
+    if (!origin) {
+        setChecklistFilter('all');
+        origin = EL.checklistBody.querySelector(`tr[data-step-index="${index}"]`);
     }
-    const naturalTop = (previous
-        ? previous.getBoundingClientRect().bottom
-        : row.parentElement.getBoundingClientRect().top) + skippedHeight;
-    scroller.scrollTop += naturalTop - headCell.getBoundingClientRect().bottom;
+    if (!origin) return;
+    const pinnedHeight = layoutChecklistStickyRows(scroller);
+    // Temporarily release sticky positioning to measure the actual document position.
+    const position = origin.style.position;
+    origin.style.position = 'static';
+    const naturalTop = origin.getBoundingClientRect().top;
+    origin.style.position = position;
+    scroller.scrollTop += naturalTop - headCell.getBoundingClientRect().bottom - pinnedHeight;
 }
 
 function setupChecklistStickyHeadings() {
@@ -2837,15 +2885,28 @@ function setupChecklistStickyHeadings() {
     if (!scroller) return;
     scroller.addEventListener('scroll', scheduleStickyHeadingUpdate, { passive: true });
     if (typeof ResizeObserver === 'function') {
-        new ResizeObserver(scheduleStickyHeadingUpdate).observe(scroller);
+        const observer = new ResizeObserver(scheduleStickyHeadingUpdate);
+        observer.observe(scroller);
+        if (EL.checklistPinnedBody) observer.observe(EL.checklistPinnedBody);
+        const head = scroller.querySelector('thead');
+        if (head) observer.observe(head);
     }
     scroller.addEventListener('click', (event) => {
         const button = event.target.closest?.('.checklist-sticky-jump');
         if (!button) return;
         event.stopPropagation();
-        const row = button.closest('tr.is-sticky-heading');
+        const row = button.closest('tr.is-sticky-heading, tr.is-pinned-row');
         if (row) scrollStickyHeadingToOrigin(row);
     }, true);
+}
+
+function observePinnedChecklistRows() {
+    if (typeof ResizeObserver !== 'function') return;
+    pinnedRowsResizeObserver ??= new ResizeObserver(scheduleStickyHeadingUpdate);
+    pinnedRowsResizeObserver.disconnect();
+    EL.checklistPinnedBody?.querySelectorAll('tr.is-pinned-row').forEach(row => {
+        pinnedRowsResizeObserver.observe(row);
+    });
 }
 
 function setupChecklistDensityToggle() {
@@ -4995,6 +5056,7 @@ function setupWindowListeners() {
             openStepDetailPanel(idx);
         });
     }
+    EL.checklistContextPin?.addEventListener('click', handleChecklistContextPin);
     if (EL.checklistContextDelete) {
         EL.checklistContextDelete.addEventListener('click', handleChecklistContextDelete);
     }

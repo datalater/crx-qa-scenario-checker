@@ -1,0 +1,39 @@
+/* Layer values live here; consumers keep their positioning and stacking contexts.
+   Numbers are comparable only within the same stacking context. In particular,
+   submenu/export and editor-internal values do not outrank their parent contexts. */
+:root {
+  /* App surfaces: preserve the existing ordering outside the table. */
+  --z-pane-resizer: 10;
+  --z-dropdown: 20;
+  --z-app-header: 40;
+  --z-note-backdrop: 60;
+  --z-table-search: 61;
+  --z-note-panel: 62;
+  --z-context-menu: 120;
+  --z-context-submenu: 121;
+  --z-export-menu: 200;
+  --z-shortcuts-backdrop: 999;
+  --z-shortcuts-modal: 1000;
+  --z-command-palette-backdrop: 1000;
+  --z-command-palette: 1001;
+  --z-loading-overlay: 2000;
+
+  /* Table: ordinary rows < insertion controls < section < pins < header.
+     Insertion controls stay inside their zone's context; no child override. */
+  --z-table-insert: 2;
+  --z-table-section: 3;
+  --z-table-pinned: 4;
+  --z-table-header: 5;
+
+  /* JSON editor layers, not app overlay priorities. */
+  --z-editor-highlight-background: 0;
+  --z-editor-highlight-text: 1;
+  --z-editor-input: 2;
+  --z-editor-line-numbers: 3;
+  --z-editor-find: 4;
+  --z-editor-scroll-markers: 4;
+  --z-editor-error-marker: 1;
+
+  /* Inside the note panel's own stacking context. */
+  --z-note-panel-resizer: 1;
+}

@@ -249,7 +249,7 @@ tr:hover .checklist-note-add,
   position: fixed;
   inset: 0;
   background-color: rgb(1 4 9 / 45%);
-  z-index: 60;
+  z-index: var(--z-note-backdrop);
 }
 
 .step-detail-backdrop.is-hidden {
@@ -277,7 +277,7 @@ tr:hover .checklist-note-add,
   background-color: var(--editor-bg, var(--bg-color));
   border-left: 1px solid var(--border-muted);
   box-shadow: -8px 0 24px rgb(1 4 9 / 40%);
-  z-index: 62;
+  z-index: var(--z-note-panel);
 }
 
 .step-detail-resizer {
@@ -291,7 +291,7 @@ tr:hover .checklist-note-add,
   touch-action: none;
   background-color: transparent;
   transition: background-color 120ms ease;
-  z-index: 1;
+  z-index: var(--z-note-panel-resizer);
 }
 
 .step-detail-resizer:hover,
@@ -766,7 +766,7 @@ tr:hover .checklist-note-add,
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  z-index: 20;
+  z-index: var(--z-dropdown);
   min-width: 150px;
   display: flex;
   flex-direction: column;

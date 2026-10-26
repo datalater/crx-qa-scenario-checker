@@ -33,7 +33,7 @@
     cursor: col-resize;
     touch-action: none;
     transition: background-color 0.2s;
-    z-index: 10;
+    z-index: var(--z-pane-resizer);
     position: relative;
   }
 

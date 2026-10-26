@@ -462,6 +462,17 @@ export function isStickyHeadingDivider(divider, title) {
         && String(title ?? '').trim().length > 0;
 }
 
+function addPinnedRowControls(row, controlsHost) {
+    row.classList.add('is-pinned-row');
+    const icon = document.createElement('span');
+    icon.className = 'checklist-pin-icon';
+    icon.title = '고정된 행';
+    icon.setAttribute('aria-label', '고정된 행');
+    icon.innerHTML = '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M5 1h6v1l-1 1v4l2 2v1H8.5v5h-1v-5H4V9l2-2V3L5 2z"/></svg>';
+    (row.querySelector('.col-num') || controlsHost).prepend(icon);
+    controlsHost.appendChild(createStickyJumpButton());
+}
+
 function createStickyJumpButton() {
     const button = document.createElement('button');
     button.type = 'button';
@@ -1306,7 +1317,7 @@ export function renderChecklist(container, data, options = {}) {
         onUpdatePass, onUpdateStep, onHighlightStep, onScenarioTitleUpdate,
         onAddStep, onAddDivider, onOpenChecklistContextMenu, onOpenStepDetail,
         activeNoteIndex = null, activeNoteKey = null, activeFilter = 'all',
-        searchResults = [], activeSearchResult = null
+        searchResults = [], activeSearchResult = null, pinnedOnly = false
     } = options;
     if (!container) return;
     const canInsertRows = typeof onAddStep === 'function' || typeof onAddDivider === 'function';
@@ -1316,6 +1327,8 @@ export function renderChecklist(container, data, options = {}) {
     // while the rows are still in the table reset the pane's scroll position.
     container.replaceChildren();
     destroyMountedEditors(container);
+
+    if (pinnedOnly && (!Array.isArray(data?.steps) || !data.steps.some(step => step.pinned === true))) return;
 
     if (!data || !data.steps || !Array.isArray(data.steps)) {
         container.innerHTML = '<tr class="empty-state"><td colspan="6">JSON structure must contain a "steps" array.</td></tr>';
@@ -1346,7 +1359,9 @@ export function renderChecklist(container, data, options = {}) {
 
     container.innerHTML = '';
     const filter = normalizeChecklistFilter(activeFilter);
-    const visibility = buildChecklistVisibility(data.steps, filter, data);
+    const visibility = pinnedOnly
+        ? data.steps.map(step => step.pinned === true)
+        : buildChecklistVisibility(data.steps, filter, data);
     const searchResultsByStep = new Map();
     searchResults.forEach((result) => {
         if (!searchResultsByStep.has(result.stepIndex)) searchResultsByStep.set(result.stepIndex, []);
@@ -1411,10 +1426,11 @@ export function renderChecklist(container, data, options = {}) {
             dividerInner.appendChild(dividerSpacer);
             dividerInner.appendChild(dividerEditor.element);
             // A plain text divider with a title acts as a section heading that can pin to the top.
-            if (isStickyHeadingDivider(divider, getChecklistDividerTitle(step))) {
+            if (step.pinned !== true && isStickyHeadingDivider(divider, getChecklistDividerTitle(step))) {
                 dividerRow.classList.add('is-sticky-heading');
                 dividerInner.appendChild(createStickyJumpButton());
             }
+            if (pinnedOnly) addPinnedRowControls(dividerRow, dividerInner);
             dividerCell.appendChild(dividerInner);
             dividerRow.appendChild(dividerCell);
             dividerRow.addEventListener('click', () => {
@@ -1488,6 +1504,8 @@ export function renderChecklist(container, data, options = {}) {
         });
         if (noteChips.length > 0) tr.classList.add('has-note');
         if (isActiveStep) tr.classList.add('is-note-active');
+
+        if (pinnedOnly) addPinnedRowControls(tr, tr.querySelector('.col-then'));
 
         const populateCell = (field, val) => {
             const cell = tr.querySelector(`[data-field="${field}"]`);

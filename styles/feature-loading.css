@@ -8,7 +8,7 @@
     justify-content: center;
     gap: 16px;
     background: var(--bg-color);
-    z-index: 2000;
+    z-index: var(--z-loading-overlay);
   }
 
   .loading-overlay.is-hidden {

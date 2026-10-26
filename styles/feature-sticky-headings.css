@@ -2,26 +2,48 @@
    Plain text dividers (class is-sticky-heading) pin under the table header; a later
    heading reaches the same spot and covers the earlier one. The backgrounds are opaque
    so rows scrolling underneath never show through. */
+.checklist-container tr.is-pinned-row,
 .checklist-container.is-sticky-headings tr.is-sticky-heading {
   position: sticky;
-  /* 1px under the header (which sits above, z-index 5) so no sub-pixel gap shows. */
-  top: calc(var(--checklist-head-height, 38px) - 1px);
-  z-index: 4;
+  /* Layout gives every boundary the same 1px overlap used below the header. */
+  top: var(--checklist-sticky-top, 37px);
   background-color: var(--editor-bg);
-  background-image: linear-gradient(rgba(56, 139, 253, 0.12), rgba(56, 139, 253, 0.12));
+  --sticky-edge-color: var(--border-color);
 }
 
+.checklist-container tr.is-pinned-row {
+  z-index: var(--z-table-pinned);
+}
+
+.checklist-container tr.is-pinned-row:hover {
+  background-image: linear-gradient(rgba(88, 166, 255, 0.05), rgba(88, 166, 255, 0.05));
+}
+
+.checklist-container.is-sticky-headings tr.is-sticky-heading {
+  z-index: var(--z-table-section);
+}
+
+.checklist-container tr.is-pinned-row.checklist-divider-row,
+.checklist-container.is-sticky-headings tr.is-sticky-heading {
+  --sticky-edge-color: color-mix(in srgb, var(--divider-color, rgb(56, 139, 253)) 35%, transparent);
+  background-image: linear-gradient(var(--sticky-tint), var(--sticky-tint));
+  --sticky-tint: color-mix(in srgb, var(--divider-color, rgb(56, 139, 253)) 12%, transparent);
+}
+
+.checklist-container tr.is-pinned-row.checklist-divider-row:hover,
 .checklist-container.is-sticky-headings tr.is-sticky-heading:hover {
-  background-image: linear-gradient(rgba(56, 139, 253, 0.16), rgba(56, 139, 253, 0.16));
+  --sticky-tint: color-mix(in srgb, var(--divider-color, rgb(56, 139, 253)) 16%, transparent);
 }
 
+.checklist-container tr.is-pinned-row.selected-row,
 .checklist-container.is-sticky-headings tr.is-sticky-heading.selected-row {
   background-image: linear-gradient(rgba(88, 166, 255, 0.18), rgba(88, 166, 255, 0.18));
 }
 
 /* Collapsed table borders do not travel with a pinned row, so draw the edges with shadows. */
+.checklist-container tr.is-pinned-row td,
 .checklist-container.is-sticky-headings tr.is-sticky-heading.is-stuck td {
-  box-shadow: inset 0 -1px 0 rgba(56, 139, 253, 0.35), 0 3px 6px -3px rgba(0, 0, 0, 0.5);
+  box-shadow: inset 0 -1px 0 var(--sticky-edge-color), 0 3px 6px -3px rgba(0, 0, 0, 0.5);
 }
 
 .checklist-sticky-jump {
@@ -42,6 +64,24 @@
   background: rgba(128, 128, 128, 0.25);
 }
 
-.checklist-container.is-sticky-headings tr.is-stuck .checklist-sticky-jump {
+.checklist-container.is-sticky-headings tr.is-stuck .checklist-sticky-jump,
+.is-pinned-row .checklist-sticky-jump {
   display: inline-flex;
+}
+
+.checklist-pin-icon {
+  display: inline-flex;
+  color: var(--text-secondary);
+  margin-right: 4px;
+}
+
+.is-pinned-row .col-then {
+  position: relative;
+  padding-right: 32px;
+}
+
+.is-pinned-row .col-then > .checklist-sticky-jump {
+  position: absolute;
+  right: 4px;
+  top: 10px;
 }

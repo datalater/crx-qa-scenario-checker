@@ -43,7 +43,7 @@
     box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
     padding: 8px;
     display: none;
-    z-index: 200;
+    z-index: var(--z-export-menu);
   }
 
   .export-options-menu.is-open {
