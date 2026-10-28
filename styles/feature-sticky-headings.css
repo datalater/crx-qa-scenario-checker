@@ -23,6 +23,13 @@
   z-index: var(--z-table-section);
 }
 
+/* A section title's own `+` `/` controls straddle its bottom edge from the
+   zone row below it. While the title sits in the flow they must draw above
+   it; once it is stuck, rows and their controls pass under it again. */
+.checklist-container.is-sticky-headings tr.is-sticky-heading:not(.is-stuck) + .checklist-add-row-zone {
+  z-index: var(--z-table-section-insert);
+}
+
 .checklist-container tr.is-pinned-row.checklist-divider-row,
 .checklist-container.is-sticky-headings tr.is-sticky-heading {
   --sticky-edge-color: color-mix(in srgb, var(--divider-color, rgb(56, 139, 253)) 35%, transparent);
