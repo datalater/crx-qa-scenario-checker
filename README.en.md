@@ -69,7 +69,9 @@ QA Scenario Checker is a Chrome extension for editing QA scenario JSON and revie
 }
 ```
 
-A divider can also be an object: `{ "value": "...", "type": "code", "color": "#a371f7" }`. `type` (`text` by default, or `code` for a highlighted CodeMirror editor whose language is picked on the row, `tsx` by default and stored as `lang` otherwise; `height` is `fixed` (300px max, scrolls) by default or `auto` to show the whole block) and `color` are independent; change them from the divider's context menu. Unknown types render as text and are preserved.
+A divider can also be an object: `{ "value": "...", "type": "code", "color": "#a371f7" }`. `type` (`text` by default, or `code` for a highlighted CodeMirror editor whose language is picked on the row, `tsx` by default and stored as `lang` otherwise; `height` is `fixed` (300px max, scrolls) by default or `auto` to show the whole block) and `color` are independent (drag the handle under a code editor for an exact height, stored as `"height": "480px"`; double-click it to reset; note code blocks have the same handle; `wrap` wraps long lines, and live tables, to the editor width; like VS Code it defaults to `on` for markdown and `off` for other languages, and only a pick that differs is stored); change them from the divider's context menu. Unknown types render as text and are preserved.
+
+With `lang` set to `markdown`, a `view` picker appears above the editor (note code blocks too). `live` (default, not stored) edits GFM tables as cells while the rest of the markdown shows as source; `source` (stored as `"view": "source"`) shows everything as written. The stored value is always plain markdown: a line break inside a cell is saved as `<br>`. In a live table, hover a column's top edge or a row's left edge for its menu (insert right/below, delete), use the `+`/`-` in the middle of the right/bottom edge to append or remove the last column/row, and the trash button just above the top-left corner to delete the table (undo restores it). Type `/` at the start of a line or after a space and pick `/table` to insert a new table.
 
 ## Motivation
 

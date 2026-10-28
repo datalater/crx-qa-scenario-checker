@@ -1,14 +1,19 @@
 import { getActiveFile } from './workspace-manager.js';
+import { CODE_VIEWS, hasCodeView, resolveCodeView, storedCodeView } from './code-view.js';
+import { applyCodeHeight, createCodeHeightHandle, parseCodeHeightPx } from './code-height.js';
 import {
     getDividerTitle,
     isDivider,
     parseDivider,
     DEFAULT_DIVIDER_TYPE,
     DIVIDER_HEIGHTS,
+    DIVIDER_WRAPS,
     PLAIN_DIVIDER_LANG,
     resolveDividerHeight,
     resolveDividerLang,
     resolveDividerType,
+    resolveDividerView,
+    resolveDividerWrap,
     serializeDivider
 } from './divider-model.js';
 
@@ -163,6 +168,12 @@ export function normalizeNoteBlock(value, options = {}) {
     if (type === 'code') {
         const lang = typeof value.lang === 'string' ? value.lang.trim().toLowerCase() : '';
         if (lang) block.lang = lang;
+        // source/live for markdown; the default (live) is not stored.
+        const view = storedCodeView(value.view);
+        if (view) block.view = view;
+        // A dragged editor height ("480px"); none means the default cap.
+        const height = typeof value.height === 'string' ? value.height.trim().toLowerCase() : '';
+        if (parseCodeHeightPx(height) !== null) block.height = height;
     }
     return block;
 }
@@ -1256,15 +1267,38 @@ function mountCodeDividerEditor(dividerType, { divider, commit }) {
 
     const host = document.createElement('div');
     host.className = 'checklist-divider-code-host';
-    const applyHeight = (height) => host.classList.toggle('is-height-auto', height === 'auto');
+    const applyHeight = height => applyCodeHeight(host, height);
     applyHeight(resolveDividerHeight(divider));
     const editor = factory({
         parent: host,
         doc: divider.value,
         lang: resolveDividerLang(divider),
+        view: resolveDividerView(divider),
+        wrap: resolveDividerWrap(divider) === 'on',
         placeholder: dividerType.placeholder || '',
         onChange: value => commit({ value })
     });
+
+    // source/live, shown only for languages with a live view (markdown).
+    let storedView = divider.view;
+    const viewLabel = createDividerHeadLabel('view');
+    const viewSelect = createDividerOptionSelect({
+        label: 'Editor view',
+        options: CODE_VIEWS,
+        selected: resolveCodeView('markdown', storedView)
+    });
+    const applyViewVisibility = (lang) => {
+        const visible = hasCodeView(lang);
+        viewLabel.hidden = !visible;
+        viewSelect.hidden = !visible;
+    };
+    applyViewVisibility(resolveDividerLang(divider));
+    viewSelect.addEventListener('change', () => {
+        storedView = viewSelect.value;
+        commit({ view: viewSelect.value });
+        editor.setView(viewSelect.value);
+    });
+    viewSelect.addEventListener('click', event => event.stopPropagation());
 
     const langSelect = createDividerLangSelect({
         selected: resolveDividerLang(divider),
@@ -1273,6 +1307,10 @@ function mountCodeDividerEditor(dividerType, { divider, commit }) {
     langSelect.addEventListener('change', () => {
         commit({ lang: langSelect.value });
         editor.setLanguage(langSelect.value);
+        editor.setView(resolveCodeView(langSelect.value, storedView));
+        applyViewVisibility(langSelect.value);
+        currentLang = resolveDividerLang({ type: divider.type, lang: langSelect.value });
+        applyWrap();
     });
     // Picking a language should not select the row or open its menu.
     langSelect.addEventListener('click', event => event.stopPropagation());
@@ -1288,6 +1326,51 @@ function mountCodeDividerEditor(dividerType, { divider, commit }) {
     });
     heightSelect.addEventListener('click', event => event.stopPropagation());
 
+    // Without a pick, wrap follows the language (markdown on, code off), so a
+    // language change can flip it.
+    let storedWrap = divider.wrap;
+    let currentLang = resolveDividerLang(divider);
+    const wrapSelect = createDividerOptionSelect({
+        label: 'Line wrap',
+        options: DIVIDER_WRAPS,
+        selected: resolveDividerWrap(divider)
+    });
+    const applyWrap = () => {
+        const wrap = resolveDividerWrap({ type: divider.type, lang: currentLang, wrap: storedWrap });
+        wrapSelect.value = wrap;
+        editor.setWrap(wrap === 'on');
+    };
+    wrapSelect.addEventListener('change', () => {
+        storedWrap = wrapSelect.value;
+        commit({ wrap: wrapSelect.value });
+        applyWrap();
+    });
+    wrapSelect.addEventListener('click', event => event.stopPropagation());
+
+    // Dragging sets an exact height ("480px"); it then shows in the select
+    // like the named heights. A double click goes back to the type default.
+    const showHeight = (height) => {
+        if (![...heightSelect.options].some(option => option.value === height)) {
+            const option = document.createElement('option');
+            option.value = height;
+            option.textContent = height;
+            heightSelect.appendChild(option);
+        }
+        heightSelect.value = height;
+    };
+    const heightHandle = createCodeHeightHandle(host, {
+        onCommit: (height) => {
+            commit({ height });
+            showHeight(height);
+        },
+        onReset: () => {
+            commit({ height: '' });
+            const height = resolveDividerHeight({ type: divider.type });
+            applyHeight(height);
+            showHeight(height);
+        }
+    });
+
     // Same header as a note code block: `label [select]` pairs. It sits above
     // the editor because the table is often wider than the pane, so controls
     // beside the editor could end up off-screen.
@@ -1297,10 +1380,14 @@ function mountCodeDividerEditor(dividerType, { divider, commit }) {
         createDividerHeadLabel(dividerType.label),
         langSelect,
         createDividerHeadLabel('height'),
-        heightSelect
+        heightSelect,
+        createDividerHeadLabel('wrap'),
+        wrapSelect,
+        viewLabel,
+        viewSelect
     );
 
-    element.append(head, host);
+    element.append(head, host, heightHandle);
     // Escape leaves the editor like the other cells, unless CodeMirror used
     // it first (closing search or autocomplete).
     element.addEventListener('keydown', (event) => {

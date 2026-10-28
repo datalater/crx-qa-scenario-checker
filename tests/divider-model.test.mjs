@@ -8,6 +8,8 @@ import {
     resolveDividerHeight,
     resolveDividerLang,
     resolveDividerType,
+    resolveDividerView,
+    resolveDividerWrap,
     serializeDivider
 } from '../modules/divider-model.js';
 import { assertDeepEqual, assertEqual, test } from './lib/test-runner.mjs';
@@ -15,10 +17,10 @@ import { assertDeepEqual, assertEqual, test } from './lib/test-runner.mjs';
 const roundTrip = raw => serializeDivider(parseDivider(raw));
 
 test('divider model reads every legacy shape', () => {
-    assertDeepEqual(parseDivider(true), { value: '', type: 'text', color: '', lang: '', height: '' });
-    assertDeepEqual(parseDivider('  Group  '), { value: 'Group', type: 'text', color: '', lang: '', height: '' });
-    assertDeepEqual(parseDivider({ value: 'G', color: '#f85149' }), { value: 'G', type: 'text', color: '#f85149', lang: '', height: '' });
-    assertDeepEqual(parseDivider({ value: true, color: '#f85149' }), { value: '', type: 'text', color: '#f85149', lang: '', height: '' });
+    assertDeepEqual(parseDivider(true), { value: '', type: 'text', color: '', lang: '', height: '', view: '', wrap: '' });
+    assertDeepEqual(parseDivider('  Group  '), { value: 'Group', type: 'text', color: '', lang: '', height: '', view: '', wrap: '' });
+    assertDeepEqual(parseDivider({ value: 'G', color: '#f85149' }), { value: 'G', type: 'text', color: '#f85149', lang: '', height: '', view: '', wrap: '' });
+    assertDeepEqual(parseDivider({ value: true, color: '#f85149' }), { value: '', type: 'text', color: '#f85149', lang: '', height: '', view: '', wrap: '' });
     assertEqual(parseDivider(''), null);
     assertEqual(parseDivider(false), null);
     assertEqual(parseDivider({ value: '   ' }), null);
@@ -47,7 +49,7 @@ test('code keeps indentation but drops surrounding blank lines', () => {
     const value = '\n\nconst canLogin =\n  id.valid()\n  && password.valid()\n\n';
     assertDeepEqual(
         parseDivider({ value, type: 'code' }),
-        { value: 'const canLogin =\n  id.valid()\n  && password.valid()', type: 'code', color: '', lang: '', height: '' }
+        { value: 'const canLogin =\n  id.valid()\n  && password.valid()', type: 'code', color: '', lang: '', height: '', view: '', wrap: '' }
     );
     assertEqual(parseDivider({ value: '  indented', type: 'code' }).value, '  indented');
     assertEqual(parseDivider({ value: '  trimmed  ' }).value, 'trimmed');
@@ -134,4 +136,56 @@ test('changing height keeps lang and color', () => {
         serializeDivider({ ...parseDivider(raw), height: 'auto' }),
         { value: 'a', type: 'code', lang: 'json', height: 'auto', color: '#3fb950' }
     );
+});
+
+test('markdown code divider view defaults to live and only stores source', () => {
+    assertEqual(resolveDividerView({ type: 'code', lang: 'markdown' }), 'live');
+    assertEqual(resolveDividerView({ type: 'code', lang: 'markdown', view: ' Source ' }), 'source');
+    assertEqual(resolveDividerView({ type: 'code', lang: 'markdown', view: 'preview' }), 'live');
+    assertEqual(resolveDividerView({ type: 'code' }), '');
+    assertEqual(resolveDividerView({ type: 'code', lang: 'json', view: 'source' }), '');
+    assertEqual(resolveDividerView({ type: 'text', lang: 'markdown', view: 'source' }), '');
+    assertDeepEqual(
+        serializeDivider({ value: '# a', type: 'code', lang: 'markdown', view: 'live' }),
+        { value: '# a', type: 'code', lang: 'markdown' }
+    );
+    assertDeepEqual(
+        roundTrip({ value: '# a', type: 'code', lang: 'markdown', view: 'source' }),
+        { value: '# a', type: 'code', lang: 'markdown', view: 'source' }
+    );
+});
+
+test('view survives a language change and is dropped for text types', () => {
+    const raw = { value: '# a', type: 'code', lang: 'markdown', view: 'source', color: '#3fb950' };
+    assertDeepEqual(
+        serializeDivider({ ...parseDivider(raw), lang: 'json' }),
+        { value: '# a', type: 'code', lang: 'json', view: 'source', color: '#3fb950' }
+    );
+    assertDeepEqual(serializeDivider({ ...parseDivider(raw), type: 'text' }), { value: '# a', color: '#3fb950' });
+});
+
+test('a dragged divider height is stored as px and survives other edits', () => {
+    assertEqual(resolveDividerHeight({ type: 'code', height: '480px' }), '480px');
+    assertEqual(resolveDividerHeight({ type: 'code', height: '20px' }), 'fixed');
+    assertEqual(resolveDividerHeight({ type: 'code', height: '480' }), 'fixed');
+    const raw = { value: 'a', type: 'code', lang: 'markdown', height: '480px' };
+    assertDeepEqual(roundTrip(raw), raw);
+    assertDeepEqual(serializeDivider({ ...parseDivider(raw), view: 'source' }), { ...raw, view: 'source' });
+    assertDeepEqual(serializeDivider({ ...parseDivider(raw), height: '' }), { value: 'a', type: 'code', lang: 'markdown' });
+});
+
+test('code divider wrap defaults to on for markdown and off for code', () => {
+    assertEqual(resolveDividerWrap({ type: 'code' }), 'off');
+    assertEqual(resolveDividerWrap({ type: 'code', lang: 'markdown' }), 'on');
+    assertEqual(resolveDividerWrap({ type: 'code', wrap: ' ON ' }), 'on');
+    assertEqual(resolveDividerWrap({ type: 'code', lang: 'markdown', wrap: 'off' }), 'off');
+    assertEqual(resolveDividerWrap({ type: 'code', lang: 'markdown', wrap: 'soft' }), 'on');
+    assertEqual(resolveDividerWrap({ type: 'text', wrap: 'on' }), '');
+    // Only a pick that differs from the language default is stored.
+    assertDeepEqual(serializeDivider({ value: 'a', type: 'code', wrap: 'off' }), { value: 'a', type: 'code' });
+    assertDeepEqual(serializeDivider({ value: 'a', type: 'code', lang: 'markdown', wrap: 'on' }), { value: 'a', type: 'code', lang: 'markdown' });
+    const raw = { value: 'a', type: 'code', lang: 'markdown', height: '480px', wrap: 'off' };
+    assertDeepEqual(roundTrip(raw), raw);
+    assertDeepEqual(roundTrip({ value: 'a', type: 'code', wrap: 'on' }), { value: 'a', type: 'code', wrap: 'on' });
+    assertEqual(serializeDivider({ ...parseDivider(raw), type: 'text' }), 'a');
 });

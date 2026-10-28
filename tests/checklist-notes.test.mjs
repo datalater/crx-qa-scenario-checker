@@ -364,3 +364,24 @@ test('a legacy note carries no tone', () => {
     assertEqual(getChecklistNoteChips({ note: 'plain memo' })[0].tone, '');
     assertEqual(getChecklistNoteChips({ ref: [{ slug: 'AC-01' }] })[0].tone, '');
 });
+
+test('code note blocks store a non-default view only', () => {
+    assertDeepEqual(
+        normalizeNoteBlock({ type: 'code', value: '# a', lang: 'markdown', view: 'Source' }),
+        { type: 'code', value: '# a', lang: 'markdown', view: 'source' }
+    );
+    assertDeepEqual(
+        normalizeNoteBlock({ type: 'code', value: '# a', lang: 'markdown', view: 'live' }),
+        { type: 'code', value: '# a', lang: 'markdown' }
+    );
+    assertDeepEqual(normalizeNoteBlock({ type: 'text', value: 'a', view: 'source' }), { type: 'text', value: 'a' });
+});
+
+test('code note blocks keep a dragged height only', () => {
+    assertDeepEqual(
+        normalizeNoteBlock({ type: 'code', value: 'a', height: '480PX' }),
+        { type: 'code', value: 'a', height: '480px' }
+    );
+    assertDeepEqual(normalizeNoteBlock({ type: 'code', value: 'a', height: 'auto' }), { type: 'code', value: 'a' });
+    assertDeepEqual(normalizeNoteBlock({ type: 'code', value: 'a', height: '10px' }), { type: 'code', value: 'a' });
+});

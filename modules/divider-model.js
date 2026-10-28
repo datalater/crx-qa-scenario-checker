@@ -4,15 +4,19 @@
  * Stored shapes (all still readable):
  *   true                                   empty text divider
  *   "Error cases"                          text divider
- *   { value, color?, type?, lang?, height? } divider with attributes
+ *   { value, color?, type?, lang?, height?, view?, wrap? } divider with attributes
  *
  * `type` stores what the text *is* (text, code, ...). How a type
- * is edited lives in DIVIDER_TYPES. Code types also take `lang` and `height`;
- * each falls back to the type default, and a default is never stored.
+ * is edited lives in DIVIDER_TYPES. Code types also take `lang`, `height`,
+ * `view` (source/live, markdown only) and `wrap` (off/on, default per
+ * language); each falls back to its default, and a default is never stored.
  *
  * Every write goes through `serializeDivider({ ...parseDivider(raw), patch })`
  * so changing one attribute can never drop another.
  */
+
+import { parseCodeHeightPx } from './code-height.js';
+import { CODE_WRAPS, DEFAULT_CODE_VIEW, defaultCodeWrap, resolveCodeView } from './code-view.js';
 
 export const DEFAULT_DIVIDER_TYPE = 'text';
 
@@ -27,12 +31,18 @@ export const DIVIDER_TYPES = Object.freeze({
         editor: 'code',
         lang: 'tsx',
         height: 'fixed',
+        view: DEFAULT_CODE_VIEW,
         placeholder: 'Write code'
     })
 });
 
-// `fixed` caps the editor (it scrolls past that); `auto` grows to fit.
+// `fixed` caps the editor (it scrolls past that); `auto` grows to fit. A
+// dragged height ("480px", see code-height.js) is also valid.
 export const DIVIDER_HEIGHTS = Object.freeze(['fixed', 'auto']);
+
+// `off` scrolls long lines sideways; `on` wraps them to the editor width.
+// The default depends on the language (see defaultCodeWrap).
+export const DIVIDER_WRAPS = CODE_WRAPS;
 
 // Explicit "no highlighting" for a code divider. An empty `lang` already means
 // "use the type default", so plain text needs its own id.
@@ -48,7 +58,7 @@ function normalizeDividerType(value) {
 }
 
 // Attributes that only mean something for code editors.
-const CODE_ATTRIBUTES = Object.freeze(['lang', 'height']);
+const CODE_ATTRIBUTES = Object.freeze(['lang', 'height', 'view', 'wrap']);
 
 function normalizeAttribute(value) {
     return typeof value === 'string' ? value.trim().toLowerCase() : '';
@@ -59,11 +69,14 @@ function normalizeAttribute(value) {
  * (they may be code in a newer build), and omitted when it equals the type
  * default.
  */
-function storedCodeAttribute(type, key, value) {
+function storedCodeAttribute(type, key, value, divider) {
     if (!value) return '';
     const known = Object.prototype.hasOwnProperty.call(DIVIDER_TYPES, type) ? DIVIDER_TYPES[type] : null;
-    if (known && (known.editor !== 'code' || known[key] === value)) return '';
-    return value;
+    if (!known) return value;
+    if (known.editor !== 'code') return '';
+    // wrap's default follows the language rather than the type.
+    const fallback = key === 'wrap' ? defaultCodeWrap(resolveDividerLang({ ...divider, type })) : known[key];
+    return fallback === value ? '' : value;
 }
 
 function resolveCodeAttribute(divider, key) {
@@ -78,13 +91,30 @@ export function resolveDividerLang(divider) {
 }
 
 /**
+ * View the editor should use: '' unless the language has views (markdown).
+ * A stored view outside markdown is ignored but kept.
+ */
+export function resolveDividerView(divider) {
+    if (resolveDividerType(divider?.type).editor !== 'code') return '';
+    return resolveCodeView(resolveDividerLang(divider), divider?.view);
+}
+
+/** Line wrapping for code editors (default per language); '' for text types. */
+export function resolveDividerWrap(divider) {
+    if (resolveDividerType(divider?.type).editor !== 'code') return '';
+    const wrap = normalizeAttribute(divider?.wrap);
+    return DIVIDER_WRAPS.includes(wrap) ? wrap : defaultCodeWrap(resolveDividerLang(divider));
+}
+
+/**
  * Height mode the editor should use. An unknown stored value renders as the
  * type default but is still preserved by serialize.
  */
 export function resolveDividerHeight(divider) {
     const height = resolveCodeAttribute(divider, 'height');
     if (!height) return '';
-    return DIVIDER_HEIGHTS.includes(height) ? height : resolveDividerType(divider?.type).height;
+    if (DIVIDER_HEIGHTS.includes(height) || parseCodeHeightPx(height) !== null) return height;
+    return resolveDividerType(divider?.type).height;
 }
 
 /**
@@ -108,11 +138,11 @@ function normalizeDividerText(value, type) {
 }
 
 function emptyDivider(type, value = '') {
-    return { value, type, color: '', lang: '', height: '' };
+    return { value, type, color: '', lang: '', height: '', view: '', wrap: '' };
 }
 
 /**
- * Any stored divider value -> `{ value, type, color, lang, height }`, or null
+ * Any stored divider value -> `{ value, type, color, lang, height, view, wrap }`, or null
  * when the value is not a divider. An empty divider (`true`) has `value: ''`.
  */
 export function parseDivider(raw) {
@@ -131,7 +161,9 @@ export function parseDivider(raw) {
         type,
         color: typeof raw.color === 'string' ? raw.color.trim() : '',
         lang: normalizeAttribute(raw.lang),
-        height: normalizeAttribute(raw.height)
+        height: normalizeAttribute(raw.height),
+        view: normalizeAttribute(raw.view),
+        wrap: normalizeAttribute(raw.wrap)
     };
 }
 
@@ -146,7 +178,7 @@ export function serializeDivider(divider) {
     const color = typeof source.color === 'string' ? source.color.trim() : '';
     const value = normalizeDividerText(source.value, type) || true;
     const codeAttributes = CODE_ATTRIBUTES
-        .map(key => [key, storedCodeAttribute(type, key, normalizeAttribute(source[key]))])
+        .map(key => [key, storedCodeAttribute(type, key, normalizeAttribute(source[key]), source)])
         .filter(([, attribute]) => attribute);
 
     if (type === DEFAULT_DIVIDER_TYPE && !color && codeAttributes.length === 0) return value;

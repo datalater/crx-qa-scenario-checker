@@ -10,9 +10,8 @@ import { css } from "@codemirror/lang-css";
 import { html } from "@codemirror/lang-html";
 import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
-import { markdown } from "@codemirror/lang-markdown";
+import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import {
-  HighlightStyle,
   bracketMatching,
   foldGutter,
   indentOnInput,
@@ -32,7 +31,8 @@ import {
   placeholder as placeholderExtension,
   rectangularSelection,
 } from "@codemirror/view";
-import { tags as t } from "@lezer/highlight";
+import { liveMarkdown, markdownSlashCommands } from "./live-markdown.js";
+import { PALETTE, darkHighlightStyle } from "./theme-palette.js";
 
 const LANGUAGE_EXTENSIONS = {
   javascript,
@@ -42,8 +42,12 @@ const LANGUAGE_EXTENSIONS = {
   json,
   html,
   css,
-  // Fenced code blocks inside markdown reuse the languages above.
-  markdown: () => markdown({ codeLanguages: resolveFencedLanguage }),
+  // GFM (tables, strikethrough, task lists) on top of CommonMark. Fenced code
+  // blocks reuse the languages above.
+  markdown: () => [
+    markdown({ base: markdownLanguage, codeLanguages: resolveFencedLanguage }),
+    markdownSlashCommands,
+  ],
 };
 
 const FENCE_ALIASES = { js: "javascript", ts: "typescript", md: "markdown" };
@@ -65,51 +69,16 @@ function resolveLanguage(lang) {
   return factory ? [factory()] : [];
 }
 
-// Palette copied from styles/reset-layer.css so a code block reads like the
-// JSON editor next to it. CodeMirror's defaultHighlightStyle is built for light
-// backgrounds and is unreadable here.
-const PALETTE = {
-  text: "#e6edf3",
-  muted: "#7d8590",
-  keyword: "#ff7b72",
-  string: "#a5d6ff",
-  number: "#79c0ff",
-  name: "#79c0ff",
-  func: "#d2a8ff",
-  type: "#ffa657",
-  comment: "#8b949e",
-  invalid: "#f85149",
-};
+// `cm-wrapping` lets other extensions (the live table) follow the wrap mode.
+function resolveWrap(wrap) {
+  return wrap ? [EditorView.lineWrapping, EditorView.editorAttributes.of({ class: "cm-wrapping" })] : [];
+}
 
-const darkHighlightStyle = HighlightStyle.define(
-  [
-    { tag: t.keyword, color: PALETTE.keyword },
-    { tag: [t.controlKeyword, t.moduleKeyword], color: PALETTE.keyword },
-    { tag: [t.name, t.deleted, t.character, t.propertyName, t.macroName], color: PALETTE.text },
-    { tag: [t.variableName], color: PALETTE.text },
-    { tag: [t.function(t.variableName), t.labelName], color: PALETTE.func },
-    { tag: [t.color, t.constant(t.name), t.standard(t.name)], color: PALETTE.number },
-    { tag: [t.definition(t.name), t.separator], color: PALETTE.text },
-    { tag: [t.className], color: PALETTE.type },
-    { tag: [t.typeName, t.changed, t.annotation, t.modifier, t.self, t.namespace], color: PALETTE.type },
-    { tag: [t.number, t.integer, t.float], color: PALETTE.number },
-    { tag: [t.operator, t.operatorKeyword], color: PALETTE.keyword },
-    { tag: [t.regexp, t.escape, t.special(t.string)], color: PALETTE.string },
-    { tag: [t.string, t.processingInstruction, t.inserted], color: PALETTE.string },
-    { tag: [t.meta, t.comment], color: PALETTE.comment, fontStyle: "italic" },
-    { tag: t.link, color: PALETTE.number, textDecoration: "underline" },
-    { tag: t.heading, color: PALETTE.keyword, fontWeight: "bold" },
-    { tag: t.url, color: PALETTE.number },
-    { tag: t.monospace, color: PALETTE.string },
-    { tag: t.quote, color: PALETTE.comment },
-    { tag: [t.atom, t.bool, t.special(t.variableName)], color: PALETTE.type },
-    { tag: t.invalid, color: PALETTE.invalid },
-    { tag: t.strikethrough, textDecoration: "line-through" },
-    { tag: t.emphasis, fontStyle: "italic" },
-    { tag: t.strong, fontWeight: "bold" },
-  ],
-  { themeType: "dark" }
-);
+// Only markdown has a live view (see modules/code-view.js); any other
+// language, or the source view, gets nothing.
+function resolveView(lang, view) {
+  return String(lang || "").toLowerCase() === "markdown" && view === "live" ? liveMarkdown() : [];
+}
 
 /**
  * `dark: true` matters beyond colors: it adds CodeMirror's `cm-dark` class,
@@ -221,6 +190,8 @@ export function createCodeEditor(options) {
     parent,
     doc = "",
     lang = "",
+    view = "",
+    wrap = false,
     placeholder = "",
     onChange = () => {},
   } = options;
@@ -228,7 +199,11 @@ export function createCodeEditor(options) {
   // The language sits in a compartment so it can change without rebuilding
   // the editor (and losing focus, history and selection).
   const languageCompartment = new Compartment();
-  const view = new EditorView({
+  const viewCompartment = new Compartment();
+  const wrapCompartment = new Compartment();
+  let currentLang = lang;
+  let currentView = view;
+  const editorView = new EditorView({
     parent,
     state: EditorState.create({
       doc,
@@ -248,6 +223,8 @@ export function createCodeEditor(options) {
         highlightActiveLine(),
         placeholderExtension(placeholder),
         languageCompartment.of(resolveLanguage(lang)),
+        viewCompartment.of(resolveView(lang, view)),
+        wrapCompartment.of(resolveWrap(wrap)),
         search(),
         syntaxHighlighting(darkHighlightStyle, { fallback: true }),
         keymap.of([
@@ -262,7 +239,7 @@ export function createCodeEditor(options) {
           ...completionKeymap,
         ]),
         EditorView.updateListener.of((update) => {
-          if (update.docChanged) onChange(view.state.doc.toString());
+          if (update.docChanged) onChange(editorView.state.doc.toString());
         }),
         editorTheme(),
       ],
@@ -270,19 +247,34 @@ export function createCodeEditor(options) {
   });
 
   return {
-    getValue: () => view.state.doc.toString(),
+    getValue: () => editorView.state.doc.toString(),
     setValue(nextValue) {
       const insert = nextValue ?? "";
-      if (insert === view.state.doc.toString()) return;
-      view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert },
+      if (insert === editorView.state.doc.toString()) return;
+      editorView.dispatch({
+        changes: { from: 0, to: editorView.state.doc.length, insert },
       });
     },
-    focus: () => view.focus(),
-    blur: () => view.contentDOM.blur(),
+    focus: () => editorView.focus(),
+    blur: () => editorView.contentDOM.blur(),
     setLanguage(nextLang) {
-      view.dispatch({ effects: languageCompartment.reconfigure(resolveLanguage(nextLang)) });
+      currentLang = nextLang;
+      editorView.dispatch({
+        effects: [
+          languageCompartment.reconfigure(resolveLanguage(nextLang)),
+          viewCompartment.reconfigure(resolveView(currentLang, currentView)),
+        ],
+      });
     },
-    destroy: () => view.destroy(),
+    /** `source` or `live`; ignored by languages without a live view. */
+    setView(nextView) {
+      currentView = nextView;
+      editorView.dispatch({ effects: viewCompartment.reconfigure(resolveView(currentLang, currentView)) });
+    },
+    /** Wraps long lines to the editor width instead of scrolling sideways. */
+    setWrap(nextWrap) {
+      editorView.dispatch({ effects: wrapCompartment.reconfigure(resolveWrap(nextWrap)) });
+    },
+    destroy: () => editorView.destroy(),
   };
 }

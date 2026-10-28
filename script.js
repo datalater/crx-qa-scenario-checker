@@ -15,6 +15,8 @@ import { nowTs, nowIso } from './utils/date.js';
 import * as Workspace from './modules/workspace-manager.js';
 import * as UI from './modules/ui-renderer.js';
 import { DIVIDER_TYPE_IDS, DIVIDER_TYPES, parseDivider, serializeDivider } from './modules/divider-model.js';
+import { CODE_VIEWS, defaultCodeWrap, hasCodeView, resolveCodeView } from './modules/code-view.js';
+import { applyCodeHeight, createCodeHeightHandle } from './modules/code-height.js';
 import * as Editor from './modules/editor-manager.js';
 import { captureEditorSelectionSnapshot, restoreEditorSelectionSnapshot } from './modules/editor-caret-manager.js';
 import { createResizerLayoutManager } from './modules/resizer-layout-manager.js';
@@ -3656,6 +3658,29 @@ function buildNoteBlockRow(block, blockIndex, note, noteIndex, notes, commitNote
             patchBlock({ lang: langSelect.value }, { refreshPanel: true });
         });
         head.appendChild(langSelect);
+
+        // source/live, only for languages with a live view (markdown).
+        if (hasCodeView(block.lang)) {
+            const viewKind = document.createElement('span');
+            viewKind.className = 'step-detail-block-kind';
+            viewKind.textContent = 'view';
+            const viewSelect = document.createElement('select');
+            viewSelect.className = 'step-detail-lang-select';
+            viewSelect.setAttribute('aria-label', 'Editor view');
+            const selectedView = resolveCodeView(block.lang, block.view);
+            CODE_VIEWS.forEach((view) => {
+                const option = document.createElement('option');
+                option.value = view;
+                option.textContent = view;
+                option.selected = view === selectedView;
+                viewSelect.appendChild(option);
+            });
+            viewSelect.addEventListener('change', () => {
+                stepDetailActiveNote = noteIndex;
+                patchBlock({ view: viewSelect.value }, { refreshPanel: true });
+            });
+            head.append(viewKind, viewSelect);
+        }
     }
 
     const headSpacer = document.createElement('span');
@@ -3697,6 +3722,7 @@ function buildNoteBlockRow(block, blockIndex, note, noteIndex, notes, commitNote
     if (block.type === 'code') {
         const host = document.createElement('div');
         host.className = 'step-detail-code-host';
+        applyCodeHeight(host, block.height || '');
         row.appendChild(host);
 
         const factory = window.QaCodeMirror?.createCodeEditor;
@@ -3706,6 +3732,9 @@ function buildNoteBlockRow(block, blockIndex, note, noteIndex, notes, commitNote
                 parent: host,
                 doc: block.value,
                 lang: block.lang || '',
+                view: resolveCodeView(block.lang, block.view),
+                // Same per-language default as code dividers (markdown wraps).
+                wrap: defaultCodeWrap(block.lang) === 'on',
                 placeholder: 'Paste code here',
                 onChange: (value) => {
                     pending = value;
@@ -3720,6 +3749,15 @@ function buildNoteBlockRow(block, blockIndex, note, noteIndex, notes, commitNote
                     if (pending !== block.value) patchBlock({ value: pending });
                 }
             });
+            // Same drag handle as code dividers; a double click restores the
+            // default 300px cap.
+            row.appendChild(createCodeHeightHandle(host, {
+                onCommit: height => patchBlock({ height }),
+                onReset: () => {
+                    applyCodeHeight(host, '');
+                    patchBlock({ height: '' });
+                }
+            }));
         } else {
             const fallback = document.createElement('textarea');
             fallback.className = 'step-detail-input';

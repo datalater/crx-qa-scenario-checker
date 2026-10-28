@@ -1,0 +1,40 @@
+/* Drag handle under code dividers and note code blocks (modules/code-height.js). */
+
+.code-height-handle {
+  position: relative;
+  height: 10px;
+  margin-top: -3px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+/* A short pill in the middle; the whole strip is the hit area. */
+.code-height-handle::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  transform: translateX(-50%);
+  background: var(--border-color);
+  transition: background 120ms ease;
+}
+
+.code-height-handle:hover::before,
+.code-height-handle.is-dragging::before {
+  background: var(--accent-primary);
+}
+
+/* A dragged height ("480px") is exact. CodeMirror's theme is unlayered and
+   caps the editor at 300px; only a layered !important outranks it. */
+.is-height-custom > .cm-editor {
+  height: var(--code-editor-height) !important;
+  max-height: none !important;
+}
+
+.is-height-custom > .cm-editor > .cm-scroller {
+  height: 100% !important;
+  max-height: none !important;
+}

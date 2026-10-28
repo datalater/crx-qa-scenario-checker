@@ -10,6 +10,7 @@ import './editor-find-replace-manager.test.mjs';
 import './editor-manager.test.mjs';
 import './checklist-divider-support.test.mjs';
 import './divider-model.test.mjs';
+import './markdown-table.test.mjs';
 import './checklist-notes.test.mjs';
 import './step-detail-panel-refresh.test.mjs';
 import './pass-summary-refresh.test.mjs';
