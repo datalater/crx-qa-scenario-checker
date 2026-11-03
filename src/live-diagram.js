@@ -30,6 +30,8 @@ import {
   joinFence,
   serializeFlowchart,
   setDirection,
+  setTitle,
+  titleOf,
   splitFence,
   updateEdge,
   updateNode,
@@ -64,6 +66,7 @@ const HELP_SECTIONS = [
   ["마우스", [
     [["동그라미 끌기"], "다른 노드에 놓으면 연결, 빈 곳이면 새 노드"],
     [["간선 더블클릭"], "간선 설명 편집"],
+    [["제목 더블클릭"], "상단 제목 입력칸으로 이동"],
     [["빈 곳 끌기"], "화면 이동 (확대했을 때)"],
   ]],
   ["보기", [
@@ -167,6 +170,36 @@ class DiagramController {
     this.stage.addEventListener("pointerdown", (event) => this.onPanStart(event));
   }
 
+  /** Title field for the front matter's `title:`; a change is written when it is confirmed. */
+  buildTitleInput(model) {
+    const current = titleOf(model);
+    const input = el("input", "cm-ld-title");
+    input.type = "text";
+    input.title = "다이어그램 제목 (Enter 확정, Esc 취소)";
+    if (current === null) {
+      // Written as a block scalar or another form that cannot be edited safely.
+      input.disabled = true;
+      input.placeholder = "제목 (소스에서 편집)";
+    } else {
+      input.placeholder = "제목";
+      input.value = current;
+    }
+    input.addEventListener("keydown", (event) => {
+      event.stopPropagation();
+      if (event.isComposing) return; // an IME re-sends the key that ends composition
+      if (event.key === "Enter") input.blur();
+      else if (event.key === "Escape") {
+        input.value = current ?? "";
+        input.blur();
+      }
+    });
+    input.addEventListener("change", () => {
+      this.commitModel(setTitle(model, input.value), this.selected);
+      this.stage.focus({ preventScroll: true });
+    });
+    return input;
+  }
+
   /** Lives in the bar (rebuilt with it), so it never covers the drawing. */
   buildZoomControls() {
     const zoom = el("div", "cm-ld-zoom");
@@ -243,6 +276,7 @@ class DiagramController {
     this.bar.replaceChildren();
     if (analysis.editable) {
       this.bar.append(
+        this.buildTitleInput(analysis.model),
         select(DIRECTIONS.map((d) => [d, `방향 ${DIRECTION_ARROWS[d]}`]), analysis.model.direction, (value) =>
           this.commitModel(setDirection(analysis.model, value))
         , "배치 방향"),
@@ -577,6 +611,7 @@ class DiagramController {
     if (!this.analysis.editable || event.target.closest(".cm-ld-tools, .cm-ld-editor")) return;
     const node = event.target.closest(".pele-node");
     if (node) return this.editNodeLabel(node.dataset.id);
+    if (event.target.closest(".pele-title")) return this.editTitle();
     const edge = event.target.closest(".pele-edge, .pele-edge-label");
     const index = edge ? this.edgeIndexOf(edge) : -1;
     if (index >= 0) this.editEdgeLabel(index);
@@ -750,6 +785,14 @@ class DiagramController {
       else if (via === "sibling") this.addSibling(id, renamed);
       else this.commitModel(renamed, { kind: "node", id });
     });
+  }
+
+  /** Moves to the title field in the bar. */
+  editTitle() {
+    const input = this.bar.querySelector(".cm-ld-title");
+    if (!input || input.disabled) return;
+    input.focus();
+    input.select();
   }
 
   editEdgeLabel(index) {
@@ -1058,6 +1101,22 @@ export const diagramTheme = EditorView.theme({
     strokeWidth: "2.5px",
   },
   ".cm-ld-stage .pele-edge, .cm-ld-stage .pele-edge-label": { cursor: "pointer" },
+  ".cm-ld-title": {
+    flex: "0 1 180px",
+    minWidth: "90px",
+    padding: "2px 8px",
+    border: "1px solid #30363d",
+    borderRadius: "4px",
+    backgroundColor: "#0d1117",
+    color: PALETTE.text,
+    font: "inherit",
+    fontSize: "12px",
+    outline: "none",
+  },
+  ".cm-ld-title:focus": { borderColor: ACCENT },
+  ".cm-ld-title:disabled": { opacity: "0.6" },
+  ".cm-ld-stage .pele-title": { cursor: "text" },
+  ".cm-ld-stage .pele-title:hover": { fill: ACCENT },
   ".cm-ld-hit": { stroke: "transparent", strokeWidth: "14px", fill: "none", pointerEvents: "stroke" },
   ".cm-ld-stage .pele-edge:hover > path:not(.cm-ld-hit), .cm-ld-stage .pele-edge.cm-ld-sel > path:not(.cm-ld-hit)": {
     stroke: ACCENT,
