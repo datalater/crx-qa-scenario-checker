@@ -13,6 +13,7 @@ import { Decoration, EditorView, WidgetType } from "@codemirror/view";
 import { parse, register, render } from "pele/core";
 import flowchart from "pele/diagrams/flowchart";
 import { exportSvg } from "./diagram-export.js";
+import { ZOOM_STEP, clampScale, fitScale, scaleAfterWheel, scrollAfterZoom } from "./diagram-zoom.js";
 import { planTableDeletion } from "./markdown-table.js";
 import {
   DIRECTIONS,
@@ -39,6 +40,39 @@ register(flowchart);
 
 /** Base font size of the drawn diagram (pele's default is 16). */
 const FONT_SIZE = 13;
+
+/** The stage scrolls past this height, so a tall diagram does not push the table down. */
+const STAGE_MAX_HEIGHT = 560;
+const STAGE_PADDING = { x: 32, y: 60 };
+
+/** Shortcut help: [section, [[keys, what it does]]]. Keep in step with the key handlers below. */
+const HELP_SECTIONS = [
+  ["노드", [
+    [["←", "↑", "↓", "→"], "가까운 노드로 이동"],
+    [["Enter"], "이름 편집 (더블클릭도 가능)"],
+    [["Tab"], "이어지는 하위 노드 추가"],
+    [["Shift", "Tab"], "같은 부모에서 갈라지는 형제 노드 추가"],
+    [["Delete"], "삭제 후 이전 노드 선택"],
+    [["Esc"], "선택 해제"],
+  ]],
+  ["이름 입력 중", [
+    [["Enter"], "확정"],
+    [["Tab"], "확정하고 하위 노드 추가"],
+    [["Shift", "Tab"], "확정하고 형제 노드 추가"],
+    [["Esc"], "취소"],
+  ]],
+  ["마우스", [
+    [["동그라미 끌기"], "다른 노드에 놓으면 연결, 빈 곳이면 새 노드"],
+    [["간선 더블클릭"], "간선 설명 편집"],
+    [["빈 곳 끌기"], "화면 이동 (확대했을 때)"],
+  ]],
+  ["보기", [
+    [["+"], "확대"],
+    [["-"], "축소"],
+    [["0"], "100%"],
+    [["Ctrl/⌘", "휠"], "포인터 위치 기준 확대/축소"],
+  ]],
+];
 
 const ARROW_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
 
@@ -107,6 +141,8 @@ class DiagramController {
     this.block = block;
     this.selected = null; // { kind: "node", id } | { kind: "edge", index }
     this.sourceOpen = false;
+    this.scale = 1; // 100%: the drawing keeps its size and the stage scrolls
+    this.natural = null;
     this.analysis = null;
     this.build();
     this.refresh();
@@ -127,6 +163,21 @@ class DiagramController {
     this.stage.addEventListener("click", (event) => this.onClick(event));
     this.stage.addEventListener("dblclick", (event) => this.onDoubleClick(event));
     this.stage.addEventListener("keydown", (event) => this.onKeyDown(event));
+    this.stage.addEventListener("wheel", (event) => this.onWheel(event), { passive: false });
+    this.stage.addEventListener("pointerdown", (event) => this.onPanStart(event));
+  }
+
+  /** Lives in the bar (rebuilt with it), so it never covers the drawing. */
+  buildZoomControls() {
+    const zoom = el("div", "cm-ld-zoom");
+    this.zoomLabel = button(`${Math.round(this.scale * 100)}%`, "100%로 (0)", () => this.zoomTo(1), "cm-ld-zoom-label");
+    zoom.append(
+      button("−", "축소 (-, Ctrl/⌘+휠)", () => this.zoomBy(1 / ZOOM_STEP)),
+      this.zoomLabel,
+      button("+", "확대 (+, Ctrl/⌘+휠)", () => this.zoomBy(ZOOM_STEP)),
+      button("맞춤", "전체가 보이게 맞춤", () => this.zoomFit())
+    );
+    return zoom;
   }
 
   get inner() {
@@ -158,6 +209,7 @@ class DiagramController {
     this.stage.insertAdjacentHTML("afterbegin", svg);
     this.stage.appendChild(this.layer);
     this.layer.replaceChildren();
+    this.applyZoom();
     this.stage.querySelectorAll(".pele-edge").forEach((edge) => {
       // The drawn line is thin; a wide invisible copy makes it clickable.
       edge.querySelectorAll("path:not(.pele-marker)").forEach((path) => {
@@ -201,10 +253,7 @@ class DiagramController {
       );
     }
     const spacer = el("span", "cm-ld-spacer");
-    if (analysis.editable) {
-      spacer.textContent = "←↑↓→ 이동 · Enter 이름 · Tab 하위 · Shift+Tab 형제 · Delete 삭제";
-      spacer.classList.add("cm-ld-hint");
-    }
+    const help = button("?", "단축키 도움말", () => this.toggleHelp(help), "cm-ld-help");
     const more = button("⋯", "더보기 (복사)", () => this.toggleMenu(more));
     more.classList.add("cm-ld-more");
     const toggle = button("</>", "mermaid 소스 보기/편집", () => {
@@ -214,7 +263,99 @@ class DiagramController {
       if (this.sourceOpen) this.source.focus();
     }, this.sourceOpen ? "is-on" : "");
     const del = button("삭제", "다이어그램 삭제", () => this.deleteDiagram(), "is-danger");
-    this.bar.append(spacer, toggle, more, del);
+    this.bar.append(spacer, this.buildZoomControls(), help, toggle, more, del);
+  }
+
+  // ----- zoom and pan -----
+
+  svgEl() {
+    return this.stage.querySelector("svg.pele");
+  }
+
+  /** Sizes the drawing from its natural size; the stage then scrolls instead of shrinking it. */
+  applyZoom() {
+    const svg = this.svgEl();
+    if (!svg) return;
+    const width = Number(svg.getAttribute("width"));
+    const height = Number(svg.getAttribute("height"));
+    if (!width || !height) return;
+    this.natural = { width, height };
+    svg.style.maxWidth = "none";
+    svg.style.width = `${width * this.scale}px`;
+    svg.style.height = `${height * this.scale}px`;
+    if (this.zoomLabel) this.zoomLabel.textContent = `${Math.round(this.scale * 100)}%`;
+    this.stage.classList.toggle("is-zoomed", this.scale !== 1);
+  }
+
+  /** Changes the scale; the point at `anchor` (visible-area px, default centre) stays put. */
+  zoomTo(scale, anchor = null) {
+    const next = clampScale(scale);
+    if (!this.svgEl() || next === this.scale) return;
+    const point = anchor || { x: this.stage.clientWidth / 2, y: this.stage.clientHeight / 2 };
+    const scroll = scrollAfterZoom(this.stage, point, this.scale, next);
+    this.scale = next;
+    this.applyZoom();
+    this.stage.scrollLeft = scroll.scrollLeft;
+    this.stage.scrollTop = scroll.scrollTop;
+    this.applySelection(); // tools and handles are positioned from the drawing
+  }
+
+  zoomBy(factor, anchor = null) {
+    this.zoomTo(this.scale * factor, anchor);
+  }
+
+  zoomFit() {
+    if (!this.natural) return;
+    const box = {
+      width: this.stage.clientWidth - STAGE_PADDING.x,
+      height: STAGE_MAX_HEIGHT - STAGE_PADDING.y,
+    };
+    this.zoomTo(fitScale(this.natural, box));
+    this.stage.scrollLeft = 0;
+    this.stage.scrollTop = 0;
+  }
+
+  /** Ctrl/⌘ + wheel (also a trackpad pinch) zooms at the pointer; a plain wheel scrolls. */
+  onWheel(event) {
+    if (!(event.ctrlKey || event.metaKey)) return;
+    event.preventDefault();
+    const box = this.stage.getBoundingClientRect();
+    this.zoomTo(scaleAfterWheel(this.scale, event.deltaY), {
+      x: event.clientX - box.left,
+      y: event.clientY - box.top,
+    });
+  }
+
+  /** Dragging empty background pans the stage when the drawing is bigger than it. */
+  onPanStart(event) {
+    if (event.button !== 0 || event.target.closest(".pele-node, .pele-edge, .pele-edge-label, .cm-ld-tools, .cm-ld-handle, .cm-ld-editor")) return;
+    const { stage } = this;
+    if (stage.scrollWidth <= stage.clientWidth && stage.scrollHeight <= stage.clientHeight) return;
+    const start = { x: event.clientX, y: event.clientY, left: stage.scrollLeft, top: stage.scrollTop };
+    let moved = false;
+    const onMove = (e) => {
+      const dx = e.clientX - start.x;
+      const dy = e.clientY - start.y;
+      if (!moved && Math.hypot(dx, dy) < 4) return;
+      if (!moved) {
+        moved = true;
+        stage.setPointerCapture(event.pointerId);
+        stage.classList.add("is-panning");
+      }
+      stage.scrollLeft = start.left - dx;
+      stage.scrollTop = start.top - dy;
+    };
+    const onUp = () => {
+      stage.removeEventListener("pointermove", onMove);
+      stage.removeEventListener("pointerup", onUp);
+      stage.removeEventListener("pointercancel", onUp);
+      stage.classList.remove("is-panning");
+      // The click that ends a drag must not deselect.
+      if (moved) this.justPanned = true;
+    };
+    stage.addEventListener("pointermove", onMove);
+    stage.addEventListener("pointerup", onUp);
+    stage.addEventListener("pointercancel", onUp);
   }
 
   // ----- more menu: copy source / svg -----
@@ -222,12 +363,35 @@ class DiagramController {
   closeMenu() {
     this.menu?.remove();
     this.menu = null;
+    this.menuAnchor = null;
     document.removeEventListener("mousedown", this.onOutside, true);
     document.removeEventListener("keydown", this.onMenuKey, true);
   }
 
+  /** Shows `menu` under `anchor`, right-aligned with it; Esc or an outside click closes it. */
+  openPopover(anchor, menu) {
+    this.closeMenu();
+    this.wrap.appendChild(menu);
+    const wrapBox = this.wrap.getBoundingClientRect();
+    const box = anchor.getBoundingClientRect();
+    menu.style.top = `${box.bottom - wrapBox.top + 4}px`;
+    menu.style.right = `${Math.max(4, wrapBox.right - box.right)}px`;
+    this.menu = menu;
+    this.menuAnchor = anchor;
+    this.onOutside = (event) => {
+      if (!menu.contains(event.target) && !anchor.contains(event.target)) this.closeMenu();
+    };
+    this.onMenuKey = (event) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      this.closeMenu();
+    };
+    document.addEventListener("mousedown", this.onOutside, true);
+    document.addEventListener("keydown", this.onMenuKey, true);
+  }
+
   toggleMenu(anchor) {
-    if (this.menu) return this.closeMenu();
+    if (this.menu && this.menuAnchor === anchor) return this.closeMenu();
     const items = [
       ["소스 복사", () => this.copy(this.source.value, anchor)],
       ["소스 복사 (``` 포함)", () => this.copy(joinFence(this.source.value, "mermaid"), anchor)],
@@ -250,22 +414,23 @@ class DiagramController {
       });
       menu.appendChild(item);
     });
-    this.wrap.appendChild(menu);
-    const wrapBox = this.wrap.getBoundingClientRect();
-    const box = anchor.getBoundingClientRect();
-    menu.style.top = `${box.bottom - wrapBox.top + 4}px`;
-    menu.style.right = `${Math.max(4, wrapBox.right - box.right)}px`;
-    this.menu = menu;
-    this.onOutside = (event) => {
-      if (!menu.contains(event.target) && event.target !== anchor) this.closeMenu();
-    };
-    this.onMenuKey = (event) => {
-      if (event.key !== "Escape") return;
-      event.stopPropagation();
-      this.closeMenu();
-    };
-    document.addEventListener("mousedown", this.onOutside, true);
-    document.addEventListener("keydown", this.onMenuKey, true);
+    this.openPopover(anchor, menu);
+  }
+
+  toggleHelp(anchor) {
+    if (this.menu && this.menuAnchor === anchor) return this.closeMenu();
+    const panel = el("div", "cm-ld-menu cm-ld-help-panel");
+    HELP_SECTIONS.forEach(([title, rows]) => {
+      panel.appendChild(el("div", "cm-ld-help-title", title));
+      rows.forEach(([keys, description]) => {
+        const row = el("div", "cm-ld-help-row");
+        const cell = el("span", "cm-ld-help-keys");
+        keys.forEach((key) => cell.appendChild(el("kbd", "", key)));
+        row.append(cell, el("span", "", description));
+        panel.appendChild(row);
+      });
+    });
+    this.openPopover(anchor, panel);
   }
 
   /** A fresh, selection-free render, so the copy has no editing overlays in it. */
@@ -393,6 +558,10 @@ class DiagramController {
   // ----- events -----
 
   onClick(event) {
+    if (this.justPanned) {
+      this.justPanned = false;
+      return;
+    }
     if (!this.analysis.editable || event.target.closest(".cm-ld-tools, .cm-ld-handle, .cm-ld-editor")) return;
     const node = event.target.closest(".pele-node");
     if (node) return this.select({ kind: "node", id: node.dataset.id });
@@ -420,7 +589,13 @@ class DiagramController {
     // Safety net for an IME copy of Tab/Enter that lands on the stage just after
     // the label editor closed on the same key.
     if (performance.now() - (this.editorClosedAt ?? -1e9) < 150) return;
-    if (event.target !== this.stage || !this.analysis.editable) return;
+    if (event.target !== this.stage) return;
+    if (!(event.metaKey || event.ctrlKey || event.altKey)) {
+      if (event.key === "+" || event.key === "=") return this.zoomBy(ZOOM_STEP);
+      if (event.key === "-" || event.key === "_") return this.zoomBy(1 / ZOOM_STEP);
+      if (event.key === "0") return this.zoomTo(1);
+    }
+    if (!this.analysis.editable) return;
     if (ARROW_KEYS.has(event.key) && !(event.metaKey || event.ctrlKey || event.altKey)) {
       event.preventDefault();
       this.moveSelection(event.key);
@@ -772,7 +947,15 @@ const ACCENT = "#2f81f7";
 export const diagramTheme = EditorView.theme({
   ".cm-ld-wrap": {
     position: "relative",
-    margin: "6px 0",
+    // The drawing is as wide as it is (zoom keeps its size), and without line
+    // wrapping the editor sizes itself to its widest block. Inline-size
+    // containment makes the widget contribute no width of its own: it takes
+    // the editor's width and the stage inside scrolls instead.
+    contain: "inline-size",
+    minWidth: "0",
+    maxWidth: "100%",
+    // Breathing room on the right, so the frame does not touch the cell's edge.
+    margin: "6px 12px 6px 0",
     border: "1px solid #30363d",
     borderRadius: "6px",
     backgroundColor: "#0d1117",
@@ -788,13 +971,13 @@ export const diagramTheme = EditorView.theme({
   },
   ".cm-ld-bar": {
     display: "flex",
+    flexWrap: "wrap",
     alignItems: "center",
     gap: "6px",
     padding: "4px 8px",
     borderBottom: "1px solid #21262d",
   },
   ".cm-ld-spacer": { flex: "1" },
-  ".cm-ld-hint": { color: PALETTE.muted, fontSize: "11px", textAlign: "right", paddingRight: "4px" },
   ".cm-ld-btn, .cm-ld-select": {
     padding: "2px 8px",
     border: "1px solid #30363d",
@@ -836,11 +1019,37 @@ export const diagramTheme = EditorView.theme({
   ".cm-ld-stage": {
     position: "relative",
     overflow: "auto",
+    maxHeight: `${STAGE_MAX_HEIGHT}px`,
     padding: "40px 16px 20px",
     outline: "none",
     textAlign: "center",
   },
   ".cm-ld-stage svg.pele": { display: "inline-block", verticalAlign: "top", overflow: "visible" },
+  ".cm-ld-stage.is-zoomed, .cm-ld-stage.is-panning": { cursor: "grab" },
+  ".cm-ld-stage.is-panning, .cm-ld-stage.is-panning *": { cursor: "grabbing", userSelect: "none" },
+  ".cm-ld-zoom": { display: "inline-flex", gap: "2px", marginRight: "6px" },
+  ".cm-ld-zoom-label": { minWidth: "44px", textAlign: "center" },
+  ".cm-ld-help": { width: "24px", padding: "2px 0", textAlign: "center", borderRadius: "50%" },
+  ".cm-ld-help-panel": { minWidth: "320px", padding: "8px 10px", gap: "2px" },
+  ".cm-ld-help-title": { margin: "6px 0 2px", color: PALETTE.muted, fontSize: "11px", fontWeight: "600" },
+  ".cm-ld-help-row": {
+    display: "flex",
+    alignItems: "baseline",
+    gap: "10px",
+    fontSize: "12px",
+    color: PALETTE.text,
+  },
+  ".cm-ld-help-keys": { flex: "0 0 112px", display: "inline-flex", flexWrap: "wrap", gap: "3px" },
+  ".cm-ld-help-keys kbd": {
+    padding: "0 5px",
+    border: "1px solid #30363d",
+    borderBottomWidth: "2px",
+    borderRadius: "4px",
+    backgroundColor: "#0d1117",
+    font: "inherit",
+    fontSize: "11px",
+    color: PALETTE.text,
+  },
   ".cm-ld-layer": { position: "absolute", left: "0", top: "0", width: "0", height: "0" },
   ".cm-ld-stage .pele-node": { cursor: "pointer" },
   ".cm-ld-stage .pele-node:hover > :not(text):not(svg)": { stroke: ACCENT },

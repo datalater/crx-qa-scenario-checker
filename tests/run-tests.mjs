@@ -13,6 +13,7 @@ import './divider-model.test.mjs';
 import './markdown-table.test.mjs';
 import './mermaid-flow.test.mjs';
 import './diagram-export.test.mjs';
+import './diagram-zoom.test.mjs';
 import './checklist-notes.test.mjs';
 import './step-detail-panel-refresh.test.mjs';
 import './pass-summary-refresh.test.mjs';
