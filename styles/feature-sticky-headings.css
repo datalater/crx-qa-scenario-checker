@@ -19,15 +19,13 @@
   background-image: linear-gradient(rgba(88, 166, 255, 0.05), rgba(88, 166, 255, 0.05));
 }
 
-.checklist-container.is-sticky-headings tr.is-sticky-heading {
+/* A section title only outranks the rows/insert controls while it is actually
+   covering them: when stuck, or when it sits above the stuck title (it then
+   peeks out below it). Titles still in the flow stay under the `+` `/` zones,
+   so a zone straddling their top or bottom edge is never cropped by them. */
+.checklist-container.is-sticky-headings tr.is-sticky-heading.is-stuck,
+.checklist-container.is-sticky-headings tr.is-sticky-heading:has(~ tr.is-stuck) {
   z-index: var(--z-table-section);
-}
-
-/* A section title's own `+` `/` controls straddle its bottom edge from the
-   zone row below it. While the title sits in the flow they must draw above
-   it; once it is stuck, rows and their controls pass under it again. */
-.checklist-container.is-sticky-headings tr.is-sticky-heading:not(.is-stuck) + .checklist-add-row-zone {
-  z-index: var(--z-table-section-insert);
 }
 
 .checklist-container tr.is-pinned-row.checklist-divider-row,
@@ -91,4 +89,10 @@
   position: absolute;
   right: 4px;
   top: 10px;
+}
+
+/* Scrolled to the top, the first row's `+` `/` sit on the header/body border like every
+   other row's; any scroll puts them back under the header and pinned rows. */
+.checklist-container.is-at-top .checklist-add-row-zone.is-before-first-row {
+  z-index: var(--z-table-first-insert);
 }

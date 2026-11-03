@@ -2825,6 +2825,9 @@ function scheduleStickyHeadingUpdate() {
 function updateStickyHeadings() {
     const scroller = getChecklistScroller();
     if (!scroller) return;
+    // At the very top nothing has scrolled under the header yet, so the first insert
+    // zone may draw above it (CSS); once scrolled, the header covers it again.
+    scroller.classList.toggle('is-at-top', scroller.scrollTop <= 0);
     const headCell = scroller.querySelector('thead th');
     const pinnedHeight = layoutChecklistStickyRows(scroller);
     const rows = scroller.querySelectorAll('tr.is-sticky-heading');

@@ -18,14 +18,17 @@
   --z-command-palette: 1001;
   --z-loading-overlay: 2000;
 
-  /* Table: ordinary rows < insertion controls < section < a section's own
-     controls < pins < header. Insertion controls stay inside their zone's
-     context; no child override. */
+  /* Table: ordinary rows < insertion controls < stuck section < pins < header.
+     A section title only takes its layer while stuck, so in the flow it never
+     covers insertion controls. Controls stay inside their zone's context; no
+     child override. */
   --z-table-insert: 2;
   --z-table-section: 3;
-  --z-table-section-insert: 4;
-  --z-table-pinned: 5;
-  --z-table-header: 6;
+  --z-table-pinned: 4;
+  --z-table-header: 5;
+  /* The first insert zone straddles the header's bottom edge; it only rises above
+     the header while the table is scrolled to the very top. */
+  --z-table-first-insert: 6;
 
   /* JSON editor layers, not app overlay priorities. */
   --z-editor-highlight-background: 0;
