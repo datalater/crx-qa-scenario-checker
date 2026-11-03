@@ -1,0 +1,25 @@
+{
+  "steps": [
+    {
+      "divider": {
+        "value": "## 문항 상태 전이\n\n노드를 클릭하면 도구가 나타나요. 더블클릭은 이름 변경, 오른쪽 동그라미를 끌어서 다른 노드에 놓으면 연결돼요.\n\n```mermaid\nflowchart TD\n  A[\"초안\"]\n  B[\"검토\"]\n  C[\"승인\"]\n  D{\"반려?\"}\n  A --> B\n  B --> D\n  D -->|\"예\"| A\n  D -->|\"아니오\"| C\n```\n",
+        "type": "code",
+        "lang": "markdown",
+        "view": "live",
+        "height": "auto"
+      }
+    },
+    {
+      "given": [
+        "문항이 초안 상태"
+      ],
+      "when": [
+        "출제자가 검토 요청"
+      ],
+      "then": [
+        "상태가 검토로 변경"
+      ],
+      "pass": false
+    }
+  ]
+}

@@ -20,6 +20,7 @@
     "@codemirror/state": "^6.5.2",
     "@codemirror/view": "^6.36.6",
     "@lezer/highlight": "^1.2.3",
-    "esbuild": "^0.25.5"
+    "esbuild": "^0.25.5",
+    "pele": "^1.13.0"
   }
 }

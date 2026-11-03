@@ -14,6 +14,7 @@ import { StateEffect, StateField } from "@codemirror/state";
 import { Decoration, EditorView, WidgetType } from "@codemirror/view";
 import { highlightCode } from "@lezer/highlight";
 import {
+  EMPTY_TABLE,
   deleteColumn,
   deleteRow,
   insertColumn,
@@ -24,6 +25,8 @@ import {
   serializeTable,
   tableSourceFromClipboard,
 } from "./markdown-table.js";
+import { diagramExtensions } from "./live-diagram.js";
+import { EMPTY_FLOWCHART, joinFence } from "./mermaid-flow.js";
 import { PALETTE, darkHighlightStyle } from "./theme-palette.js";
 
 // ---------- icons (currentColor) ----------
@@ -662,7 +665,7 @@ const pasteTables = EditorView.domEventHandlers({
 
 /** Everything the live view adds. Only mounted for markdown in live view. */
 export function liveMarkdown() {
-  return [liveTables, liveTheme, pasteTables];
+  return [liveTables, liveTheme, pasteTables, diagramExtensions];
 }
 
 // ---------- slash commands ----------
@@ -677,7 +680,8 @@ function insideNoCommandNode(state, pos) {
   return false;
 }
 
-function applyTableCommand(view, completion, from, to) {
+/** Replaces the command text with a block (a table, a fenced diagram, ...). */
+function applyBlockCommand(view, completion, from, to, block, focusTable) {
   const { doc } = view.state;
   const line = doc.lineAt(from);
   const isBlank = (n) => !doc.line(n).text.trim();
@@ -692,21 +696,29 @@ function applyTableCommand(view, completion, from, to) {
       nextBlank: line.number < doc.lines && isBlank(line.number + 1),
     },
     from,
-    to
+    to,
+    block
   );
   view.dispatch({
     changes: plan.changes,
-    // In the source view the caret lands in the first header cell; in the
-    // live view the new table's first cell takes focus.
-    selection: { anchor: plan.tableFrom + 2 },
-    effects: focusTableEffect.of(plan.tableFrom),
+    // In the source view the caret lands in the block's first line; in the
+    // live view a new table's first cell takes focus.
+    selection: { anchor: plan.tableFrom + (focusTable ? 2 : 0) },
+    effects: focusTable ? focusTableEffect.of(plan.tableFrom) : [],
     annotations: pickedCompletion.of(completion),
     userEvent: "input.complete",
   });
 }
 
+const applyTableCommand = (view, completion, from, to) =>
+  applyBlockCommand(view, completion, from, to, EMPTY_TABLE, true);
+
+const applyDiagramCommand = (view, completion, from, to) =>
+  applyBlockCommand(view, completion, from, to, joinFence(EMPTY_FLOWCHART), false);
+
 const SLASH_COMMANDS = [
   { label: "/table", detail: "표 삽입", apply: applyTableCommand },
+  { label: "/diagram", detail: "다이어그램 삽입 (mermaid)", apply: applyDiagramCommand },
 ];
 
 /**

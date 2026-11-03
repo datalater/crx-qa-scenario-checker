@@ -11,6 +11,8 @@ import './editor-manager.test.mjs';
 import './checklist-divider-support.test.mjs';
 import './divider-model.test.mjs';
 import './markdown-table.test.mjs';
+import './mermaid-flow.test.mjs';
+import './diagram-export.test.mjs';
 import './checklist-notes.test.mjs';
 import './step-detail-panel-refresh.test.mjs';
 import './pass-summary-refresh.test.mjs';
