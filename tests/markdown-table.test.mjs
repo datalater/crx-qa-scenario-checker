@@ -8,8 +8,11 @@ import {
     parseTable,
     planTableDeletion,
     planTableInsertion,
+    parseTsv,
     serializeTable,
-    splitTableRow
+    splitTableRow,
+    tableSourceFromHtml,
+    tableSourceFromText
 } from '../src/markdown-table.js';
 import { assertDeepEqual, assertEqual, test } from './lib/test-runner.mjs';
 
@@ -112,4 +115,52 @@ test('deleting a table leaves one blank line between its neighbours', () => {
     const only = 'T1\nT2';
     const r4 = planTableDeletion(0, 5, { docLength: only.length, prev: null, next: null });
     assertEqual(only.slice(0, r4.from) + only.slice(r4.to), '');
+});
+
+const NOTION_TEXT = [
+    '단계\t구분\t수정 가능여부\t삭제 가능여부\t예외 ',
+    '초안\t최초 문항 생성 시 \t수정 가능 \t삭제 가능\t통계 발생 시, 수정/삭제불가',
+    '-일부 수정 가능',
+    '검토\t출제자가 검토 단계로 상태 변경 시\t수정 불가\t삭제 불가\t',
+    '승인\t문항 관리자가 문항을 승인하였을 경우\t일부 수정 가능\t삭제 불가\t'
+].join('\n');
+
+test('Notion text: a line without tabs continues the previous last cell', () => {
+    const rows = parseTsv(NOTION_TEXT);
+    assertEqual(rows.length, 4);
+    assertDeepEqual(rows[0], ['단계', '구분', '수정 가능여부', '삭제 가능여부', '예외']);
+    assertDeepEqual(rows[1], ['초안', '최초 문항 생성 시', '수정 가능', '삭제 가능', '통계 발생 시, 수정/삭제불가\n-일부 수정 가능']);
+    assertDeepEqual(rows[2], ['검토', '출제자가 검토 단계로 상태 변경 시', '수정 불가', '삭제 불가', '']);
+});
+
+test('pasted text becomes a markdown table', () => {
+    const source = tableSourceFromText(NOTION_TEXT);
+    const model = parseTable(source);
+    assertEqual(model.header.length, 5);
+    assertEqual(model.rows.length, 3);
+    assertEqual(model.rows[0][4], '통계 발생 시, 수정/삭제불가\n-일부 수정 가능');
+    assertEqual(source.split('\n').length, 5);
+});
+
+test('a short row continues in the next line, quoted cells keep tabs and breaks', () => {
+    assertDeepEqual(parseTsv('a\tb\tc\nx\ty\nz\tw'), [['a', 'b', 'c'], ['x', 'y\nz', 'w']]);
+    assertDeepEqual(parseTsv('a\tb\n"1\n2"\t"x\ty ""q"""'), [['a', 'b'], ['1\n2', 'x\ty "q"']]);
+});
+
+test('text that is not a table stays plain', () => {
+    assertEqual(tableSourceFromText('just a sentence'), null);
+    assertEqual(tableSourceFromText('one\ttwo'), null);
+    assertEqual(tableSourceFromText('\tindented\n\tcode'), null);
+    assertEqual(tableSourceFromText('a\tb\nc'), null);
+});
+
+test('cells with pipes are escaped when pasted', () => {
+    assertEqual(tableSourceFromText('a\tb\n1|2\t3'), '| a | b |\n| -- | -- |\n| 1\\|2 | 3 |');
+});
+
+test('HTML tables convert only when they are the whole clipboard', () => {
+    if (typeof globalThis.DOMParser === 'undefined') return;
+    const html = '<table><tr><th>A</th><th>B</th></tr><tr><td>1<br>2</td><td><p>x</p><p>y</p></td></tr></table>';
+    assertEqual(tableSourceFromHtml(html), '| A | B |\n| -- | -- |\n| 1<br>2 | x<br>y |');
+    assertEqual(tableSourceFromHtml('<p>intro</p>' + html), null);
 });

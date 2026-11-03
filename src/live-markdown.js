@@ -22,6 +22,7 @@ import {
   planTableDeletion,
   planTableInsertion,
   serializeTable,
+  tableSourceFromClipboard,
 } from "./markdown-table.js";
 import { PALETTE, darkHighlightStyle } from "./theme-palette.js";
 
@@ -607,9 +608,61 @@ const liveTheme = EditorView.theme({
   ".cm-lt-menu button.is-danger, .cm-lt-menu button.is-danger svg": { color: "#f85149" },
 });
 
+// ---------- pasting tables ----------
+
+/**
+ * A table copied from Notion, a spreadsheet or a web page (tab-separated text
+ * or an HTML table) becomes a markdown table, which the live view then renders
+ * as a table widget. Anything else, and code, pastes as usual.
+ */
+const pasteTables = EditorView.domEventHandlers({
+  paste(event, view) {
+    const { state } = view;
+    const data = event.clipboardData;
+    if (!data || state.selection.ranges.length !== 1) return false;
+    const { from, to } = state.selection.main;
+    if (insideNoCommandNode(state, from)) return false;
+    const table = tableSourceFromClipboard({
+      html: data.getData("text/html"),
+      text: data.getData("text/plain"),
+    });
+    if (!table) return false;
+
+    const { doc } = state;
+    const first = doc.lineAt(from);
+    const last = doc.lineAt(to);
+    const isBlank = (n) => !doc.line(n).text.trim();
+    const plan = planTableInsertion(
+      {
+        text: doc.sliceString(first.from, last.to),
+        from: first.from,
+        to: last.to,
+        hasPrev: first.number > 1,
+        prevBlank: first.number > 1 && isBlank(first.number - 1),
+        hasNext: last.number < doc.lines,
+        nextBlank: last.number < doc.lines && isBlank(last.number + 1),
+      },
+      from,
+      to,
+      table
+    );
+    const tableTo = plan.tableFrom + table.length;
+    const length = doc.length + plan.changes.reduce((n, c) => n + c.insert.length - (c.to - c.from), 0);
+    event.preventDefault();
+    view.dispatch({
+      changes: plan.changes,
+      // Beside a block widget the caret would be drawn as tall as the table.
+      selection: { anchor: tableTo < length ? tableTo + 1 : tableTo },
+      scrollIntoView: true,
+      userEvent: "input.paste",
+    });
+    return true;
+  },
+});
+
 /** Everything the live view adds. Only mounted for markdown in live view. */
 export function liveMarkdown() {
-  return [liveTables, liveTheme];
+  return [liveTables, liveTheme, pasteTables];
 }
 
 // ---------- slash commands ----------
