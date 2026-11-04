@@ -30,6 +30,18 @@ export function setupTableCellNavigation(cell, allCells) {
     generation++;
   });
   cell.addEventListener("keydown", (event) => {
+    if ((event.key === "ArrowUp" || event.key === "ArrowDown") &&
+        !composing && !event.isComposing && event.keyCode !== 229 &&
+        !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      const row = Number(cell.dataset.r) + (event.key === "ArrowUp" ? -1 : 1);
+      const target = allCells().find((other) =>
+        Number(other.dataset.r) === row && other.dataset.c === cell.dataset.c);
+      if (target) {
+        event.preventDefault();
+        target.focus();
+      }
+      return;
+    }
     if (event.key !== "Tab") return;
     event.preventDefault();
     const direction = event.shiftKey ? -1 : 1;

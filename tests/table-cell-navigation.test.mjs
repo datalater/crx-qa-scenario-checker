@@ -3,10 +3,10 @@ import { assertEqual, test } from './lib/test-runner.mjs';
 
 function fixture() {
     const doc = { activeElement: null };
-    const cells = Array.from({ length: 3 }, () => {
+    const cells = Array.from({ length: 3 }, (_, index) => {
         const handlers = {};
         return {
-            ownerDocument: doc, isConnected: true, text: '',
+            ownerDocument: doc, isConnected: true, text: '', dataset: { r: String(index - 1), c: '0' },
             addEventListener(type, fn) { (handlers[type] ||= []).push(fn); },
             emit(type, props = {}) {
                 const event = { keyCode: 0, preventDefault() { this.defaultPrevented = true; }, ...props };
@@ -44,6 +44,40 @@ test('Shift+Tab waits for composition; ordinary Tab moves immediately', async ()
     await tick();
     assertEqual(doc.activeElement, cells[0]);
     cells[0].emit('keydown', { key: 'Tab' });
+    assertEqual(doc.activeElement, cells[1]);
+});
+
+test('up and down move to the same column in the adjacent row', () => {
+    const { cells, doc } = fixture();
+    const up = cells[1].emit('keydown', { key: 'ArrowUp' });
+    assertEqual(up.defaultPrevented, true);
+    assertEqual(doc.activeElement, cells[0]);
+    cells[0].emit('keydown', { key: 'ArrowDown' });
+    assertEqual(doc.activeElement, cells[1]);
+    cells[1].emit('keydown', { key: 'ArrowDown' });
+    assertEqual(doc.activeElement, cells[2]);
+    const edge = cells[2].emit('keydown', { key: 'ArrowDown' });
+    assertEqual(edge.defaultPrevented, undefined);
+    assertEqual(doc.activeElement, cells[2]);
+});
+
+test('vertical navigation does not jump to a different column', () => {
+    const { cells, doc } = fixture();
+    cells[0].dataset.c = '1';
+    const event = cells[1].emit('keydown', { key: 'ArrowUp' });
+    assertEqual(event.defaultPrevented, undefined);
+    assertEqual(doc.activeElement, cells[1]);
+});
+
+test('arrows remain native during IME composition or with modifiers', () => {
+    const { cells, doc } = fixture();
+    cells[1].emit('compositionstart');
+    const composing = cells[1].emit('keydown', { key: 'ArrowDown', isComposing: true });
+    assertEqual(composing.defaultPrevented, undefined);
+    assertEqual(doc.activeElement, cells[1]);
+    cells[1].emit('compositionend');
+    const modified = cells[1].emit('keydown', { key: 'ArrowUp', shiftKey: true });
+    assertEqual(modified.defaultPrevented, undefined);
     assertEqual(doc.activeElement, cells[1]);
 });
 
