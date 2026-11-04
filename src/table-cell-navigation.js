@@ -1,3 +1,17 @@
+// A table row can be taller than this cell's editable content. Clicking the
+// remaining area should still put the caret at the end of the cell.
+export function focusTableCellFromEmptyArea(event, container, cell) {
+  if (event.target !== container || event.button !== 0) return;
+  event.preventDefault();
+  cell.focus();
+  const selection = cell.ownerDocument.getSelection();
+  const range = cell.ownerDocument.createRange();
+  range.selectNodeContents(cell);
+  range.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
 // Keep focus in the composing cell until the IME has delivered its final input.
 export function setupTableCellNavigation(cell, allCells) {
   let composing = false;

@@ -26,7 +26,7 @@ import {
   tableSourceFromClipboard,
 } from "./markdown-table.js";
 import { diagramExtensions } from "./live-diagram.js";
-import { setupTableCellNavigation } from "./table-cell-navigation.js";
+import { focusTableCellFromEmptyArea, setupTableCellNavigation } from "./table-cell-navigation.js";
 import { EMPTY_FLOWCHART, joinFence } from "./mermaid-flow.js";
 import { PALETTE, darkHighlightStyle } from "./theme-palette.js";
 
@@ -230,6 +230,7 @@ function buildTable(wrap, view, model) {
           focusBelowTable(view, wrap);
         }
       });
+      td.addEventListener("mousedown", (event) => focusTableCellFromEmptyArea(event, td, cell));
       td.appendChild(cell);
       tr.appendChild(td);
     });
@@ -520,7 +521,9 @@ const liveTheme = EditorView.theme({
     caretColor: PALETTE.text,
     cursor: "text",
   },
-  ".cm-lt-cell:focus": { boxShadow: "inset 0 0 0 1px #2f81f7" },
+  ".cm-lt-grid table tr td:focus-within, .cm-lt-grid table tr th:focus-within": {
+    boxShadow: "inset 0 0 0 1px #2f81f7",
+  },
 
   ".cm-lt-ctl": {
     position: "absolute",

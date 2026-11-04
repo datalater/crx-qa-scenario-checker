@@ -1,4 +1,4 @@
-import { setupTableCellNavigation } from '../src/table-cell-navigation.js';
+import { focusTableCellFromEmptyArea, setupTableCellNavigation } from '../src/table-cell-navigation.js';
 import { assertEqual, test } from './lib/test-runner.mjs';
 
 function fixture() {
@@ -21,6 +21,23 @@ function fixture() {
     return { cells, doc };
 }
 const tick = () => new Promise(resolve => setTimeout(resolve, 5));
+
+test('clicking the empty part of a tall cell focuses it and places the caret at the end', () => {
+    const container = {};
+    const calls = [];
+    const range = { selectNodeContents(node) { calls.push(node); }, collapse(end) { calls.push(end); } };
+    const selection = { removeAllRanges() { calls.push('clear'); }, addRange(value) { calls.push(value); } };
+    const cell = { focus() { calls.push('focus'); }, ownerDocument: {
+        getSelection() { return selection; }, createRange() { return range; }
+    } };
+    const event = { target: container, button: 0, preventDefault() { calls.push('prevent'); } };
+    focusTableCellFromEmptyArea(event, container, cell);
+    assertEqual(calls.join(','), ['prevent', 'focus', cell, false, 'clear', range].join(','));
+    calls.length = 0;
+    focusTableCellFromEmptyArea({ ...event, target: cell }, container, cell);
+    focusTableCellFromEmptyArea({ ...event, button: 2 }, container, cell);
+    assertEqual(calls.length, 0);
+});
 
 test('Tab waits for IME final input before focusing the next cell', async () => {
     const { cells, doc } = fixture();
