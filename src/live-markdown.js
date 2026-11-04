@@ -26,6 +26,7 @@ import {
   tableSourceFromClipboard,
 } from "./markdown-table.js";
 import { diagramExtensions } from "./live-diagram.js";
+import { setupTableCellNavigation } from "./table-cell-navigation.js";
 import { EMPTY_FLOWCHART, joinFence } from "./mermaid-flow.js";
 import { PALETTE, darkHighlightStyle } from "./theme-palette.js";
 
@@ -217,6 +218,7 @@ function buildTable(wrap, view, model) {
         cell._text = cell.innerText;
         commit();
       });
+      setupTableCellNavigation(cell, allCells);
       cell.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
           // Back to the editor; the next Escape leaves the editor. The caret
@@ -226,10 +228,6 @@ function buildTable(wrap, view, model) {
           event.stopPropagation();
           cell.blur();
           focusBelowTable(view, wrap);
-        } else if (event.key === "Tab") {
-          event.preventDefault();
-          const cellsInOrder = allCells();
-          cellsInOrder[cellsInOrder.indexOf(cell) + (event.shiftKey ? -1 : 1)]?.focus();
         }
       });
       td.appendChild(cell);
