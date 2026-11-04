@@ -12,6 +12,25 @@ export function focusTableCellFromEmptyArea(event, container, cell) {
   selection.addRange(range);
 }
 
+// Probe the browser's visual-line movement (including wrapped lines), then
+// restore the caret so the normal arrow key can handle movement within a cell.
+function hasAdjacentVisualLine(cell, direction) {
+  const selection = cell.ownerDocument.getSelection();
+  if (!selection || !selection.isCollapsed || !selection.rangeCount ||
+      !cell.contains(selection.anchorNode) || typeof selection.modify !== "function") return null;
+  const original = selection.getRangeAt(0).cloneRange();
+  const before = original.getBoundingClientRect();
+  if (!before.height) return cell.textContent ? null : false;
+  selection.modify("move", direction, "line");
+  const after = selection.rangeCount ? selection.getRangeAt(0).getBoundingClientRect() : null;
+  const inside = cell.contains(selection.anchorNode);
+  selection.removeAllRanges();
+  selection.addRange(original);
+  if (!inside) return false;
+  if (!after || !after.height) return null;
+  return direction === "backward" ? after.top < before.top - 1 : after.top > before.top + 1;
+}
+
 // Keep focus in the composing cell until the IME has delivered its final input.
 export function setupTableCellNavigation(cell, allCells) {
   let composing = false;
@@ -50,7 +69,7 @@ export function setupTableCellNavigation(cell, allCells) {
       const row = Number(cell.dataset.r) + (event.key === "ArrowUp" ? -1 : 1);
       const target = allCells().find((other) =>
         Number(other.dataset.r) === row && other.dataset.c === cell.dataset.c);
-      if (target) {
+      if (target && hasAdjacentVisualLine(cell, event.key === "ArrowUp" ? "backward" : "forward") === false) {
         event.preventDefault();
         target.focus();
       }

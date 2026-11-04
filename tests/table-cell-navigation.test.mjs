@@ -3,17 +3,31 @@ import { assertEqual, test } from './lib/test-runner.mjs';
 
 function fixture() {
     const doc = { activeElement: null };
+    let line = 0;
+    let lastLine = 0;
+    const selection = {
+        isCollapsed: true, rangeCount: 1, anchorNode: null,
+        getRangeAt() {
+            const saved = line;
+            return { cloneRange() { return this; }, getBoundingClientRect() { return { top: saved * 20, height: 20 }; }, line: saved };
+        },
+        modify(_alter, direction) { line = Math.max(0, Math.min(lastLine, line + (direction === 'forward' ? 1 : -1))); },
+        removeAllRanges() {}, addRange(range) { line = range.line; },
+    };
+    doc.getSelection = () => selection;
+    doc.setLine = (value, last) => { line = value; lastLine = last; };
     const cells = Array.from({ length: 3 }, (_, index) => {
         const handlers = {};
         return {
             ownerDocument: doc, isConnected: true, text: '', dataset: { r: String(index - 1), c: '0' },
+            contains(node) { return node === this; },
             addEventListener(type, fn) { (handlers[type] ||= []).push(fn); },
             emit(type, props = {}) {
                 const event = { keyCode: 0, preventDefault() { this.defaultPrevented = true; }, ...props };
                 for (const fn of handlers[type] || []) fn(event);
                 return event;
             },
-            focus() { if (doc.activeElement) doc.activeElement.emit('blur'); doc.activeElement = this; }
+            focus() { if (doc.activeElement) doc.activeElement.emit('blur'); doc.activeElement = this; selection.anchorNode = this; }
         };
     });
     cells.forEach(cell => setupTableCellNavigation(cell, () => cells));
@@ -75,6 +89,21 @@ test('up and down move to the same column in the adjacent row', () => {
     assertEqual(doc.activeElement, cells[2]);
     const edge = cells[2].emit('keydown', { key: 'ArrowDown' });
     assertEqual(edge.defaultPrevented, undefined);
+    assertEqual(doc.activeElement, cells[2]);
+});
+
+test('arrows stay in a multiline cell until the first or last visual line', () => {
+    const { cells, doc } = fixture();
+    doc.setLine(0, 2);
+    const down = cells[1].emit('keydown', { key: 'ArrowDown' });
+    assertEqual(down.defaultPrevented, undefined);
+    assertEqual(doc.activeElement, cells[1]);
+    doc.setLine(1, 2);
+    const up = cells[1].emit('keydown', { key: 'ArrowUp' });
+    assertEqual(up.defaultPrevented, undefined);
+    assertEqual(doc.activeElement, cells[1]);
+    doc.setLine(2, 2);
+    cells[1].emit('keydown', { key: 'ArrowDown' });
     assertEqual(doc.activeElement, cells[2]);
 });
 
