@@ -25,6 +25,8 @@ import {
   serializeTable,
   tableSourceFromClipboard,
 } from "./markdown-table.js";
+import { renderChecklistAlertToken } from "../modules/checklist-alerts.js";
+import { findAlertTokens } from "./markdown-alerts.js";
 import { diagramExtensions } from "./live-diagram.js";
 import { focusTableCellFromEmptyArea, setupTableCellNavigation } from "./table-cell-navigation.js";
 import { EMPTY_FLOWCHART, joinFence } from "./mermaid-flow.js";
@@ -57,7 +59,7 @@ const ICONS = {
 function renderCellText(cell, text) {
   cell.replaceChildren();
   const tree = markdownLanguage.parser.parse(text);
-  highlightCode(
+  const appendHighlighted = (from, to) => highlightCode(
     text,
     tree,
     darkHighlightStyle,
@@ -71,8 +73,18 @@ function renderCellText(cell, text) {
       span.textContent = chunk;
       cell.append(span);
     },
-    () => cell.append("\n")
+    () => cell.append("\n"),
+    from, to
   );
+  let offset = 0;
+  for (const token of findAlertTokens(text, tree)) {
+    appendHighlighted(offset, token.from);
+    const template = document.createElement("template");
+    template.innerHTML = renderChecklistAlertToken(token.config);
+    cell.append(template.content);
+    offset = token.to;
+  }
+  appendHighlighted(offset, text.length);
 }
 
 function setCellText(cell, text) {
@@ -80,6 +92,37 @@ function setCellText(cell, text) {
   if (document.activeElement === cell) cell.textContent = text;
   else renderCellText(cell, text);
 }
+
+// Inline alerts stay editable: reveal the original markdown whenever a
+// selection touches a token. Table cells have their own blur/focus rendering.
+class AlertTokenWidget extends WidgetType {
+  constructor(config) { super(); this.config = config; }
+  eq(other) { return this.config === other.config; }
+  toDOM() {
+    const template = document.createElement("template");
+    template.innerHTML = renderChecklistAlertToken(this.config);
+    return template.content.firstElementChild;
+  }
+  ignoreEvent() { return false; }
+}
+
+function buildAlertDecorations(state) {
+  const tree = ensureSyntaxTree(state, state.doc.length, 1000);
+  if (!tree) return Decoration.none;
+  const selections = state.selection.ranges;
+  const ranges = findAlertTokens(state.doc.toString(), tree, { skipTables: true })
+    .filter(({ from, to }) => !selections.some((selection) => selection.from <= to && selection.to >= from))
+    .map(({ from, to, config }) => Decoration.replace({ widget: new AlertTokenWidget(config) }).range(from, to));
+  return Decoration.set(ranges);
+}
+
+const liveAlertTokens = StateField.define({
+  create: buildAlertDecorations,
+  update(value, tr) {
+    return tr.docChanged || tr.selection ? buildAlertDecorations(tr.state) : value;
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
 
 // ---------- table widget ----------
 
@@ -666,7 +709,7 @@ const pasteTables = EditorView.domEventHandlers({
 
 /** Everything the live view adds. Only mounted for markdown in live view. */
 export function liveMarkdown() {
-  return [liveTables, liveTheme, pasteTables, diagramExtensions];
+  return [liveTables, liveAlertTokens, liveTheme, pasteTables, diagramExtensions];
 }
 
 // ---------- slash commands ----------

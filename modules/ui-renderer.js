@@ -1,4 +1,5 @@
 import { getActiveFile } from './workspace-manager.js';
+import { getChecklistAlertConfig, renderChecklistAlertToken } from './checklist-alerts.js';
 import { CODE_VIEWS, hasCodeView, resolveCodeView, storedCodeView } from './code-view.js';
 import { applyCodeHeight, createCodeHeightHandle, parseCodeHeightPx } from './code-height.js';
 import {
@@ -67,50 +68,15 @@ function escapeChecklistHtml(value) {
         .replace(/>/g, '&gt;');
 }
 
-const CHECKLIST_ALERTS = {
-    note: {
-        label: 'Note',
-        className: 'note',
-        icon: '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8.75-3.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM8 6a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 8 6Z"></path></svg>'
-    },
-    tip: {
-        label: 'Tip',
-        className: 'tip',
-        icon: '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 1a4.75 4.75 0 0 0-2.694 8.663c.343.234.694.73.694 1.337V11h4v-.001c0-.607.35-1.103.694-1.337A4.75 4.75 0 0 0 8 1Zm-4 4.75a4 4 0 1 1 6.301 3.25c-.582.397-1.063 1.02-1.237 1.75H6.936c-.174-.73-.655-1.353-1.237-1.75A3.989 3.989 0 0 1 4 5.75ZM6 12.5A.5.5 0 0 1 6.5 12h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5Zm.75 1.75a.75.75 0 0 0 1.5 0h-1.5Z"></path></svg>'
-    },
-    important: {
-        label: 'Important',
-        className: 'important',
-        icon: '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M7.25 1.75a.75.75 0 0 1 1.5 0v6.5a.75.75 0 0 1-1.5 0v-6.5ZM8 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"></path><path fill="currentColor" d="M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"></path></svg>'
-    },
-    warning: {
-        label: 'Warning',
-        className: 'warning',
-        icon: '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M6.457 1.047a1.75 1.75 0 0 1 3.086 0l5.273 9.496A1.75 1.75 0 0 1 13.273 13H2.727a1.75 1.75 0 0 1-1.543-2.457l5.273-9.496ZM8 4.5a.75.75 0 0 0-.75.75v2.5a.75.75 0 0 0 1.5 0v-2.5A.75.75 0 0 0 8 4.5Zm0 6a.875.875 0 1 0 0-1.75.875.875 0 0 0 0 1.75Z"></path></svg>'
-    },
-    caution: {
-        label: 'Caution',
-        className: 'caution',
-        icon: '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M7.48 1.117a.75.75 0 0 1 1.04 0l5.363 5.048a.75.75 0 0 1 .237.546v2.578a.75.75 0 0 1-.237.546L8.52 14.883a.75.75 0 0 1-1.04 0L2.117 9.835a.75.75 0 0 1-.237-.546V6.711a.75.75 0 0 1 .237-.546L7.48 1.117ZM8 4.5a.75.75 0 0 0-.75.75v2.5a.75.75 0 0 0 1.5 0v-2.5A.75.75 0 0 0 8 4.5Zm0 6a.875.875 0 1 0 0-1.75.875.875 0 0 0 0 1.75Z"></path></svg>'
-    }
-};
-
 function renderChecklistInlineToken(token) {
     if (token === '\\n') {
         return '<span class="checklist-line-spacer" role="separator"></span>';
     }
     const alertConfig = getChecklistAlertConfig(token);
     if (alertConfig) {
-        return `<span class="checklist-alert-token checklist-alert-token--${alertConfig.className}" title="${alertConfig.label}"><span class="checklist-alert-token__icon" aria-hidden="true">${alertConfig.icon}</span><span class="checklist-alert-token__label">${alertConfig.label}</span></span>`;
+        return renderChecklistAlertToken(alertConfig);
     }
     return `<code class="inline-code">${escapeChecklistHtml(token)}</code>`;
-}
-
-function getChecklistAlertConfig(token) {
-    const normalized = String(token || '').trim();
-    const match = normalized.match(/^\[!([a-z]+)\]$/i);
-    if (!match) return null;
-    return CHECKLIST_ALERTS[match[1].toLowerCase()] || null;
 }
 
 export const NOTE_BLOCK_TYPES = ['link', 'text', 'code'];

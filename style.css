@@ -1496,56 +1496,59 @@
     color: var(--text-primary);
   }
 
-  .cell-content .checklist-alert-token {
+  :is(.cell-content, .cm-content) .checklist-alert-token {
     display: inline-flex;
     align-items: center;
     gap: 0.32em;
-    padding: 0.15em 0.5em;
+    /* Fit the normal text line box in both checklist and live markdown. */
+    padding: 0.05em 0.4em;
     border-radius: 999px;
     border: 1px solid transparent;
-    font-size: 0.92em;
+    font-size: 0.85em;
     font-weight: 600;
     line-height: 1;
     white-space: nowrap;
-    vertical-align: -0.2em;
+    vertical-align: -0.1em;
   }
 
-  .cell-content .checklist-alert-token__icon {
+  :is(.cell-content, .cm-content) .checklist-alert-token__icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     flex: 0 0 auto;
   }
 
-  .cell-content .checklist-alert-token__icon svg {
+  :is(.cell-content, .cm-content) .checklist-alert-token__icon svg {
     display: block;
+    width: 1.2em;
+    height: 1.2em;
   }
 
-  .cell-content .checklist-alert-token--note {
+  :is(.cell-content, .cm-content) .checklist-alert-token--note {
     color: #2f81f7;
     background-color: rgba(47, 129, 247, 0.16);
     border-color: rgba(47, 129, 247, 0.3);
   }
 
-  .cell-content .checklist-alert-token--tip {
+  :is(.cell-content, .cm-content) .checklist-alert-token--tip {
     color: #3fb950;
     background-color: rgba(63, 185, 80, 0.16);
     border-color: rgba(63, 185, 80, 0.3);
   }
 
-  .cell-content .checklist-alert-token--important {
+  :is(.cell-content, .cm-content) .checklist-alert-token--important {
     color: #a371f7;
     background-color: rgba(163, 113, 247, 0.16);
     border-color: rgba(163, 113, 247, 0.3);
   }
 
-  .cell-content .checklist-alert-token--warning {
+  :is(.cell-content, .cm-content) .checklist-alert-token--warning {
     color: #d29922;
     background-color: rgba(210, 153, 34, 0.16);
     border-color: rgba(210, 153, 34, 0.3);
   }
 
-  .cell-content .checklist-alert-token--caution {
+  :is(.cell-content, .cm-content) .checklist-alert-token--caution {
     color: #f85149;
     background-color: rgba(248, 81, 73, 0.16);
     border-color: rgba(248, 81, 73, 0.3);

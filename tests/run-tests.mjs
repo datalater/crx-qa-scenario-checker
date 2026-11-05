@@ -11,6 +11,7 @@ import './editor-manager.test.mjs';
 import './checklist-divider-support.test.mjs';
 import './divider-model.test.mjs';
 import './markdown-table.test.mjs';
+import './markdown-alerts.test.mjs';
 import './table-cell-navigation.test.mjs';
 import './mermaid-flow.test.mjs';
 import './diagram-export.test.mjs';
