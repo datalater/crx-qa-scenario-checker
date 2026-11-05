@@ -28,6 +28,7 @@ import {
 import { renderChecklistAlertToken } from "../modules/checklist-alerts.js";
 import { findAlertTokens } from "./markdown-alerts.js";
 import { shiftHiddenColumns } from "./table-visibility.js";
+import { setupTableCellSelection } from "./table-cell-selection.js";
 import { diagramExtensions } from "./live-diagram.js";
 import { focusTableCellFromEmptyArea, setupTableCellNavigation } from "./table-cell-navigation.js";
 import { EMPTY_FLOWCHART, joinFence } from "./mermaid-flow.js";
@@ -295,6 +296,7 @@ function buildTable(wrap, view, model) {
   addRow(model.header, -1, "th");
   model.rows.forEach((row, r) => addRow(row, r, "td"));
   grid.appendChild(table);
+  const cellSelection = setupTableCellSelection(table);
 
   // ---- floating controls ----
   const control = (className, icon, title) => {
@@ -392,7 +394,7 @@ function buildTable(wrap, view, model) {
     highlight(match);
     document.addEventListener("mousedown", onOutside, true);
   };
-  wrap._cleanup = closeMenu;
+  wrap._cleanup = () => { closeMenu(); cellSelection.destroy(); };
 
   const visibilityButton = control("cm-lt-visibility", svg('<rect x="2" y="3" width="12" height="10" rx="1"/><path d="M6 3v10M10 3v10"/>'), "열 표시");
   const emptyMessage = document.createElement("div");
@@ -418,6 +420,7 @@ function buildTable(wrap, view, model) {
   };
   wrap._resetVisibility = () => { hidden = []; wrap._hiddenColumns = hidden; applyVisibility(); };
   const saveVisibility = (nextHidden) => {
+    cellSelection.clear();
     hidden = nextHidden;
     wrap._hiddenColumns = hidden;
     applyVisibility();
@@ -646,6 +649,8 @@ const liveTheme = EditorView.theme({
   "&.cm-wrapping .cm-lt-grid table tr th, &.cm-wrapping .cm-lt-grid table tr td": { maxWidth: "none" },
   ".cm-lt-grid table tr th": { backgroundColor: "#161b22", fontWeight: "600" },
   ".cm-lt-grid table tr td.cm-lt-target, .cm-lt-grid table tr th.cm-lt-target": { backgroundColor: "#2f81f71f" },
+  ".cm-lt-grid table tr td.cm-lt-selected, .cm-lt-grid table tr th.cm-lt-selected": { backgroundColor: "#2f81f74d" },
+  ".cm-lt-grid table.cm-lt-selecting .cm-lt-cell": { userSelect: "none" },
   ".cm-lt-cell": {
     padding: "3px 8px",
     minHeight: "1.6em",
