@@ -27,6 +27,7 @@ import {
 } from "./markdown-table.js";
 import { renderChecklistAlertToken } from "../modules/checklist-alerts.js";
 import { findAlertTokens } from "./markdown-alerts.js";
+import { shiftHiddenColumns } from "./table-visibility.js";
 import { diagramExtensions } from "./live-diagram.js";
 import { focusTableCellFromEmptyArea, setupTableCellNavigation } from "./table-cell-navigation.js";
 import { EMPTY_FLOWCHART, joinFence } from "./mermaid-flow.js";
@@ -168,10 +169,14 @@ class TableWidget extends WidgetType {
     const next = parseTable(this.source);
     const cells = dom.querySelectorAll(".cm-lt-cell");
     if (cells.length !== (next.rows.length + 1) * next.header.length) {
+      if (!dom._pendingTableChange) dom._hiddenColumns = [];
       dom._cleanup?.();
       dom.replaceChildren();
       buildTable(dom, view, next);
       return true;
+    }
+    if (!dom._pendingTableChange && JSON.stringify(dom._model.header) !== JSON.stringify(next.header)) {
+      dom._resetVisibility?.();
     }
     cells.forEach((cell) => {
       const r = Number(cell.dataset.r);
@@ -195,6 +200,7 @@ class TableWidget extends WidgetType {
 
 function buildTable(wrap, view, model) {
   wrap._model = model;
+  let hidden = [...(wrap._hiddenColumns || [])];
   const cols = model.header.length;
 
   // Cell text goes into the model before the structure changes: an insert
@@ -202,7 +208,7 @@ function buildTable(wrap, view, model) {
   // Typing commits without `mutate`. A structural edit (`mutate`) is its own
   // undo step, and focus moves to the editor if it was elsewhere, so Cmd+Z
   // reaches the editor's history instead of the page.
-  const commit = (mutate) => {
+  const commit = (mutate, columnEdit = null) => {
     let next = structuredClone(wrap._model);
     wrap.querySelectorAll(".cm-lt-cell").forEach((cell) => {
       const r = Number(cell.dataset.r);
@@ -211,6 +217,8 @@ function buildTable(wrap, view, model) {
       else next.rows[r][c] = cell._text;
     });
     if (mutate) next = mutate(next);
+    if (columnEdit) hidden = shiftHiddenColumns(hidden, columnEdit.index, columnEdit.operation);
+    wrap._hiddenColumns = hidden;
     const range = findTableAt(view, view.posAtDOM(wrap));
     if (!range) return;
     const insert = serializeTable(next);
@@ -219,11 +227,16 @@ function buildTable(wrap, view, model) {
     // below the table first; otherwise undo would jump it to wherever the
     // editor's selection happened to be (often the top of the document).
     if (mutate) placeCaretBelow(view, range);
-    view.dispatch({
-      changes: { ...range, insert },
-      userEvent: mutate ? "input.table" : "input",
-      annotations: mutate ? isolateHistory.of("full") : [],
-    });
+    wrap._pendingTableChange = true;
+    try {
+      view.dispatch({
+        changes: { ...range, insert },
+        userEvent: mutate ? "input.table" : "input",
+        annotations: mutate ? isolateHistory.of("full") : [],
+      });
+    } finally {
+      wrap._pendingTableChange = false;
+    }
     // The rebuild drops focus from a cell; keep it in the editor so Cmd+Z
     // reaches the editor's history instead of the page.
     if (mutate && !view.dom.contains(document.activeElement)) view.focus();
@@ -238,7 +251,7 @@ function buildTable(wrap, view, model) {
   zone.appendChild(grid);
 
   const table = document.createElement("table");
-  const allCells = () => [...table.querySelectorAll(".cm-lt-cell")];
+  const allCells = () => [...table.querySelectorAll(".cm-lt-cell")].filter((cell) => !hidden.includes(Number(cell.dataset.c)));
   const addRow = (cells, r, tag) => {
     const tr = document.createElement("tr");
     cells.forEach((text, c) => {
@@ -306,10 +319,13 @@ function buildTable(wrap, view, model) {
   const edgeButton = (className, icon, title, mutate) => {
     control(`cm-lt-edge-btn ${className}`, icon, title).addEventListener("click", () => commit(mutate));
   };
-  edgeButton("cm-lt-edge-right-add", ICONS.plusSmall, "맨 오른쪽에 열 추가", (m) => insertColumn(m, cols));
-  if (cols > 1) {
-    edgeButton("cm-lt-edge-right-remove", ICONS.minusSmall, "마지막 열 삭제", (m) => deleteColumn(m, cols - 1));
-  }
+  control("cm-lt-edge-btn cm-lt-edge-right-add", ICONS.plusSmall, "맨 오른쪽에 열 추가")
+    .addEventListener("click", () => commit((m) => insertColumn(m, cols), { operation: "insert", index: cols }));
+  const removeColumnButton = cols > 1 ? control("cm-lt-edge-btn cm-lt-edge-right-remove", ICONS.minusSmall, "열 삭제") : null;
+  removeColumnButton?.addEventListener("click", () => {
+    const c = Array.from({ length: cols }, (_, i) => i).filter((i) => !hidden.includes(i)).at(-1);
+    if (c != null) commit((m) => deleteColumn(m, c), { operation: "delete", index: c });
+  });
   edgeButton("cm-lt-edge-bottom-add", ICONS.plusSmall, "맨 아래에 행 추가", (m) => insertRow(m, model.rows.length));
   if (model.rows.length > 0) {
     edgeButton("cm-lt-edge-bottom-remove", ICONS.minusSmall, "마지막 행 삭제", (m) => deleteRow(m, model.rows.length - 1));
@@ -378,6 +394,69 @@ function buildTable(wrap, view, model) {
   };
   wrap._cleanup = closeMenu;
 
+  const visibilityButton = control("cm-lt-visibility", svg('<rect x="2" y="3" width="12" height="10" rx="1"/><path d="M6 3v10M10 3v10"/>'), "열 표시");
+  const emptyMessage = document.createElement("div");
+  emptyMessage.className = "cm-lt-empty";
+  emptyMessage.textContent = "열 표시가 모두 해제되었습니다.";
+  grid.appendChild(emptyMessage);
+  const applyVisibility = () => {
+    table.querySelectorAll("td, th").forEach((td) => { td.hidden = hidden.includes(Number(td.dataset.c)); });
+    const allHidden = hidden.length === cols;
+    grid.classList.toggle("all-hidden", allHidden);
+    table.hidden = allHidden;
+    emptyMessage.hidden = !allHidden;
+    visibilityButton.classList.toggle("has-hidden", hidden.length > 0);
+    visibilityButton.title = hidden.length ? `열 표시 · ${hidden.length}개 숨김` : "열 표시";
+    visibilityButton.setAttribute("aria-label", visibilityButton.title);
+    if (removeColumnButton) {
+      removeColumnButton.hidden = allHidden;
+      const c = Array.from({ length: cols }, (_, i) => i).filter((i) => !hidden.includes(i)).at(-1);
+      const label = wrap._model.header[c] || `${(c ?? 0) + 1}열`;
+      removeColumnButton.title = `열 삭제: ${label}`;
+      removeColumnButton.setAttribute("aria-label", removeColumnButton.title);
+    }
+  };
+  wrap._resetVisibility = () => { hidden = []; wrap._hiddenColumns = hidden; applyVisibility(); };
+  const saveVisibility = (nextHidden) => {
+    hidden = nextHidden;
+    wrap._hiddenColumns = hidden;
+    applyVisibility();
+    return true;
+  };
+  visibilityButton.addEventListener("click", () => {
+    closeMenu();
+    menu = document.createElement("div");
+    menu.className = "cm-lt-menu cm-lt-visibility-menu";
+    const title = document.createElement("strong");
+    title.textContent = "열 표시";
+    menu.appendChild(title);
+    wrap._model.header.forEach((name, c) => {
+      const label = document.createElement("label");
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = !hidden.includes(c);
+      input.addEventListener("change", () => {
+        const next = input.checked ? hidden.filter((i) => i !== c) : [...hidden, c];
+        if (!saveVisibility(next)) input.checked = !input.checked;
+        const button = menu?.querySelector("button");
+        if (button) button.disabled = hidden.length === 0;
+      });
+      const text = document.createElement("span");
+      text.textContent = name || `열 ${c + 1}`;
+      label.append(input, text);
+      menu.appendChild(label);
+    });
+    const showAll = document.createElement("button");
+    showAll.type = "button";
+    showAll.textContent = "모두 표시";
+    showAll.disabled = hidden.length === 0;
+    showAll.addEventListener("click", () => { if (saveVisibility([])) closeMenu(); });
+    menu.appendChild(showAll);
+    grid.appendChild(menu);
+    document.addEventListener("mousedown", onOutside, true);
+  });
+  applyVisibility();
+
   let hoverCol = 0;
   let hoverRow = -1;
   colHandle.addEventListener("click", () => {
@@ -385,8 +464,8 @@ function buildTable(wrap, view, model) {
     openMenu(
       colHandle,
       [
-        [ICONS.right, "오른쪽에 열 삽입", () => commit((m) => insertColumn(m, c + 1))],
-        ...(cols > 1 ? [[ICONS.trash, "열 삭제", () => commit((m) => deleteColumn(m, c)), true]] : []),
+        [ICONS.right, "오른쪽에 열 삽입", () => commit((m) => insertColumn(m, c + 1), { operation: "insert", index: c + 1 })],
+        ...(cols > 1 ? [[ICONS.trash, "열 삭제", () => commit((m) => deleteColumn(m, c), { operation: "delete", index: c }), true]] : []),
       ],
       (_r, cc) => cc === c
     );
@@ -512,6 +591,22 @@ const liveTheme = EditorView.theme({
   ".cm-lt-wrap.is-doc-start .cm-lt-zone": { paddingTop: "18px" },
   ".cm-lt-wrap.is-doc-end .cm-lt-zone": { paddingBottom: "10px" },
   ".cm-lt-grid": { position: "relative" },
+  ".cm-lt-grid [hidden], .cm-lt-grid.all-hidden .cm-lt-edge-btn, .cm-lt-grid.all-hidden .cm-lt-handle": { display: "none !important" },
+  ".cm-lt-empty": { padding: "20px 28px", border: "1px solid #30363d", color: PALETTE.muted },
+  ".cm-lt-ctl.cm-lt-visibility": {
+    right: "0", top: "-20px", width: "20px", height: "18px", color: PALETTE.muted,
+    backgroundColor: "#161b22", borderRadius: "4px", boxShadow: "0 0 0 1px #30363d",
+  },
+  ".cm-lt-zone:hover .cm-lt-visibility, .cm-lt-zone:focus-within .cm-lt-visibility, .cm-lt-visibility:focus, .cm-lt-visibility.has-hidden": { display: "flex" },
+  ".cm-lt-visibility.has-hidden::after": {
+    content: '""', position: "absolute", right: "-2px", top: "-2px", width: "6px", height: "6px",
+    borderRadius: "50%", backgroundColor: "#2f81f7",
+  },
+  ".cm-lt-visibility-menu": { right: "0", top: "0", minWidth: "150px", zIndex: "5" },
+  ".cm-lt-visibility-menu strong": { padding: "5px", fontWeight: "600" },
+  ".cm-lt-visibility-menu label": { display: "flex", alignItems: "center", gap: "6px", padding: "4px 5px", cursor: "pointer" },
+  ".cm-lt-visibility-menu input": { margin: "0" },
+  ".cm-lt-visibility-menu button:disabled": { opacity: "0.5" },
   // With line wrapping the table fits the editor width: the grid shrinks to
   // the table but never past the editor, and long cells wrap.
   // `&` is the editor root, which carries `cm-wrapping`.
