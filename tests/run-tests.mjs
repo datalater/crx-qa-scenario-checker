@@ -15,6 +15,7 @@ import './markdown-alerts.test.mjs';
 import './table-cell-navigation.test.mjs';
 import './table-cell-selection.test.mjs';
 import './table-visibility.test.mjs';
+import './table-widget-height.test.mjs';
 import './mermaid-flow.test.mjs';
 import './diagram-export.test.mjs';
 import './diagram-zoom.test.mjs';

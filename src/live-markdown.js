@@ -29,6 +29,7 @@ import { renderChecklistAlertToken } from "../modules/checklist-alerts.js";
 import { findAlertTokens } from "./markdown-alerts.js";
 import { shiftHiddenColumns } from "./table-visibility.js";
 import { setupTableCellSelection } from "./table-cell-selection.js";
+import { mappedTableWidgetHeights } from "./table-widget-height.js";
 import { diagramExtensions } from "./live-diagram.js";
 import { focusTableCellFromEmptyArea, setupTableCellNavigation } from "./table-cell-navigation.js";
 import { EMPTY_FLOWCHART, joinFence } from "./mermaid-flow.js";
@@ -143,12 +144,15 @@ function findTableAt(view, pos) {
 class TableWidget extends WidgetType {
   // `edges` marks a table on the first / last line of the document, where no
   // blank line gives the overflowing controls room (see .cm-lt-zone).
-  constructor(source, autofocus, edges = "") {
+  constructor(source, autofocus, edges = "", height = -1) {
     super();
     this.source = source;
     this.autofocus = autofocus;
     this.edges = edges;
+    this.height = height;
   }
+
+  get estimatedHeight() { return this.height; }
 
   eq(other) {
     return other.source === this.source && other.edges === this.edges;
@@ -157,6 +161,7 @@ class TableWidget extends WidgetType {
   toDOM(view) {
     const wrap = document.createElement("div");
     wrap.className = `cm-lt-wrap ${this.edges}`.trim();
+    wrap._widget = this;
     wrap.contentEditable = "false";
     buildTable(wrap, view, parseTable(this.source));
     if (this.autofocus) requestAnimationFrame(() => wrap.querySelector(".cm-lt-cell")?.focus());
@@ -167,6 +172,7 @@ class TableWidget extends WidgetType {
   // keeps its focus and caret.
   updateDOM(dom, view) {
     dom.className = `cm-lt-wrap ${this.edges}`.trim();
+    dom._widget = this;
     const next = parseTable(this.source);
     const cells = dom.querySelectorAll(".cm-lt-cell");
     if (cells.length !== (next.rows.length + 1) * next.header.length) {
@@ -228,6 +234,9 @@ function buildTable(wrap, view, model) {
     // below the table first; otherwise undo would jump it to wherever the
     // editor's selection happened to be (often the top of the document).
     if (mutate) placeCaretBelow(view, range);
+    // The replacement widget needs the actual previous height as its initial
+    // estimate, or CodeMirror can shift the viewport when it remeasures a tall table.
+    if (wrap._widget) wrap._widget.height = wrap.getBoundingClientRect().height;
     wrap._pendingTableChange = true;
     try {
       view.dispatch({
@@ -547,16 +556,17 @@ function deleteTable(view, wrap) {
   view.focus();
 }
 
-function buildTableDecorations(state, focusAt = null) {
+function buildTableDecorations(state, focusAt = null, previous = null, changes = null) {
   const tree = ensureSyntaxTree(state, state.doc.length, 1000);
   const ranges = [];
+  const heights = mappedTableWidgetHeights(previous, changes, TableWidget);
   tree?.iterate({
     enter(node) {
       if (node.name !== "Table") return;
       const from = state.doc.lineAt(node.from).from;
       const to = state.doc.lineAt(node.to).to;
       const edges = [from === 0 ? "is-doc-start" : "", to === state.doc.length ? "is-doc-end" : ""].join(" ").trim();
-      const widget = new TableWidget(state.sliceDoc(from, to), from === focusAt, edges);
+      const widget = new TableWidget(state.sliceDoc(from, to), from === focusAt, edges, heights.get(from) ?? -1);
       ranges.push(Decoration.replace({ widget, block: true }).range(from, to));
       return false;
     },
@@ -569,7 +579,7 @@ const liveTables = StateField.define({
   create: (state) => buildTableDecorations(state),
   update(decorations, tr) {
     const focus = tr.effects.find((effect) => effect.is(focusTableEffect));
-    if (tr.docChanged || focus) return buildTableDecorations(tr.state, focus ? focus.value : null);
+    if (tr.docChanged || focus) return buildTableDecorations(tr.state, focus ? focus.value : null, decorations, tr.changes);
     return decorations;
   },
   provide: (field) => EditorView.decorations.from(field),
@@ -597,7 +607,8 @@ const liveTheme = EditorView.theme({
   ".cm-lt-grid [hidden], .cm-lt-grid.all-hidden .cm-lt-edge-btn, .cm-lt-grid.all-hidden .cm-lt-handle": { display: "none !important" },
   ".cm-lt-empty": { padding: "20px 28px", border: "1px solid #30363d", color: PALETTE.muted },
   ".cm-lt-ctl.cm-lt-visibility": {
-    right: "0", top: "-20px", width: "20px", height: "18px", color: PALETTE.muted,
+    // Overlap the table edge so the pointer can reach the hover-only button.
+    right: "0", top: "-16px", width: "20px", height: "18px", color: PALETTE.muted,
     backgroundColor: "#161b22", borderRadius: "4px", boxShadow: "0 0 0 1px #30363d",
   },
   ".cm-lt-zone:hover .cm-lt-visibility, .cm-lt-zone:focus-within .cm-lt-visibility, .cm-lt-visibility:focus, .cm-lt-visibility.has-hidden": { display: "flex" },
