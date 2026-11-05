@@ -611,6 +611,7 @@ const liveTheme = EditorView.theme({
     right: "0", top: "-16px", width: "20px", height: "18px", color: PALETTE.muted,
     backgroundColor: "#161b22", borderRadius: "4px", boxShadow: "0 0 0 1px #30363d",
   },
+  ".cm-lt-ctl.cm-lt-visibility:hover": { backgroundColor: "#21262d", color: PALETTE.text },
   ".cm-lt-zone:hover .cm-lt-visibility, .cm-lt-zone:focus-within .cm-lt-visibility, .cm-lt-visibility:focus, .cm-lt-visibility.has-hidden": { display: "flex" },
   ".cm-lt-visibility.has-hidden::after": {
     content: '""', position: "absolute", right: "-2px", top: "-2px", width: "6px", height: "6px",
