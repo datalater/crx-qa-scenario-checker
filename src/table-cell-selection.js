@@ -43,6 +43,14 @@ export function setupTableCellSelection(table) {
     const td = getCell(event.target);
     if (td) { start = point(td); startCell = td.querySelector('.cm-lt-cell'); dragging = true; }
   };
+  const paintSelection = () => {
+    const minRow = Math.min(start.r, end.r), maxRow = Math.max(start.r, end.r);
+    const minCol = Math.min(start.c, end.c), maxCol = Math.max(start.c, end.c);
+    table.querySelectorAll('td, th').forEach(item => {
+      const r = Number(item.dataset.r), c = Number(item.dataset.c);
+      item.classList.toggle('cm-lt-selected', !item.hidden && r >= minRow && r <= maxRow && c >= minCol && c <= maxCol);
+    });
+  };
   const onMove = event => {
     if (!dragging || !start) return;
     const td = getCell(doc.elementFromPoint(event.clientX, event.clientY));
@@ -52,12 +60,7 @@ export function setupTableCellSelection(table) {
     end = current;
     table.classList.add('cm-lt-selecting');
     doc.getSelection()?.removeAllRanges();
-    const minRow = Math.min(start.r, end.r), maxRow = Math.max(start.r, end.r);
-    const minCol = Math.min(start.c, end.c), maxCol = Math.max(start.c, end.c);
-    table.querySelectorAll('td, th').forEach(item => {
-      const r = Number(item.dataset.r), c = Number(item.dataset.c);
-      item.classList.toggle('cm-lt-selected', !item.hidden && r >= minRow && r <= maxRow && c >= minCol && c <= maxCol);
-    });
+    paintSelection();
   };
   const onUp = () => {
     if (dragging && end && startCell?.isConnected && !table.contains(doc.activeElement)) {
@@ -76,6 +79,19 @@ export function setupTableCellSelection(table) {
     event.stopPropagation();
   };
   const onKey = event => {
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey &&
+        !event.isComposing && event.keyCode !== 229 && event.key.toLowerCase() === 'a') {
+      const visible = [...table.querySelectorAll('td, th')].filter(td => !td.hidden);
+      if (!visible.length) return;
+      start = point(visible[0]);
+      end = point(visible[visible.length - 1]);
+      dragging = false;
+      doc.getSelection()?.removeAllRanges();
+      paintSelection();
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (['Control', 'Meta', 'Shift', 'Alt'].includes(event.key) ||
         ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c')) return;
     clear();

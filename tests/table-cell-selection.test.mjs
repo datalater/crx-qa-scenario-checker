@@ -50,6 +50,19 @@ test('multi-cell copy survives the modifier key and is handled before surroundin
     assertEqual(event.prevented, true);
     assertEqual(event.stopped, true);
     assertEqual(copied['text/plain'], 'one\ttwo');
+    selection.clear();
+    const selectAll = { key: 'a', metaKey: true, keyCode: 65,
+        preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; } };
+    tableEvents.keydown(selectAll);
+    assertEqual(selectAll.prevented, true);
+    assertEqual(selectAll.stopped, true);
+    const copiedAll = {};
+    events.copy.fn({ clipboardData: { setData(type, value) { copiedAll[type] = value; } }, preventDefault() {}, stopPropagation() {} });
+    assertEqual(copiedAll['text/plain'], 'one\ttwo');
+    selection.clear();
+    const composing = { key: 'a', metaKey: true, isComposing: true, preventDefault() { this.prevented = true; } };
+    tableEvents.keydown(composing);
+    assertEqual(composing.prevented, undefined);
     selection.destroy();
 });
 
