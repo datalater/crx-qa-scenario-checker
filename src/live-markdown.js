@@ -668,9 +668,10 @@ const liveTheme = EditorView.theme({
     minHeight: "1.6em",
     whiteSpace: "pre-wrap",
     // Korean breaks between words, not inside them; an over-long word still
-    // breaks rather than overflowing the cell.
+    // breaks rather than overflowing the cell. `anywhere`, not `break-word`:
+    // only `anywhere` lets the table column shrink below the word's width.
     wordBreak: "keep-all",
-    overflowWrap: "break-word",
+    overflowWrap: "anywhere",
     outline: "none",
     color: PALETTE.text,
     caretColor: PALETTE.text,
