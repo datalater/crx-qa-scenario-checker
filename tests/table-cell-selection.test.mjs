@@ -66,6 +66,44 @@ test('multi-cell copy survives the modifier key and is handled before surroundin
     selection.destroy();
 });
 
+test('select-all selects the focused cell text first, then the whole table', () => {
+    const tableEvents = {};
+    let range = null, painted = 0;
+    const cell = { textContent: 'hello', matches: selector => selector === '.cm-lt-cell',
+        contains(node) { return node === this; } };
+    const td = { dataset: { r: '0', c: '0' }, hidden: false, classList: { toggle(_name, yes) { if (yes) painted++; }, remove() {} } };
+    const selection = {
+        get rangeCount() { return range ? 1 : 0; },
+        getRangeAt() { return range; },
+        selectAllChildren(node) { range = { commonAncestorContainer: node, toString: () => node.textContent }; },
+        removeAllRanges() { range = null; },
+    };
+    const doc = { activeElement: cell, addEventListener() {}, removeEventListener() {}, getSelection() { return selection; } };
+    const table = { ownerDocument: doc, classList: { add() {}, remove() {} }, contains(node) { return node === cell; },
+        querySelectorAll(selector) { return selector === 'td, th' ? [td] : []; },
+        addEventListener(type, fn) { tableEvents[type] = fn; }, removeEventListener() {} };
+    const handle = setupTableCellSelection(table);
+    const press = () => {
+        const event = { key: 'a', ctrlKey: true, keyCode: 65, preventDefault() { this.prevented = true; }, stopPropagation() {} };
+        tableEvents.keydown(event);
+        return event;
+    };
+    assertEqual(press().prevented, true);
+    assertEqual(range?.commonAncestorContainer, cell);
+    assertEqual(painted, 0);
+    assertEqual(press().prevented, true);
+    assertEqual(range, null);
+    assertEqual(painted, 1);
+    press();
+    assertEqual(range, null);
+    assertEqual(painted, 2);
+    handle.clear();
+    cell.textContent = '';
+    press();
+    assertEqual(painted, 3);
+    handle.destroy();
+});
+
 test('copied cell text is quoted for spreadsheets and escaped in HTML', () => {
     const { text, html } = tableSelectionClipboard([['a\tb', 'one\ntwo', '<tag> & "x"']]);
     assertEqual(text, '"a\tb"\t"one\ntwo"\t"<tag> & ""x"""');

@@ -78,9 +78,28 @@ export function setupTableCellSelection(table) {
     event.preventDefault();
     event.stopPropagation();
   };
+  // Compared by text so a manual drag over the whole text counts too; an
+  // empty cell has nothing to select and goes straight to the table.
+  const cellTextSelected = (cell, selection) => {
+    const text = cell.textContent ?? '';
+    if (!text) return true;
+    if (!selection.rangeCount) return false;
+    const range = selection.getRangeAt(0);
+    return cell.contains(range.commonAncestorContainer) && range.toString() === text;
+  };
   const onKey = event => {
     if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey &&
         !event.isComposing && event.keyCode !== 229 && event.key.toLowerCase() === 'a') {
+      // First press selects the focused cell's text; pressing again (or when
+      // the text is already fully selected, or cells are selected) selects the table.
+      const cell = doc.activeElement;
+      const selection = doc.getSelection();
+      if (!end && selection && cell?.matches?.('.cm-lt-cell') && table.contains(cell) && !cellTextSelected(cell, selection)) {
+        selection.selectAllChildren(cell);
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       const visible = [...table.querySelectorAll('td, th')].filter(td => !td.hidden);
       if (!visible.length) return;
       start = point(visible[0]);
