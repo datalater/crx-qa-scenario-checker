@@ -1,6 +1,7 @@
 import { getActiveFile } from './workspace-manager.js';
 import { getChecklistAlertConfig, renderChecklistAlertToken } from './checklist-alerts.js';
 import { findNoteInlineTokens } from './note-inline.js';
+import { stepLinesToText } from './step-lines.js';
 import { CODE_VIEWS, hasCodeView, resolveCodeView, storedCodeView } from './code-view.js';
 import { applyCodeHeight, createCodeHeightHandle, parseCodeHeightPx } from './code-height.js';
 import {
@@ -145,7 +146,7 @@ export function stepMatchesChecklistFilter(step, filter) {
     if (filter === 'outline') return false;
     const token = `\`[!${filter}]\``;
     return STEP_TEXT_FIELDS.some(field => (
-        normalizeStepFieldForEditor(step?.[field]).toLowerCase().includes(token)
+        stepLinesToText(step?.[field]).toLowerCase().includes(token)
     ));
 }
 
@@ -177,18 +178,6 @@ export function buildChecklistVisibility(steps, filter) {
     });
 
     return visible;
-}
-
-function normalizeStepFieldForEditor(value) {
-    if (Array.isArray(value)) {
-        return value
-            // An object here is an older data shape, not text to show.
-            .map(item => (item == null || typeof item === 'object' ? '' : String(item).trim()))
-            .filter(Boolean)
-            .join('\n');
-    }
-    if (value == null || typeof value === 'object') return '';
-    return String(value).trim();
 }
 
 // Thin wrappers over divider-model so existing callers keep their names.
@@ -1264,10 +1253,10 @@ export function renderChecklist(container, data, options = {}) {
             return cell;
         };
 
-        populateCell('given', normalizeStepFieldForEditor(step.given));
-        populateCell('when', normalizeStepFieldForEditor(step.when));
-        populateCell('then', normalizeStepFieldForEditor(step.then));
-        const noteValue = normalizeStepFieldForEditor(step.note);
+        populateCell('given', stepLinesToText(step.given));
+        populateCell('when', stepLinesToText(step.when));
+        populateCell('then', stepLinesToText(step.then));
+        const noteValue = stepLinesToText(step.note);
         const noteCell = populateCell('note', noteValue, { rich: true });
         if (noteValue) tr.classList.add('has-note');
         if (typeof onNoteCellMount === 'function') onNoteCellMount(noteCell);

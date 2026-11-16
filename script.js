@@ -50,6 +50,7 @@ import { createEditorFindReplaceManager } from './modules/editor-find-replace-ma
 import { createDeletedFileHistoryManager } from './modules/deleted-file-history-manager.js';
 import { searchChecklist, tokenizeChecklistSearchQuery } from './modules/checklist-search-manager.js';
 import { collectNoteAssetNames } from './modules/note-inline.js';
+import { toStepLines } from './modules/step-lines.js';
 import { createNoteAssetStore } from './modules/note-assets.js';
 import { createNoteCellController } from './modules/note-cell-controller.js';
 import { createNoteImageManager } from './modules/note-image-manager.js';
@@ -2551,12 +2552,12 @@ function renderChecklist() {
                 }
                 if (field === 'note') {
                     // An empty note leaves no key behind in the JSON.
-                    const lines = toChecklistArray(val);
+                    const lines = toStepLines(val);
                     if (lines.length) currentData.steps[idx].note = lines;
                     else delete currentData.steps[idx].note;
                     scheduleNoteImageStatusRefresh();
                 } else if (isStepArrayField(field)) {
-                    currentData.steps[idx][field] = toChecklistArray(val);
+                    currentData.steps[idx][field] = toStepLines(val);
                 } else {
                     currentData.steps[idx][field] = val;
                 }
@@ -3149,19 +3150,6 @@ function setupChecklistSearch() {
         event.stopPropagation();
         openChecklistSearch();
     });
-}
-
-function toChecklistArray(value) {
-    if (Array.isArray(value)) {
-        return value
-            .map(item => (item == null ? '' : String(item).trim()))
-            .filter(Boolean);
-    }
-    if (value == null) return [];
-    return String(value)
-        .split('\n')
-        .map(line => line.trim())
-        .filter(Boolean);
 }
 
 function clearHighlightIfNoSelection() {

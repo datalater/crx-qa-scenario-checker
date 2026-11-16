@@ -1,4 +1,5 @@
 import { parseDivider, serializeDivider } from './divider-model.js';
+import { toStepLines } from './step-lines.js';
 
 export function buildExportPayload(options) {
     const {
@@ -110,30 +111,17 @@ function buildRequiredStepWithDefaults(input) {
     }
     const normalized = {
         ...source,
-        given: toChecklistArray(source.given),
-        when: toChecklistArray(source.when),
+        given: toStepLines(source.given),
+        when: toStepLines(source.when),
         pass: source.pass === true
     };
-    normalized['then'] = toChecklistArray(source['then']);
+    normalized['then'] = toStepLines(source['then']);
     return normalized;
 }
 
 function normalizeDividerValue(value) {
     const divider = parseDivider(value);
     return divider ? serializeDivider(divider) : null;
-}
-
-function toChecklistArray(value) {
-    if (Array.isArray(value)) {
-        return value
-            .map(item => (item == null ? '' : String(item).trim()))
-            .filter(Boolean);
-    }
-    if (value == null) return [];
-    return String(value)
-        .split('\n')
-        .map(line => line.trim())
-        .filter(Boolean);
 }
 
 function buildFieldSelectorTree(paths, canonicalizeFieldPath) {
