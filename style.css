@@ -201,6 +201,11 @@
     border: 1px solid var(--border-color);
   }
 
+  /* `display: flex` above would otherwise override the hidden attribute. */
+  .btn[hidden] {
+    display: none;
+  }
+
   .btn-icon {
     font-size: 13px;
     line-height: 1;
