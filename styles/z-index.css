@@ -6,9 +6,8 @@
   --z-pane-resizer: 10;
   --z-dropdown: 20;
   --z-app-header: 40;
-  --z-note-backdrop: 60;
   --z-table-search: 61;
-  --z-note-panel: 62;
+  --z-note-preview: 110;
   --z-context-menu: 120;
   --z-context-submenu: 121;
   --z-export-menu: 200;
@@ -38,7 +37,4 @@
   --z-editor-find: 4;
   --z-editor-scroll-markers: 4;
   --z-editor-error-marker: 1;
-
-  /* Inside the note panel's own stacking context. */
-  --z-note-panel-resizer: 1;
 }

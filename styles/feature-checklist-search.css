@@ -1,4 +1,4 @@
-/* Table Editor search, including note contents that are hidden from the table. */
+/* Table Editor search. */
 
 .checklist-search-toggle {
   flex: 0 0 auto;
@@ -174,23 +174,6 @@ tr.is-search-current {
 .cell-content.is-search-field-match {
   border-radius: 3px;
   background-color: rgb(210 153 34 / 13%);
-}
-
-.checklist-note-chip-group.is-search-match::after {
-  content: '⌕';
-  display: inline-flex;
-  align-items: center;
-  padding: 0 4px;
-  color: #e3b341;
-  border-left: 1px solid color-mix(in srgb, #e3b341 38%, transparent);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.step-detail-note-card.is-search-match,
-.step-detail-block.is-search-match {
-  border-color: #e3b341;
-  box-shadow: 0 0 0 1px rgb(227 179 65 / 35%);
 }
 
 @media (max-width: 760px) {

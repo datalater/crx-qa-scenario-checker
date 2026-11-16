@@ -1,5 +1,5 @@
 /**
- * Editor height for code dividers and note code blocks.
+ * Editor height for code dividers.
  *
  *   fixed    capped at 300px, scrolls past that (the CodeMirror theme)
  *   auto     grows to fit the whole text

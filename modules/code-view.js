@@ -6,7 +6,6 @@
  *   live    parts of it render as editing UI (today: markdown tables)
  *
  * Only markdown has a live view, so other languages have no view at all.
- * Code dividers and note code blocks share these rules.
  */
 
 export const CODE_VIEWS = Object.freeze(['source', 'live']);

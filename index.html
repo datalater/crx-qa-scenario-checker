@@ -187,8 +187,8 @@
                             id="checklist-search-toggle"
                             class="checklist-search-toggle"
                             type="button"
-                            title="Search table and notes"
-                            aria-label="Search table and notes"
+                            title="Search table"
+                            aria-label="Search table"
                             aria-expanded="false"
                         >Search</button>
                         <button
@@ -232,7 +232,7 @@
                                 </button>
                                 <div class="checklist-filter-separator" role="separator"></div>
                                 <div role="group" aria-labelledby="checklist-notes-group-label">
-                                <div id="checklist-notes-group-label" class="checklist-filter-group-label">Notes</div>
+                                <div id="checklist-notes-group-label" class="checklist-filter-group-label">Alerts</div>
                                 <button class="checklist-filter-item" type="button" role="option" data-filter="note">
                                     <span class="checklist-filter-swatch is-tone-note"></span>Note
                                 </button>
@@ -305,6 +305,13 @@
                 File tree, JSON Editor, Table Editor 중 하나 이상을 선택하면 내용이 표시됩니다.
             </div>
         </main>
+        <footer class="app-statusbar" id="app-statusbar">
+            <button id="statusbar-images" class="statusbar-item" type="button" title="이미지 관리" aria-haspopup="dialog">
+                <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M16 13.25A1.75 1.75 0 0 1 14.25 15H1.75A1.75 1.75 0 0 1 0 13.25V2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75ZM1.75 2.5a.25.25 0 0 0-.25.25v10.5c0 .138.112.25.25.25h.94l.03-.03 6.077-6.078a1.75 1.75 0 0 1 2.412-.06L14.5 10.31V2.75a.25.25 0 0 0-.25-.25Zm12.5 11a.25.25 0 0 0 .25-.25v-.917l-4.298-3.889a.25.25 0 0 0-.344.009L4.81 13.5ZM7 6a2 2 0 1 1-3.999.001A2 2 0 0 1 7 6ZM5.5 6a.5.5 0 1 0-1 0 .5.5 0 0 0 1 0Z"></path></svg>
+                <span id="statusbar-images-label">Images</span>
+            </button>
+            <span id="statusbar-message" class="statusbar-message" role="status" aria-live="polite"></span>
+        </footer>
     </div>
     <div id="tree-context-menu" class="tree-context-menu" role="menu" hidden>
         <button id="tree-context-new-folder" class="tree-context-menu-item" type="button" role="menuitem">새 폴더</button>
@@ -331,39 +338,9 @@
             <button class="tree-context-menu-item context-submenu-trigger" type="button" role="menuitem">타입 변경</button>
             <div class="context-submenu" role="menu"></div>
         </div>
-        <button id="checklist-context-detail" class="tree-context-menu-item" type="button" role="menuitem">노트 편집</button>
         <button id="checklist-context-pin" class="tree-context-menu-item" type="button" role="menuitem">행 고정</button>
         <button id="checklist-context-delete" class="tree-context-menu-item danger" type="button" role="menuitem">행 삭제</button>
     </div>
-    <div id="step-detail-backdrop" class="step-detail-backdrop is-hidden" aria-hidden="true"></div>
-    <aside
-        id="step-detail-panel"
-        class="step-detail-panel is-hidden"
-        role="dialog"
-        aria-label="Step notes"
-        aria-modal="false"
-    >
-        <div
-            id="step-detail-resizer"
-            class="step-detail-resizer"
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize note panel"
-        ></div>
-        <div class="step-detail-header">
-            <h3 id="step-detail-title">Step</h3>
-            <button id="step-detail-close" class="step-detail-close" type="button" aria-label="Close">&times;</button>
-        </div>
-        <div class="step-detail-body">
-            <div class="step-detail-section-head">
-                <h4>Notes</h4>
-                <button id="shared-notes-library" type="button" class="step-detail-add-btn">공유 노트 목록</button>
-                <button id="step-detail-add-note" class="step-detail-add-btn" type="button">+ Add</button>
-            </div>
-            <div id="step-detail-notes" class="step-detail-notes"></div>
-            <p id="step-detail-notes-empty" class="step-detail-empty">아직 노트가 없습니다. + Add로 추가하세요.</p>
-        </div>
-    </aside>
     <div id="command-palette-backdrop" class="command-palette-backdrop is-hidden" aria-hidden="true"></div>
     <div id="command-palette" class="command-palette is-hidden" role="dialog" aria-label="Command palette" aria-modal="true">
         <input id="command-palette-input" class="command-palette-input" type="text" autocomplete="off" spellcheck="false" placeholder="명령 검색..." aria-label="Command palette">

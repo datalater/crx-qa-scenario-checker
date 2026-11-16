@@ -1,5 +1,6 @@
 import { getActiveFile } from './workspace-manager.js';
 import { getChecklistAlertConfig, renderChecklistAlertToken } from './checklist-alerts.js';
+import { findNoteInlineTokens } from './note-inline.js';
 import { CODE_VIEWS, hasCodeView, resolveCodeView, storedCodeView } from './code-view.js';
 import { applyCodeHeight, createCodeHeightHandle, parseCodeHeightPx } from './code-height.js';
 import {
@@ -42,9 +43,26 @@ export function createTreeRowActions(actions) {
     return actionsWrap;
 }
 
-export function formatChecklistCellContent(rawValue) {
+/**
+ * Renders a cell's text. Every cell understands backtick tokens; a `rich`
+ * cell (the note column) also turns links and images into chips.
+ */
+export function formatChecklistCellContent(rawValue, options = {}) {
     if (!rawValue) return '-';
     const source = String(rawValue);
+    if (options.rich !== true) return formatChecklistCodeTokens(source);
+
+    let cursor = 0;
+    let rendered = '';
+    findNoteInlineTokens(source).forEach((token) => {
+        rendered += formatChecklistCodeTokens(source.slice(cursor, token.from));
+        rendered += renderNoteChip(token);
+        cursor = token.to;
+    });
+    return rendered + formatChecklistCodeTokens(source.slice(cursor));
+}
+
+function formatChecklistCodeTokens(source) {
     const pattern = /`([^`\n]+)`/g;
     let cursor = 0;
     let rendered = '';
@@ -59,6 +77,30 @@ export function formatChecklistCellContent(rawValue) {
 
     rendered += escapeChecklistHtml(source.slice(cursor));
     return rendered;
+}
+
+const NOTE_CHIP_ICONS = {
+    link: '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"></path></svg>',
+    image: '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M16 13.25A1.75 1.75 0 0 1 14.25 15H1.75A1.75 1.75 0 0 1 0 13.25V2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75ZM1.75 2.5a.25.25 0 0 0-.25.25v10.5c0 .138.112.25.25.25h.94l.03-.03 6.077-6.078a1.75 1.75 0 0 1 2.412-.06L14.5 10.31V2.75a.25.25 0 0 0-.25-.25Zm12.5 11a.25.25 0 0 0 .25-.25v-.917l-4.298-3.889a.25.25 0 0 0-.344.009L4.81 13.5ZM7 6a2 2 0 1 1-3.999.001A2 2 0 0 1 7 6ZM5.5 6a.5.5 0 1 0-1 0 .5.5 0 0 0 1 0Z"></path></svg>'
+};
+
+/**
+ * A chip carries its target in a data attribute; the note cell controller
+ * opens the link or the image from one listener on the table. It is not an
+ * anchor because the cell swaps back to its raw text as soon as it is
+ * focused, which would remove an anchor before its click arrives.
+ */
+function renderNoteChip(token) {
+    const target = escapeChecklistAttribute(token.target);
+    const hint = token.type === 'image' ? '클릭: 크게 보기' : '클릭: 새 탭에서 열기';
+    return `<span class="note-chip note-chip--${token.type}" contenteditable="false" role="${token.type === 'image' ? 'button' : 'link'}"`
+        + ` data-note-${token.type}="${target}" title="${target}\n${hint}">`
+        + `<span class="note-chip__icon">${NOTE_CHIP_ICONS[token.type]}</span>`
+        + `<span class="note-chip__label">${escapeChecklistHtml(token.label)}</span></span>`;
+}
+
+function escapeChecklistAttribute(value) {
+    return escapeChecklistHtml(value).replace(/"/g, '&quot;');
 }
 
 function escapeChecklistHtml(value) {
@@ -79,298 +121,42 @@ function renderChecklistInlineToken(token) {
     return `<code class="inline-code">${escapeChecklistHtml(token)}</code>`;
 }
 
-export const NOTE_BLOCK_TYPES = ['link', 'text', 'code'];
-
 /**
- * Note tones reuse the GFM alert vocabulary already used by the `[!note]`
- * inline tokens, so a label reads the same way as an alert in the spec it came
- * from. A tone is stored by name rather than by colour: the set stays small,
- * the value survives a theme change, and it can be validated.
+ * Row filters reuse the GFM alert vocabulary of the `[!note]` inline tokens:
+ * a filter keeps the rows that carry that token in any of their cells.
  */
-export const NOTE_TONES = ['note', 'tip', 'important', 'warning', 'caution'];
+export const NOTE_ALERT_FILTERS = ['note', 'tip', 'important', 'warning', 'caution'];
 
-export function normalizeNoteTone(value) {
-    if (typeof value !== 'string') return '';
-    const tone = value.trim().toLowerCase();
-    return NOTE_TONES.includes(tone) ? tone : '';
-}
+const STEP_TEXT_FIELDS = ['given', 'when', 'then', 'note'];
 
-export function isSafeChecklistRefLink(link) {
-    if (typeof link !== 'string' || !link.trim()) return false;
-    try {
-        const parsed = new URL(link.trim());
-        return parsed.protocol === 'https:' || parsed.protocol === 'http:';
-    } catch (_) {
-        return false;
-    }
-}
-
-export function normalizeNoteBlock(value, options = {}) {
-    const { keepEmpty = false } = options;
-
-    if (typeof value === 'string') {
-        const text = value.trim();
-        if (text) return { type: 'text', value: text };
-        return keepEmpty ? { type: 'text', value: '' } : null;
-    }
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-
-    const type = typeof value.type === 'string' ? value.type.trim().toLowerCase() : '';
-    if (!NOTE_BLOCK_TYPES.includes(type)) return null;
-
-    // Code keeps its own whitespace; the other types are single-line values.
-    const rawValue = value.value == null ? '' : String(value.value);
-    const normalizedValue = type === 'code' ? rawValue.replace(/\s+$/, '') : rawValue.trim();
-    // An empty value is kept while editing: the block was just added, or the
-    // user cleared the field and is about to retype it.
-    if (!normalizedValue && !keepEmpty) return null;
-
-    const block = { type, value: normalizedValue };
-
-    if (type === 'link') {
-        const label = typeof value.label === 'string' ? value.label.trim() : '';
-        if (label) block.label = label;
-    }
-    if (type === 'code') {
-        const lang = typeof value.lang === 'string' ? value.lang.trim().toLowerCase() : '';
-        if (lang) block.lang = lang;
-        // source/live for markdown; the default (live) is not stored.
-        const view = storedCodeView(value.view);
-        if (view) block.view = view;
-        // A dragged editor height ("480px"); none means the default cap.
-        const height = typeof value.height === 'string' ? value.height.trim().toLowerCase() : '';
-        if (parseCodeHeightPx(height) !== null) block.height = height;
-    }
-    return block;
-}
-
-/**
- * A note groups related blocks under one label, so a step can carry several
- * notes of different kinds (spec origin, open question, sample code...).
- * An empty label is allowed while the user is still typing one.
- */
-export function normalizeNoteEntry(value, options = {}) {
-    const { keepEmpty = false } = options;
-
-    if (typeof value === 'string') {
-        const text = value.trim();
-        if (text) return { label: '', blocks: [{ type: 'text', value: text }] };
-        return keepEmpty ? createEmptyNoteEntry() : null;
-    }
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-
-    if (typeof value.ref === 'string') return { ref: value.ref };
-    const label = typeof value.label === 'string' ? value.label.trim() : '';
-    const source = Array.isArray(value.blocks) ? value.blocks : [];
-    const blocks = [];
-    source.forEach((item) => {
-        const block = normalizeNoteBlock(item, { keepEmpty });
-        if (block) blocks.push(block);
-    });
-
-    if (!label && blocks.length === 0 && !keepEmpty) return null;
-
-    const entry = { label, blocks };
-    const tone = normalizeNoteTone(value.tone);
-    if (tone) entry.tone = tone;
-    return entry;
-}
-
-function convertLegacyRefToNotes(legacyRef) {
-    const refs = Array.isArray(legacyRef) ? legacyRef : [legacyRef];
-    const notes = [];
-    refs.forEach((entry) => {
-        if (typeof entry === 'string') {
-            const label = entry.trim();
-            if (label) notes.push({ label, blocks: [] });
-            return;
-        }
-        if (!entry || typeof entry !== 'object') return;
-        const label = typeof entry.slug === 'string' ? entry.slug.trim() : '';
-        const link = typeof entry.link === 'string' ? entry.link.trim() : '';
-        const text = typeof entry.text === 'string' ? entry.text.trim() : '';
-        const blocks = [];
-        if (link) blocks.push({ type: 'link', value: link });
-        if (text) blocks.push({ type: 'text', value: text });
-        if (label || blocks.length) notes.push({ label, blocks });
-    });
-    return notes;
-}
-
-/**
- * Reads a step's notes, accepting every shape this field has had:
- *   notes: [{ label, blocks }]       -> current
- *   note: "plain text"               -> one unlabeled note
- *   note: [{ type, value }]          -> flat block list, wrapped in one note
- *   ref:  [{ slug, link, text }]     -> one note per ref
- */
-export function getChecklistNotes(step, scenario = {}) {
-    const notes = [];
-
-    if (step?.ref !== undefined && step?.ref !== null) {
-        notes.push(...convertLegacyRefToNotes(step.ref));
-    }
-
-    const legacyNote = step?.note;
-    if (typeof legacyNote === 'string') {
-        const text = legacyNote.trim();
-        if (text) notes.push({ label: '', blocks: [{ type: 'text', value: text }] });
-    } else if (Array.isArray(legacyNote)) {
-        // Flat block list: a leading `label` block becomes the note label.
-        const blocks = [];
-        let label = '';
-        legacyNote.forEach((item) => {
-            if (item && typeof item === 'object' && item.type === 'label') {
-                const value = typeof item.value === 'string' ? item.value.trim() : '';
-                if (value && !label) label = value;
-                return;
-            }
-            const block = normalizeNoteBlock(item);
-            if (block) blocks.push(block);
-        });
-        if (label || blocks.length) notes.push({ label, blocks });
-    }
-
-    if (Array.isArray(step?.notes)) {
-        // An empty note is kept: the user just created that card and is about
-        // to type into it, so dropping it would make the card disappear.
-        step.notes.forEach((item) => {
-            const note = normalizeNoteEntry(item, { keepEmpty: true });
-            if (note?.ref !== undefined) {
-                const source = Object.hasOwn(scenario.sharedNotes || {}, note.ref)
-                    ? scenario.sharedNotes[note.ref] : null;
-                const resolved = source && !source.ref
-                    ? normalizeNoteEntry(source, { keepEmpty: true }) : null;
-                notes.push({ ...(resolved || { label: `Missing: ${note.ref}`, blocks: [], tone: 'caution' }), ref: note.ref, missing: !resolved });
-            } else if (note) notes.push(note);
-        });
-    }
-
-    return notes;
-}
-
-export function serializeNotes(notes) {
-    return notes.map((note) => {
-        if (typeof note.ref === 'string') return { ref: note.ref };
-        const serialized = { label: note.label || '' };
-        const tone = normalizeNoteTone(note.tone);
-        if (tone) serialized.tone = tone;
-        serialized.blocks = (note.blocks || []).map(block => ({ ...block }));
-        return serialized;
-    });
-}
-
-export function hasLegacyChecklistNoteShape(step) {
-    if (step?.ref !== undefined && step?.ref !== null) {
-        return Array.isArray(step.ref) ? step.ref.length > 0 : true;
-    }
-    const legacyNote = step?.note;
-    if (typeof legacyNote === 'string') return legacyNote.trim().length > 0;
-    if (Array.isArray(legacyNote)) return legacyNote.length > 0;
-    return false;
-}
-
-export function mergeSharedNotes(scenario, sourceId, targetId) {
-    const registry = scenario?.sharedNotes;
-    if (!registry || sourceId === targetId
-        || !Object.hasOwn(registry, sourceId) || !Object.hasOwn(registry, targetId)) return false;
-    const source = registry[sourceId];
-    const target = registry[targetId];
-    if (!source || !target || source.ref !== undefined || target.ref !== undefined) return false;
-    const blocks = [...(target.blocks || []), ...structuredClone(source.blocks || [])];
-    // Only rewrite rows using the source; preserve unrelated notes and ordering.
-    const updates = (scenario.steps || []).filter(step => step?.notes?.some(note => note?.ref === sourceId))
-        .map(step => {
-            let linked = false;
-            const notes = step.notes.flatMap(note => {
-                if (note?.ref !== sourceId && note?.ref !== targetId) return [note];
-                if (linked) return [];
-                linked = true;
-                return [{ ref: targetId }];
-            });
-            return { step, notes };
-        });
-    target.blocks = blocks;
-    updates.forEach(({ step, notes }) => { step.notes = notes; });
-    delete registry[sourceId];
-    return true;
-}
-
-export function mergeLocalNoteIntoShared(step, scenario, noteIndex, id) {
-    const notes = getChecklistNotes(step, scenario);
-    const source = notes[noteIndex];
-    const target = Object.hasOwn(scenario.sharedNotes || {}, id) ? scenario.sharedNotes[id] : null;
-    if (!source || source.ref !== undefined || !target || target.ref !== undefined) return false;
-    target.blocks = [...(target.blocks || []), ...structuredClone(source.blocks || [])];
-    // Preserve the shared title/tone and avoid duplicate references on this row.
-    const alreadyLinked = notes.some(note => note.ref === id);
-    if (alreadyLinked) notes.splice(noteIndex, 1);
-    else notes[noteIndex] = { ref: id };
-    step.notes = serializeNotes(notes);
-    delete step.note;
-    delete step.ref;
-    return true;
-}
-
-export function createEmptyNoteEntry() {
-    return { label: '', blocks: [] };
-}
-
-/**
- * Builds one chip per note for the table. The label is what the user typed;
- * without one, fall back to a link label, its host, then a generic index.
- */
-export function getChecklistNoteChips(step, scenario) {
-    return getChecklistNotes(step, scenario).map((note, noteIndex) => {
-        const linkBlock = note.blocks.find(block => block.type === 'link');
-        let label = note.label;
-        if (!label && linkBlock) {
-            label = linkBlock.label || formatLinkHost(linkBlock.value);
-        }
-        if (!label) label = `Note ${noteIndex + 1}`;
-
-        const link = linkBlock && isSafeChecklistRefLink(linkBlock.value)
-            ? linkBlock.value
-            : '';
-
-        return {
-            noteIndex,
-            label: note.ref ? `🔗 ${label}` : label,
-            link,
-            hasLink: Boolean(link),
-            tone: normalizeNoteTone(note.tone),
-            blockCount: note.blocks.length
-        };
-    });
-}
-
-export const CHECKLIST_FILTERS = ['all', 'outline', ...NOTE_TONES];
+export const CHECKLIST_FILTERS = ['all', 'outline', ...NOTE_ALERT_FILTERS];
 
 export function normalizeChecklistFilter(value) {
-    if (typeof value === 'string' && value.startsWith('shared:')) return value;
     const filter = typeof value === 'string' ? value.trim().toLowerCase() : '';
     return CHECKLIST_FILTERS.includes(filter) ? filter : 'all';
 }
 
 /**
  * `outline` hides every step, leaving the dividers as a table of contents.
- * A tone keeps the steps carrying a note of that tone.
+ * An alert filter keeps the steps that carry that alert token.
  */
-export function stepMatchesChecklistFilter(step, filter, scenario) {
-    if (filter.startsWith('shared:')) return step?.notes?.some(n => n.ref === filter.slice(7)) || false;
+export function stepMatchesChecklistFilter(step, filter) {
     if (filter === 'all') return true;
     if (filter === 'outline') return false;
-    return getChecklistNotes(step, scenario).some(note => normalizeNoteTone(note.tone) === filter);
+    const token = `\`[!${filter}]\``;
+    return STEP_TEXT_FIELDS.some(field => (
+        normalizeStepFieldForEditor(step?.[field]).toLowerCase().includes(token)
+    ));
 }
 
 /**
  * A divider is kept only when the section it opens still has a visible step,
  * so filtering never leaves a heading with nothing under it.
  */
-export function buildChecklistVisibility(steps, filter, scenario) {
+export function buildChecklistVisibility(steps, filter) {
     const list = Array.isArray(steps) ? steps : [];
     const visible = list.map(step => (
-        isChecklistDividerStep(step) ? false : stepMatchesChecklistFilter(step, filter, scenario)
+        isChecklistDividerStep(step) ? false : stepMatchesChecklistFilter(step, filter)
     ));
 
     if (filter === 'outline') return list.map(step => isChecklistDividerStep(step));
@@ -393,22 +179,15 @@ export function buildChecklistVisibility(steps, filter, scenario) {
     return visible;
 }
 
-function formatLinkHost(link) {
-    try {
-        return new URL(link).hostname.replace(/^www\./, '');
-    } catch (_) {
-        return 'link';
-    }
-}
-
 function normalizeStepFieldForEditor(value) {
     if (Array.isArray(value)) {
         return value
-            .map(item => (item == null ? '' : String(item).trim()))
+            // An object here is an older data shape, not text to show.
+            .map(item => (item == null || typeof item === 'object' ? '' : String(item).trim()))
             .filter(Boolean)
             .join('\n');
     }
-    if (value == null) return '';
+    if (value == null || typeof value === 'object') return '';
     return String(value).trim();
 }
 
@@ -1034,86 +813,6 @@ function appendAddRowButton(container, insertIndex, options = {}) {
     container.appendChild(wrapperRow);
 }
 
-const CHECKLIST_REF_LINK_ICON = '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M3.75 2h3a.75.75 0 0 1 0 1.5h-3a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25v-3a.75.75 0 0 1 1.5 0v3A1.75 1.75 0 0 1 12.25 14h-8.5A1.75 1.75 0 0 1 2 12.25v-8.5A1.75 1.75 0 0 1 3.75 2Zm6.5 0h3.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0V4.56L8.56 9.25a.75.75 0 1 1-1.06-1.06L12.19 3.5h-1.94a.75.75 0 0 1 0-1.5Z"></path></svg>';
-
-const CHECKLIST_NOTE_ICON = '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M1 2.75A1.75 1.75 0 0 1 2.75 1h10.5A1.75 1.75 0 0 1 15 2.75v8.5A1.75 1.75 0 0 1 13.25 13H7.06l-3.53 2.72A.75.75 0 0 1 2.3 15.1l.2-2.1h-.25A1.75 1.75 0 0 1 1 11.25v-8.5Zm3.5 2a.75.75 0 0 0 0 1.5h7a.75.75 0 0 0 0-1.5h-7Zm0 3a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 0-1.5h-4.5Z"></path></svg>';
-
-function renderChecklistNoteCell(cell, options) {
-    if (!cell) return;
-    const { index, chips, activeNoteKey, matchingNoteIndexes = new Set(), onOpenStepDetail } = options;
-
-    const open = (target, event) => {
-        event.stopPropagation();
-        if (typeof onOpenStepDetail === 'function') onOpenStepDetail(index, target);
-    };
-
-    // Clicking anywhere in the cell opens the panel; the chips and the add
-    // button narrow that down to a specific note or a new one.
-    cell.addEventListener('click', (event) => open({ type: 'panel' }, event));
-
-    const wrapper = document.createElement('div');
-    wrapper.className = 'checklist-note-wrapper';
-
-    chips.forEach((chip) => {
-        // The label button and the link anchor are siblings: an anchor nested
-        // inside a button is invalid HTML and swallows the navigation.
-        const group = document.createElement('span');
-        group.className = 'checklist-note-chip-group';
-        if (chip.tone) group.classList.add(`is-tone-${chip.tone}`);
-        if (activeNoteKey === chip.noteIndex) group.classList.add('is-active');
-        if (matchingNoteIndexes.has(chip.noteIndex)) group.classList.add('is-search-match');
-
-        const chipEl = document.createElement('button');
-        chipEl.type = 'button';
-        chipEl.className = 'checklist-note-chip';
-
-        const labelEl = document.createElement('span');
-        labelEl.className = 'checklist-note-chip__label';
-        labelEl.textContent = chip.label;
-        chipEl.appendChild(labelEl);
-
-        const blockLabel = chip.blockCount === 1 ? '1 block' : `${chip.blockCount} blocks`;
-        chipEl.title = `Open note "${chip.label}" (${blockLabel})`;
-        chipEl.setAttribute('aria-label', `Open note ${chip.label}, ${blockLabel}`);
-        chipEl.addEventListener('click', (event) => {
-            open({ type: 'note', noteIndex: chip.noteIndex }, event);
-        });
-        group.appendChild(chipEl);
-
-        if (chip.link) {
-            const linkEl = document.createElement('a');
-            linkEl.className = 'checklist-note-chip__link';
-            linkEl.href = chip.link;
-            // A named target reuses one background tab instead of piling up a
-            // new one per click, and never navigates this window.
-            linkEl.target = 'qa-scenario-reference';
-            linkEl.rel = 'noopener noreferrer';
-            linkEl.innerHTML = CHECKLIST_REF_LINK_ICON;
-            linkEl.title = `Open ${chip.link}`;
-            linkEl.setAttribute('aria-label', `Open link for ${chip.label} in a new tab`);
-            // The cell and the row both open the panel on click, so the anchor
-            // must stop the event from reaching them.
-            linkEl.addEventListener('click', (event) => {
-                event.stopPropagation();
-            });
-            group.appendChild(linkEl);
-        }
-
-        wrapper.appendChild(group);
-    });
-
-    const addBtn = document.createElement('button');
-    addBtn.type = 'button';
-    addBtn.className = 'checklist-note-add';
-    addBtn.textContent = '+';
-    addBtn.title = 'Add note';
-    addBtn.setAttribute('aria-label', 'Add note');
-    addBtn.addEventListener('click', (event) => open({ type: 'new' }, event));
-    wrapper.appendChild(addBtn);
-
-    cell.appendChild(wrapper);
-}
-
 function blurOnEscape(editable) {
     editable.addEventListener('keydown', (event) => {
         if (event.key !== 'Escape') return;
@@ -1191,7 +890,7 @@ function createDividerHeadLabel(text) {
 }
 
 /**
- * A header select styled like the note code block language picker. An
+ * A small header select. An
  * unknown stored value stays selectable so opening the row does not
  * silently replace it.
  */
@@ -1212,7 +911,7 @@ function createDividerOptionSelect({ label, options, selected }) {
     return select;
 }
 
-/** Language picker, listed like the note one: plain, then the bundle's. */
+/** Language picker: plain, then the languages in the bundle. */
 function createDividerLangSelect({ selected, languages }) {
     return createDividerOptionSelect({
         label: 'Code language',
@@ -1337,7 +1036,7 @@ function mountCodeDividerEditor(dividerType, { divider, commit }) {
         }
     });
 
-    // Same header as a note code block: `label [select]` pairs. It sits above
+    // The header is `label [select]` pairs. It sits above
     // the editor because the table is often wider than the pane, so controls
     // beside the editor could end up off-screen.
     const head = document.createElement('div');
@@ -1368,8 +1067,8 @@ function mountCodeDividerEditor(dividerType, { divider, commit }) {
 export function renderChecklist(container, data, options = {}) {
     const {
         onUpdatePass, onUpdateStep, onHighlightStep, onScenarioTitleUpdate,
-        onAddStep, onAddDivider, onOpenChecklistContextMenu, onOpenStepDetail,
-        activeNoteIndex = null, activeNoteKey = null, activeFilter = 'all',
+        onAddStep, onAddDivider, onOpenChecklistContextMenu,
+        onNoteCellMount, activeFilter = 'all',
         searchResults = [], activeSearchResult = null, pinnedOnly = false
     } = options;
     if (!container) return;
@@ -1414,7 +1113,7 @@ export function renderChecklist(container, data, options = {}) {
     const filter = normalizeChecklistFilter(activeFilter);
     const visibility = pinnedOnly
         ? data.steps.map(step => step.pinned === true)
-        : buildChecklistVisibility(data.steps, filter, data);
+        : buildChecklistVisibility(data.steps, filter);
     const searchResultsByStep = new Map();
     searchResults.forEach((result) => {
         if (!searchResultsByStep.has(result.stepIndex)) searchResultsByStep.set(result.stepIndex, []);
@@ -1541,29 +1240,16 @@ export function renderChecklist(container, data, options = {}) {
                     <span class="checkmark"></span>
                 </label>
             </td>
-            <td class="col-note"></td>
+            <td class="col-note"><div class="cell-content" contenteditable="plaintext-only" data-index="${index}" data-field="note"></div></td>
         `;
-
-        const noteChips = getChecklistNoteChips(step, data);
-        const isActiveStep = activeNoteIndex === index;
-        renderChecklistNoteCell(tr.querySelector('.col-note'), {
-            index,
-            chips: noteChips,
-            activeNoteKey: isActiveStep ? activeNoteKey : null,
-            matchingNoteIndexes: new Set(rowSearchResults
-                .filter(result => result.field === 'note')
-                .map(result => result.noteIndex)),
-            onOpenStepDetail
-        });
-        if (noteChips.length > 0) tr.classList.add('has-note');
-        if (isActiveStep) tr.classList.add('is-note-active');
 
         if (pinnedOnly) addPinnedRowControls(tr, tr.querySelector('.col-then'));
 
-        const populateCell = (field, val) => {
+        // The note column is the only one that renders links and images.
+        const populateCell = (field, val, { rich = false } = {}) => {
             const cell = tr.querySelector(`[data-field="${field}"]`);
             cell.dataset.rawValue = val;
-            cell.innerHTML = formatChecklistCellContent(val);
+            cell.innerHTML = formatChecklistCellContent(val, { rich });
             
             cell.addEventListener('focus', (e) => { e.target.textContent = e.target.dataset.rawValue; });
             cell.addEventListener('input', (e) => onUpdateStep(index, field, e.target.innerText));
@@ -1572,16 +1258,21 @@ export function renderChecklist(container, data, options = {}) {
                 if (v === '-') v = '';
                 onUpdateStep(index, field, v);
                 e.target.dataset.rawValue = v;
-                e.target.innerHTML = formatChecklistCellContent(v);
+                e.target.innerHTML = formatChecklistCellContent(v, { rich });
             });
             blurOnEscape(cell);
+            return cell;
         };
 
         populateCell('given', normalizeStepFieldForEditor(step.given));
         populateCell('when', normalizeStepFieldForEditor(step.when));
         populateCell('then', normalizeStepFieldForEditor(step.then));
+        const noteValue = normalizeStepFieldForEditor(step.note);
+        const noteCell = populateCell('note', noteValue, { rich: true });
+        if (noteValue) tr.classList.add('has-note');
+        if (typeof onNoteCellMount === 'function') onNoteCellMount(noteCell);
         rowSearchResults.forEach((result) => {
-            if (result.field === 'given' || result.field === 'when' || result.field === 'then') {
+            if (STEP_TEXT_FIELDS.includes(result.field)) {
                 tr.querySelector(`[data-field="${result.field}"]`)?.classList.add('is-search-field-match');
             }
         });

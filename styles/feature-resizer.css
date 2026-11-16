@@ -6,9 +6,7 @@
 
   body.is-resizing .pane,
   body.is-resizing .pane-resizer,
-  body.is-resizing .file-tree-resizer,
-  body.is-resizing .step-detail-panel,
-  body.is-resizing .step-detail-resizer {
+  body.is-resizing .file-tree-resizer {
     transition: none !important;
   }
 

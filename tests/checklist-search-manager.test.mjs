@@ -15,7 +15,7 @@ test('table search uses AND matching regardless of keyword order', () => {
     assertEqual(checklistSearchTextMatches('Reset the password', ['password', 'initial']), false);
 });
 
-test('table search finds visible fields and hidden note contents', () => {
+test('table search finds the step cells, the note included', () => {
     const data = {
         steps: [
             { divider: 'Authentication' },
@@ -23,48 +23,36 @@ test('table search finds visible fields and hidden note contents', () => {
                 given: ['An initial password was issued'],
                 when: ['The user signs in'],
                 then: ['Show the reset page'],
-                notes: [{
-                    label: 'Original specification',
-                    blocks: [{ type: 'text', value: 'The original sentence must remain unchanged.' }]
-                }]
+                note: ['[Original specification](https://example.com/prd)', 'The original sentence must remain unchanged.']
             }
         ]
     };
-    const visible = searchChecklist(data, 'initial password');
-    const hidden = searchChecklist(data, 'sentence unchanged');
-    assertEqual(visible.length, 1);
-    assertEqual(visible[0].field, 'given');
-    assertEqual(hidden.length, 1);
-    assertEqual(hidden[0].field, 'note');
-    assertEqual(hidden[0].noteIndex, 0);
-    assertEqual(hidden[0].blockIndex, 0);
+    const given = searchChecklist(data, 'initial password');
+    const note = searchChecklist(data, 'sentence unchanged');
+    assertEqual(given.length, 1);
+    assertEqual(given[0].field, 'given');
+    assertEqual(note.length, 1);
+    assertEqual(note[0].field, 'note');
+    assertEqual(note[0].fieldLabel, 'Note');
+    assertEqual(note[0].visibleStepNumber, 1);
 });
 
-test('table search resolves shared notes and preserves their row destination', () => {
-    const data = {
-        sharedNotes: {
-            policy: { label: 'Policy', blocks: [{ type: 'code', value: 'forcePasswordReset();' }] }
-        },
-        steps: [
-            { given: [], when: [], then: [], notes: [{ ref: 'policy' }] },
-            { given: [], when: [], then: [], notes: [{ ref: 'policy' }] }
-        ]
-    };
-    const results = searchChecklist(data, 'forcePasswordReset');
-    assertEqual(results.length, 2);
-    assertEqual(results[0].isShared, true);
-    assertEqual(results[0].stepIndex, 0);
-    assertEqual(results[1].stepIndex, 1);
-});
-
-test('table search can match keywords spread across one note', () => {
+test('table search can match keywords spread across the lines of one note', () => {
     const data = { steps: [{
         given: [], when: [], then: [],
-        notes: [{ label: 'Password policy', blocks: [{ type: 'text', value: 'Reset is mandatory.' }] }]
+        note: ['Password policy', 'Reset is mandatory.']
     }] };
     const results = searchChecklist(data, 'password mandatory');
     assertEqual(results.length, 1);
     assertEqual(results[0].field, 'note');
+});
+
+test('table search does not read the note panel data of older files', () => {
+    const data = { steps: [{
+        given: [], when: [], then: [],
+        notes: [{ label: 'Password policy', blocks: [{ type: 'text', value: 'Reset is mandatory.' }] }]
+    }] };
+    assertEqual(searchChecklist(data, 'mandatory').length, 0);
 });
 
 test('table search snippet keeps the match and marks clipped edges', () => {

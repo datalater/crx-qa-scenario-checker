@@ -88,6 +88,11 @@ export const SHORTCUTS = [
         bindings: [{ codes: ['KeyB'], keys: ['b'], meta: true, ctrl: false, shift: false, alt: false, platform: 'mac' }]
     },
     {
+        id: 'insertLink',
+        label: 'Insert / edit link (Note cell)',
+        bindings: [{ codes: ['KeyK'], keys: ['k'], primary: true, shift: false, alt: false }]
+    },
+    {
         id: 'indent',
         label: 'Indent (JSON Editor)',
         bindings: [{ codes: ['Tab'], keys: ['tab'], shift: false }]

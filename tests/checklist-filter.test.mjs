@@ -9,15 +9,15 @@ import { assertDeepEqual, assertEqual, test } from './lib/test-runner.mjs';
 
 const scenario = [
     { divider: 'A' },
-    { given: [], when: [], then: [], pass: false, notes: [{ label: 'q', tone: 'caution', blocks: [] }] },
-    { given: [], when: [], then: [], pass: false, notes: [{ label: 'c', tone: 'tip', blocks: [] }] },
+    { given: [], when: [], then: [], pass: false, note: ['`[!caution]` q'] },
+    { given: [], when: [], then: ['`[!tip]` c'], pass: false },
     { divider: 'B' },
-    { given: [], when: [], then: [], pass: false, notes: [{ label: 'plain', blocks: [] }] },
+    { given: [], when: [], then: [], pass: false, note: ['plain'] },
     { divider: 'C' },
-    { given: [], when: [], then: [], pass: false, notes: [{ label: 'q2', tone: 'caution', blocks: [] }] }
+    { given: ['`[!CAUTION]` q2'], when: [], then: [], pass: false }
 ];
 
-test('filters are all, outline, and the five tones', () => {
+test('filters are all, outline, and the five alerts', () => {
     assertDeepEqual(CHECKLIST_FILTERS, ['all', 'outline', 'note', 'tip', 'important', 'warning', 'caution']);
 });
 
@@ -40,7 +40,7 @@ test('outline keeps only the dividers, as a table of contents', () => {
     });
 });
 
-test('a tone filter keeps the steps carrying that tone', () => {
+test('an alert filter keeps the steps carrying that alert token', () => {
     const visible = buildChecklistVisibility(scenario, 'caution');
     assertEqual(visible[1], true);
     assertEqual(visible[2], false);
@@ -55,23 +55,24 @@ test('a divider survives only when its section still has a row', () => {
     assertEqual(visible[5], true, 'C has one');
 });
 
-test('a step matches a tone only through its notes', () => {
-    const step = { notes: [{ label: 'x', tone: 'warning', blocks: [] }] };
+test('a step matches an alert through a token in any of its cells', () => {
+    const step = { given: [], when: [], then: [], note: ['see `[!warning]` below'] };
     assertEqual(stepMatchesChecklistFilter(step, 'warning'), true);
     assertEqual(stepMatchesChecklistFilter(step, 'caution'), false);
     assertEqual(stepMatchesChecklistFilter(step, 'all'), true);
     assertEqual(stepMatchesChecklistFilter(step, 'outline'), false);
+    assertEqual(stepMatchesChecklistFilter({ when: ['`[!tip]`'] }, 'tip'), true);
 });
 
-test('a step with no note matches only all', () => {
-    const step = { given: [], when: [], then: [], pass: false };
+test('a step with no alert token matches only all', () => {
+    const step = { given: [], when: [], then: [], pass: false, note: ['warning: memo'] };
     assertEqual(stepMatchesChecklistFilter(step, 'all'), true);
-    assertEqual(stepMatchesChecklistFilter(step, 'tip'), false);
+    assertEqual(stepMatchesChecklistFilter(step, 'warning'), false);
 });
 
-test('a legacy note carries no tone, so tone filters skip it', () => {
-    assertEqual(stepMatchesChecklistFilter({ note: 'memo' }, 'note'), false);
-    assertEqual(stepMatchesChecklistFilter({ note: 'memo' }, 'all'), true);
+test('the note panel data of older files is not read', () => {
+    const step = { notes: [{ label: 'x', tone: 'warning', blocks: [] }] };
+    assertEqual(stepMatchesChecklistFilter(step, 'warning'), false);
 });
 
 test('a filter matching nothing hides every row', () => {
