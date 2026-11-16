@@ -35,7 +35,7 @@
       ],
       "pass": true,
       "note": [
-        "PRD 2.1 초기 화면 [PRD](https://example.com/docs/luxury-car-configurator-prd#initial-view) [Figma](https://www.figma.com/design/example/car-configurator?node-id=100-100&m=dev)",
+        "PRD 2.1 초기 화면 [PRD](https://example.com/docs/luxury-car-configurator-prd#initial-view) [Figma](https://www.figma.com/design/example/car-configurator?node-id=100-100&m=dev) ![모델 선택 화면](assets/model-select.png)",
         "진입 시 모델 선택 영역과 가격 요약 패널을 함께 노출한다. 가격 요약은 우측 고정."
       ]
     },
@@ -111,7 +111,7 @@
       ],
       "pass": true,
       "note": [
-        "PRD 3.4 옵션 충돌 [PRD](https://example.com/docs/luxury-car-configurator-prd#option-conflict) [Figma](https://www.figma.com/design/example/car-configurator?node-id=400-400&m=dev)",
+        "PRD 3.4 옵션 충돌 [PRD](https://example.com/docs/luxury-car-configurator-prd#option-conflict) [Figma](https://www.figma.com/design/example/car-configurator?node-id=400-400&m=dev) ![충돌 안내 모달](assets/option-conflict-modal.png)",
         "Track Edition은 Performance Wheel만 허용한다. 충돌 시 모달로 안내하고 선택은 반영하지 않는다."
       ]
     },
