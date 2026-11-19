@@ -82,11 +82,11 @@ const ARROW_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
 // ---------- finding fences ----------
 
 /**
- * Every plain (unindented) ```mermaid fence as `{ from, to }` (whole lines).
- * Other fences are skipped over, so a ```mermaid line inside another code
- * block stays text.
+ * Every plain (unindented) fence with the given info string as `{ from, to }`
+ * (whole lines). Other fences are skipped over, so a ```mermaid line inside
+ * another code block stays text.
  */
-export function findMermaidFences(doc) {
+export function findFences(doc, info) {
   const fences = [];
   let open = null;
   for (let n = 1; n <= doc.lines; n++) {
@@ -95,14 +95,16 @@ export function findMermaidFences(doc) {
       const match = /^```(.*)$/.exec(line.text);
       if (match) open = { from: line.from, info: match[1].trim() };
     } else if (/^```\s*$/.test(line.text)) {
-      if (open.info === "mermaid") fences.push({ from: open.from, to: line.to });
+      if (open.info === info) fences.push({ from: open.from, to: line.to });
       open = null;
     }
   }
   // An unclosed fence runs to the end of the document.
-  if (open?.info === "mermaid") fences.push({ from: open.from, to: doc.length });
+  if (open?.info === info) fences.push({ from: open.from, to: doc.length });
   return fences;
 }
+
+export const findMermaidFences = (doc) => findFences(doc, "mermaid");
 
 // ---------- widget ----------
 

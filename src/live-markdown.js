@@ -3,7 +3,7 @@
  * document stays plain markdown. Today that is GFM tables; other parts (links,
  * ...) can join `liveMarkdown()` without changing the view or stored data.
  *
- * Also provides the markdown slash commands (`/table`), which work in both
+ * Also provides the markdown slash commands (`/table`, `/diagram`, `/ui`), which work in both
  * the source and live views.
  */
 import { pickedCompletion } from "@codemirror/autocomplete";
@@ -33,6 +33,8 @@ import { mappedTableWidgetHeights } from "./table-widget-height.js";
 import { diagramExtensions } from "./live-diagram.js";
 import { focusTableCellFromEmptyArea, setupTableCellNavigation } from "./table-cell-navigation.js";
 import { EMPTY_FLOWCHART, joinFence } from "./mermaid-flow.js";
+import { openUiSourceEffect, uiSketchExtensions } from "./live-ui-sketch.js";
+import { EMPTY_UI_SKETCH, UI_FENCE_INFO } from "./ui-sketch.js";
 import { PALETTE, darkHighlightStyle } from "./theme-palette.js";
 
 // ---------- icons (currentColor) ----------
@@ -822,7 +824,7 @@ const pasteTables = EditorView.domEventHandlers({
 
 /** Everything the live view adds. Only mounted for markdown in live view. */
 export function liveMarkdown() {
-  return [liveTables, liveAlertTokens, liveTheme, pasteTables, diagramExtensions];
+  return [liveTables, liveAlertTokens, liveTheme, pasteTables, diagramExtensions, uiSketchExtensions];
 }
 
 // ---------- slash commands ----------
@@ -838,7 +840,7 @@ function insideNoCommandNode(state, pos) {
 }
 
 /** Replaces the command text with a block (a table, a fenced diagram, ...). */
-function applyBlockCommand(view, completion, from, to, block, focusTable) {
+function applyBlockCommand(view, completion, from, to, block, focusTable, effectAt = null) {
   const { doc } = view.state;
   const line = doc.lineAt(from);
   const isBlank = (n) => !doc.line(n).text.trim();
@@ -861,7 +863,7 @@ function applyBlockCommand(view, completion, from, to, block, focusTable) {
     // In the source view the caret lands in the block's first line; in the
     // live view a new table's first cell takes focus.
     selection: { anchor: plan.tableFrom + (focusTable ? 2 : 0) },
-    effects: focusTable ? focusTableEffect.of(plan.tableFrom) : [],
+    effects: focusTable ? focusTableEffect.of(plan.tableFrom) : effectAt ? effectAt.of(plan.tableFrom) : [],
     annotations: pickedCompletion.of(completion),
     userEvent: "input.complete",
   });
@@ -873,9 +875,15 @@ const applyTableCommand = (view, completion, from, to) =>
 const applyDiagramCommand = (view, completion, from, to) =>
   applyBlockCommand(view, completion, from, to, joinFence(EMPTY_FLOWCHART), false);
 
+// In the live view the new block opens its source right away: its drawing
+// cannot be typed into, and the template is there to be replaced.
+const applyUiCommand = (view, completion, from, to) =>
+  applyBlockCommand(view, completion, from, to, joinFence(EMPTY_UI_SKETCH, UI_FENCE_INFO), false, openUiSourceEffect);
+
 const SLASH_COMMANDS = [
   { label: "/table", detail: "표 삽입", apply: applyTableCommand },
   { label: "/diagram", detail: "다이어그램 삽입 (mermaid)", apply: applyDiagramCommand },
+  { label: "/ui", detail: "UI 스케치 삽입 (@역할)", apply: applyUiCommand },
 ];
 
 /**
