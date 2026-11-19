@@ -54,6 +54,7 @@ import { toStepLines } from './modules/step-lines.js';
 import { createNoteAssetStore } from './modules/note-assets.js';
 import { createNoteCellController } from './modules/note-cell-controller.js';
 import { createNoteImageManager } from './modules/note-image-manager.js';
+import { setupSurroundSelection } from './modules/surround-selection.js';
 import { renderOpenFileTabs, closeOpenFileTab, closeTabsWhere, syncOpenFileIds } from './modules/open-file-tabs.js';
 
 // --- Global State Mirroring the original ---
@@ -272,6 +273,7 @@ function init() {
     setupEditorFindReplaceManager();
     setupDeletedFileHistoryManager();
     setupNoteImages();
+    setupSurroundSelection();
     setupChecklistDensityToggle();
     setupChecklistStickyHeadings();
     setupChecklistFilter();
