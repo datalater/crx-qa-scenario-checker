@@ -81,6 +81,13 @@
   display: none;
 }
 
+/* The note beside a section title reads like any other note, not a title. */
+tr.checklist-divider-row td.col-note {
+  font-size: inherit;
+  font-weight: 400;
+  letter-spacing: normal;
+}
+
 /* Alert colours for the row filter, matching the alert tokens inside cells. */
 .checklist-filter-toggle,
 .checklist-filter-swatch {

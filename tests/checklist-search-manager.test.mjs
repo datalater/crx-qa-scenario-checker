@@ -61,3 +61,15 @@ test('table search snippet keeps the match and marks clipped edges', () => {
     assert(snippet.startsWith('…'));
     assert(snippet.endsWith('…'));
 });
+
+test('table search finds the note of a divider, under its section', () => {
+    const data = { steps: [
+        { divider: '#1 Login', note: ['[Figma](https://figma.com/a) whole flow'] },
+        { given: ['a'], when: [], then: [] }
+    ] };
+    const results = searchChecklist(data, 'whole flow');
+    assertEqual(results.length, 1);
+    assertEqual(results[0].field, 'note');
+    assertEqual(results[0].stepIndex, 0);
+    assertEqual(results[0].visibleStepNumber, null);
+});

@@ -805,6 +805,27 @@ function appendAddRowButton(container, insertIndex, options = {}) {
     container.appendChild(wrapperRow);
 }
 
+/**
+ * Makes `cell` the editor of one text field of a step. Focused, it shows the
+ * stored text; blurred, the rendered one. Every keystroke is saved.
+ */
+function mountStepTextCell(cell, { index, field, value, rich = false, onUpdateStep }) {
+    cell.dataset.rawValue = value;
+    cell.innerHTML = formatChecklistCellContent(value, { rich });
+
+    cell.addEventListener('focus', (e) => { e.target.textContent = e.target.dataset.rawValue; });
+    cell.addEventListener('input', (e) => onUpdateStep(index, field, e.target.innerText));
+    cell.addEventListener('blur', (e) => {
+        let v = e.target.innerText.trim();
+        if (v === '-') v = '';
+        onUpdateStep(index, field, v);
+        e.target.dataset.rawValue = v;
+        e.target.innerHTML = formatChecklistCellContent(v, { rich });
+    });
+    blurOnEscape(cell);
+    return cell;
+}
+
 function blurOnEscape(editable) {
     editable.addEventListener('keydown', (event) => {
         if (event.key !== 'Escape') return;
@@ -1184,6 +1205,28 @@ export function renderChecklist(container, data, options = {}) {
             if (pinnedOnly) addPinnedRowControls(dividerRow, dividerInner);
             dividerCell.appendChild(dividerInner);
             dividerRow.appendChild(dividerCell);
+            // A text divider leaves the note column to a note about the
+            // section; a code editor keeps the full width of the table.
+            if (dividerEditor.kind === 'text') {
+                dividerCell.colSpan = 5;
+                const noteTd = document.createElement('td');
+                noteTd.className = 'col-note';
+                const noteCell = document.createElement('div');
+                noteCell.className = 'cell-content';
+                noteCell.contentEditable = 'plaintext-only';
+                noteCell.dataset.index = String(index);
+                noteCell.dataset.field = 'note';
+                noteTd.appendChild(noteCell);
+                dividerRow.appendChild(noteTd);
+
+                const noteValue = stepLinesToText(step.note);
+                mountStepTextCell(noteCell, { index, field: 'note', value: noteValue, rich: true, onUpdateStep });
+                if (noteValue) dividerRow.classList.add('has-note');
+                if (typeof onNoteCellMount === 'function') onNoteCellMount(noteCell);
+                if (dividerSearchResults.some(result => result.field === 'note')) {
+                    noteCell.classList.add('is-search-field-match');
+                }
+            }
             dividerRow.addEventListener('click', () => {
                 const rows = container.querySelectorAll('tr');
                 rows.forEach((row) => {
@@ -1245,23 +1288,10 @@ export function renderChecklist(container, data, options = {}) {
         if (pinnedOnly) addPinnedRowControls(tr, tr.querySelector('.col-then'));
 
         // The note column is the only one that renders links and images.
-        const populateCell = (field, val, { rich = false } = {}) => {
-            const cell = tr.querySelector(`[data-field="${field}"]`);
-            cell.dataset.rawValue = val;
-            cell.innerHTML = formatChecklistCellContent(val, { rich });
-            
-            cell.addEventListener('focus', (e) => { e.target.textContent = e.target.dataset.rawValue; });
-            cell.addEventListener('input', (e) => onUpdateStep(index, field, e.target.innerText));
-            cell.addEventListener('blur', (e) => {
-                let v = e.target.innerText.trim();
-                if (v === '-') v = '';
-                onUpdateStep(index, field, v);
-                e.target.dataset.rawValue = v;
-                e.target.innerHTML = formatChecklistCellContent(v, { rich });
-            });
-            blurOnEscape(cell);
-            return cell;
-        };
+        const populateCell = (field, val, { rich = false } = {}) => mountStepTextCell(
+            tr.querySelector(`[data-field="${field}"]`),
+            { index, field, value: val, rich, onUpdateStep }
+        );
 
         populateCell('given', stepLinesToText(step.given));
         populateCell('when', stepLinesToText(step.when));

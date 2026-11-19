@@ -49,6 +49,18 @@ export function searchChecklist(data, query) {
                     snippet: createChecklistSearchSnippet(value, tokens)
                 });
             }
+            // A text divider carries a note about its section.
+            const note = normalizeStepField(step?.note);
+            if (checklistSearchTextMatches(note, tokens)) {
+                results.push({
+                    stepIndex,
+                    visibleStepNumber: null,
+                    field: 'note',
+                    fieldLabel: 'Note',
+                    value: note,
+                    snippet: createChecklistSearchSnippet(note, tokens)
+                });
+            }
             return;
         }
 
