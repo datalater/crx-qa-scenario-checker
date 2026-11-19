@@ -1,5 +1,6 @@
 /**
- * Behaviour of the note column beyond plain typing:
+ * Behaviour of the note column beyond plain typing (a text divider gets the
+ * link parts of it, without images):
  *
  *   paste an image           saved to the opened folder, inserted as `![](path)`
  *   paste a URL on selection the selection becomes the link label
@@ -106,11 +107,17 @@ export function createNoteCellController({ assets, notify = () => {} }) {
     const resolveCell = (cell, address) => {
         if (cell.isConnected) return cell;
         const body = address.bodyId ? document.getElementById(address.bodyId) : null;
-        return body?.querySelector(`[data-field="note"][data-index="${address.index}"]`) || null;
+        return body?.querySelector(`[data-field="${address.field}"][data-index="${address.index}"]`) || null;
     };
 
+    const addressOf = cell => ({
+        bodyId: cell.closest('tbody')?.id || '',
+        field: cell.dataset.field,
+        index: cell.dataset.index
+    });
+
     async function insertImage(cell, blob, offsets) {
-        const address = { bodyId: cell.closest('tbody')?.id || '', index: cell.dataset.index };
+        const address = addressOf(cell);
         let path = null;
         try {
             path = await assets.save(blob);
@@ -128,7 +135,7 @@ export function createNoteCellController({ assets, notify = () => {} }) {
         notify(`이미지를 저장했습니다: ${path}`);
     }
 
-    function handlePaste(event) {
+    function handlePaste(event, { images }) {
         const cell = event.currentTarget;
         const data = event.clipboardData;
         if (!data) return;
@@ -141,7 +148,8 @@ export function createNoteCellController({ assets, notify = () => {} }) {
         const image = text ? null : [...data.files].find(file => file.type.startsWith('image/'));
         if (image) {
             event.preventDefault();
-            void insertImage(cell, image, offsets);
+            if (images) void insertImage(cell, image, offsets);
+            else notify('이미지는 노트 셀에만 넣을 수 있습니다.', 'error');
             return;
         }
 
@@ -165,7 +173,7 @@ export function createNoteCellController({ assets, notify = () => {} }) {
         const existing = found?.type === 'link' ? found : null;
         const range = existing ? { start: existing.from, end: existing.to } : offsets;
         const selected = source.slice(offsets.start, offsets.end);
-        const address = { bodyId: cell.closest('tbody')?.id || '', index: cell.dataset.index };
+        const address = addressOf(cell);
 
         const dialog = document.createElement('dialog');
         dialog.className = 'note-link-form';
@@ -367,8 +375,9 @@ export function createNoteCellController({ assets, notify = () => {} }) {
         table.closest('.checklist-container')?.addEventListener('scroll', hidePreview, { passive: true, capture: true });
     }
 
-    function mountCell(cell) {
-        cell.addEventListener('paste', handlePaste);
+    /** `images: false` leaves the cell with links only. */
+    function mountCell(cell, { images = true } = {}) {
+        cell.addEventListener('paste', event => handlePaste(event, { images }));
         cell.addEventListener('keydown', handleKeydown);
     }
 

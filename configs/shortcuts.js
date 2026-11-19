@@ -89,7 +89,7 @@ export const SHORTCUTS = [
     },
     {
         id: 'insertLink',
-        label: 'Insert / edit link (Note cell)',
+        label: 'Insert / edit link (Note cell, text divider)',
         bindings: [{ codes: ['KeyK'], keys: ['k'], primary: true, shift: false, alt: false }]
     },
     {

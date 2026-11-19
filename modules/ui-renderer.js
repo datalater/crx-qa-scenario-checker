@@ -45,17 +45,20 @@ export function createTreeRowActions(actions) {
 }
 
 /**
- * Renders a cell's text. Every cell understands backtick tokens; a `rich`
- * cell (the note column) also turns links and images into chips.
+ * Renders a cell's text. Every cell understands backtick tokens. `rich`
+ * adds chips: `true` for links and images (the note column), `'links'` for
+ * links only (a text divider); what is not a chip stays as written.
  */
 export function formatChecklistCellContent(rawValue, options = {}) {
     if (!rawValue) return '-';
     const source = String(rawValue);
-    if (options.rich !== true) return formatChecklistCodeTokens(source);
+    const { rich } = options;
+    if (rich !== true && rich !== 'links') return formatChecklistCodeTokens(source);
 
     let cursor = 0;
     let rendered = '';
     findNoteInlineTokens(source).forEach((token) => {
+        if (rich === 'links' && token.type !== 'link') return;
         rendered += formatChecklistCodeTokens(source.slice(cursor, token.from));
         rendered += renderNoteChip(token);
         cursor = token.to;
@@ -848,15 +851,18 @@ function mountDividerEditor(dividerType, context) {
     return mount(dividerType, context) || mountTextDividerEditor(dividerType, context);
 }
 
-function mountTextDividerEditor(_dividerType, { rawTitle, commit }) {
+function mountTextDividerEditor(_dividerType, { rawTitle, commit, index, onLinkCellMount }) {
     const element = document.createElement('div');
     element.className = 'cell-content checklist-divider-content';
     // plaintext-only keeps Enter a single "\n"; see the step cells.
     element.contentEditable = 'plaintext-only';
     element.dataset.field = 'divider';
+    element.dataset.index = String(index);
 
+    // A divider title takes links, not images: it is a one-line heading.
+    const format = value => formatChecklistCellContent(value, { rich: 'links' });
     let rawValue = rawTitle;
-    element.innerHTML = formatChecklistCellContent(rawValue);
+    element.innerHTML = format(rawValue);
     element.addEventListener('focus', () => {
         element.textContent = rawValue;
     });
@@ -865,9 +871,10 @@ function mountTextDividerEditor(_dividerType, { rawTitle, commit }) {
     });
     element.addEventListener('blur', () => {
         rawValue = getDividerTitle(commit({ value: element.innerText }));
-        element.innerHTML = formatChecklistCellContent(rawValue);
+        element.innerHTML = format(rawValue);
     });
     blurOnEscape(element);
+    if (typeof onLinkCellMount === 'function') onLinkCellMount(element);
     return { kind: 'text', element };
 }
 
@@ -1152,7 +1159,10 @@ export function renderChecklist(container, data, options = {}) {
             const dividerEditor = mountDividerEditor(dividerType, {
                 divider,
                 rawTitle: getChecklistDividerTitle(step),
-                commit: commitDivider
+                commit: commitDivider,
+                index,
+                onLinkCellMount: typeof onNoteCellMount === 'function'
+                    ? cell => onNoteCellMount(cell, { images: false }) : undefined
             });
             dividerRow.classList.add(`is-divider-${dividerEditor.kind}`);
             if (dividerEditor.destroy) trackMountedEditor(container, dividerEditor);

@@ -109,3 +109,12 @@ test('chip labels and targets are escaped', () => {
     assert(!rich.includes('"><script>'));
     assert(rich.includes('&lt;b&gt;x&lt;/b&gt;'));
 });
+
+test('a links-only cell renders link chips and leaves image syntax as text', () => {
+    const source = '#1 로그인 [Figma](https://figma.com/a) ![shot](assets/a.png) https://b.dev';
+    const html = formatChecklistCellContent(source, { rich: 'links' });
+    assert(html.includes('data-note-link="https://figma.com/a"'));
+    assert(html.includes('data-note-link="https://b.dev"'));
+    assert(!html.includes('data-note-image'));
+    assert(html.includes('![shot](assets/a.png)'));
+});
