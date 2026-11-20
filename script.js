@@ -48,7 +48,12 @@ import { createContextMenu } from './modules/tab-context-menu.js';
 import { createEditorCursorHistoryManager } from './modules/editor-cursor-history-manager.js';
 import { createEditorFindReplaceManager } from './modules/editor-find-replace-manager.js';
 import { createDeletedFileHistoryManager } from './modules/deleted-file-history-manager.js';
-import { searchChecklist, tokenizeChecklistSearchQuery } from './modules/checklist-search-manager.js';
+import {
+    countChecklistReplacements,
+    replaceInChecklist,
+    searchChecklist,
+    tokenizeChecklistSearchQuery
+} from './modules/checklist-search-manager.js';
 import { collectNoteAssetNames } from './modules/note-inline.js';
 import { toStepLines } from './modules/step-lines.js';
 import { createNoteAssetStore } from './modules/note-assets.js';
@@ -94,6 +99,12 @@ const EL = {
     checklistSearchPrev: document.getElementById('checklist-search-prev'),
     checklistSearchNext: document.getElementById('checklist-search-next'),
     checklistSearchClose: document.getElementById('checklist-search-close'),
+    checklistReplaceToggle: document.getElementById('checklist-replace-toggle'),
+    checklistReplaceRow: document.getElementById('checklist-replace-row'),
+    checklistReplaceInput: document.getElementById('checklist-replace-input'),
+    checklistReplaceCount: document.getElementById('checklist-replace-count'),
+    checklistReplaceOne: document.getElementById('checklist-replace-one'),
+    checklistReplaceAll: document.getElementById('checklist-replace-all'),
     checklistFilterToggle: document.getElementById('checklist-filter-toggle'),
     checklistFilterLabel: document.getElementById('checklist-filter-label'),
     checklistFilterMenu: document.getElementById('checklist-filter-menu'),
@@ -2935,14 +2946,66 @@ function isChecklistSearchOpen() {
     return Boolean(EL.checklistSearchPanel && !EL.checklistSearchPanel.hidden);
 }
 
-function openChecklistSearch() {
+function openChecklistSearch(options = {}) {
     if (!EL.checklistSearchPanel) return;
     EL.checklistSearchPanel.hidden = false;
     EL.checklistSearchToggle?.classList.add('is-active');
     EL.checklistSearchToggle?.setAttribute('aria-expanded', 'true');
+    if (options.replace === true) setChecklistReplaceOpen(true);
     refreshChecklistSearch({ renderTable: true });
     EL.checklistSearchInput?.focus();
     EL.checklistSearchInput?.select();
+}
+
+function setChecklistReplaceOpen(open) {
+    if (!EL.checklistReplaceRow) return;
+    EL.checklistReplaceRow.hidden = !open;
+    EL.checklistReplaceToggle?.classList.toggle('is-active', open);
+    EL.checklistReplaceToggle?.setAttribute('aria-expanded', open ? 'true' : 'false');
+    updateChecklistReplaceControls();
+}
+
+/** The cell of the current search result, as a replace target. */
+function getChecklistReplaceTarget() {
+    const result = checklistSearchResults[checklistSearchResultIndex];
+    return result ? { stepIndex: result.stepIndex, field: result.field } : null;
+}
+
+/**
+ * Replace takes the query as one phrase, while search matches its keywords
+ * in any order, so the counts here can be lower than the result count.
+ */
+function updateChecklistReplaceControls() {
+    if (!EL.checklistReplaceRow || EL.checklistReplaceRow.hidden) return;
+    const query = EL.checklistSearchInput?.value || '';
+    const target = getChecklistReplaceTarget();
+    const total = countChecklistReplacements(currentData, query);
+    const inCell = target ? countChecklistReplacements(currentData, query, target) : 0;
+    if (EL.checklistReplaceCount) {
+        EL.checklistReplaceCount.textContent = query.trim() ? `바꿀 곳 ${total}` : '';
+    }
+    if (EL.checklistReplaceOne) EL.checklistReplaceOne.disabled = inCell === 0;
+    if (EL.checklistReplaceAll) EL.checklistReplaceAll.disabled = total === 0;
+}
+
+function runChecklistReplace(scope) {
+    if (!currentData) return;
+    const query = EL.checklistSearchInput?.value || '';
+    const replacement = EL.checklistReplaceInput?.value ?? '';
+    const target = scope === 'cell' ? getChecklistReplaceTarget() : null;
+    if (scope === 'cell' && !target) return;
+    const count = countChecklistReplacements(currentData, query, target);
+    if (count === 0) return;
+    // Table edits have no undo of their own, so the wide change asks first.
+    if (scope === 'all' && !confirm(`"${query.trim()}" ${count}곳을 "${replacement}"(으)로 바꿀까요?\n되돌리기가 없으니 필요하면 먼저 저장해 두세요.`)) return;
+
+    replaceInChecklist(currentData, query, replacement, target);
+    syncToEditor();
+    scheduleNoteImageStatusRefresh();
+    // The replaced cell usually drops out of the results, so the same index
+    // now points at the next one.
+    refreshChecklistSearch({ renderTable: true });
+    showStatusMessage(`${count}곳을 바꿨습니다.`);
 }
 
 function closeChecklistSearch() {
@@ -2950,6 +3013,7 @@ function closeChecklistSearch() {
     EL.checklistSearchPanel.hidden = true;
     EL.checklistSearchToggle?.classList.remove('is-active');
     EL.checklistSearchToggle?.setAttribute('aria-expanded', 'false');
+    setChecklistReplaceOpen(false);
     if (EL.checklistSearchInput) EL.checklistSearchInput.value = '';
     checklistSearchResults = [];
     checklistSearchResultIndex = -1;
@@ -2992,6 +3056,7 @@ function renderChecklistSearchResults() {
     }
     if (EL.checklistSearchPrev) EL.checklistSearchPrev.disabled = total === 0;
     if (EL.checklistSearchNext) EL.checklistSearchNext.disabled = total === 0;
+    updateChecklistReplaceControls();
     if (tokens.length > 0 && total === 0) {
         const empty = document.createElement('p');
         empty.className = 'checklist-search-empty';
@@ -3143,14 +3208,32 @@ function setupChecklistSearch() {
     EL.checklistSearchPrev?.addEventListener('click', () => navigateChecklistSearchResult(checklistSearchResultIndex - 1));
     EL.checklistSearchNext?.addEventListener('click', () => navigateChecklistSearchResult(checklistSearchResultIndex + 1));
     EL.checklistSearchClose?.addEventListener('click', closeChecklistSearch);
+    EL.checklistReplaceToggle?.addEventListener('click', () => {
+        const open = EL.checklistReplaceRow?.hidden === true;
+        setChecklistReplaceOpen(open);
+        if (open) EL.checklistReplaceInput?.focus();
+    });
+    EL.checklistReplaceInput?.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            closeChecklistSearch();
+        } else if (event.key === 'Enter' && !event.isComposing) {
+            event.preventDefault();
+            runChecklistReplace('cell');
+        }
+    });
+    EL.checklistReplaceOne?.addEventListener('click', () => runChecklistReplace('cell'));
+    EL.checklistReplaceAll?.addEventListener('click', () => runChecklistReplace('all'));
     document.addEventListener('keydown', (event) => {
-        if (!matchShortcut(event, 'findOpen')) return;
+        const replace = matchShortcut(event, 'replaceOpen');
+        if (!replace && !matchShortcut(event, 'findOpen')) return;
         // A code divider's CodeMirror already opened its own search panel.
         if (event.defaultPrevented) return;
         if (!checklistSearchScopeActive && !EL.checklistPane?.contains(event.target)) return;
         event.preventDefault();
         event.stopPropagation();
-        openChecklistSearch();
+        openChecklistSearch({ replace });
     });
 }
 

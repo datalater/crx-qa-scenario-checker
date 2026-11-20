@@ -1,3 +1,5 @@
+import { parseDivider, serializeDivider } from './divider-model.js';
+import { toStepLines } from './step-lines.js';
 import { getChecklistDividerTitle, isChecklistDividerStep } from './ui-renderer.js';
 
 export function tokenizeChecklistSearchQuery(query) {
@@ -80,4 +82,100 @@ export function searchChecklist(data, query) {
     });
 
     return results;
+}
+
+// ---------- replace ----------
+
+const STEP_FIELDS = ['given', 'when', 'then', 'note'];
+
+/**
+ * Replace works on the query as one phrase, letter case aside. Search itself
+ * matches keywords in any order, so a cell can be a search result and still
+ * hold nothing to replace.
+ */
+function literalPattern(query) {
+    const phrase = typeof query === 'string' ? query.trim() : '';
+    if (!phrase) return null;
+    return new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'giu');
+}
+
+export function countLiteralMatches(value, query) {
+    const pattern = literalPattern(query);
+    return pattern ? [...String(value ?? '').matchAll(pattern)].length : 0;
+}
+
+/** The replacement is plain text: `$1` and `$&` mean nothing special. */
+export function replaceLiteral(value, query, replacement) {
+    const pattern = literalPattern(query);
+    const text = String(value ?? '');
+    return pattern ? text.replace(pattern, () => String(replacement ?? '')) : text;
+}
+
+// A cell holds text as lines; older or hand-written data may hold a string.
+function readCellText(value) {
+    if (typeof value === 'string') return value;
+    if (Array.isArray(value) && value.every(item => typeof item === 'string')) return value.join('\n');
+    return null;
+}
+
+/** The cells replace can touch, as `{ stepIndex, field, text, write }`. */
+function replaceableCells(data) {
+    const cells = [];
+    (Array.isArray(data?.steps) ? data.steps : []).forEach((step, stepIndex) => {
+        const fields = isChecklistDividerStep(step) ? ['note'] : STEP_FIELDS;
+        if (isChecklistDividerStep(step)) {
+            const divider = parseDivider(step.divider);
+            if (divider?.value) {
+                cells.push({
+                    stepIndex,
+                    field: 'divider',
+                    text: divider.value,
+                    // Colour, type and the other attributes stay as they are.
+                    write: (text) => { step.divider = serializeDivider({ ...divider, value: text }); }
+                });
+            }
+        }
+        fields.forEach((field) => {
+            const text = readCellText(step?.[field]);
+            if (text === null) return;
+            cells.push({
+                stepIndex,
+                field,
+                text,
+                write: (next) => {
+                    const lines = toStepLines(next);
+                    // As when typing: an emptied note leaves no key behind.
+                    if (field === 'note' && lines.length === 0) delete step.note;
+                    else step[field] = lines;
+                }
+            });
+        });
+    });
+    return cells;
+}
+
+const isTarget = (cell, target) => !target
+    || (cell.stepIndex === target.stepIndex && cell.field === target.field);
+
+/** How many places a replace would change, in one cell (`target`) or all. */
+export function countChecklistReplacements(data, query, target = null) {
+    return replaceableCells(data)
+        .filter(cell => isTarget(cell, target))
+        .reduce((total, cell) => total + countLiteralMatches(cell.text, query), 0);
+}
+
+/**
+ * Replaces the phrase in place, in one cell (`target`) or in every cell, and
+ * returns how many places changed.
+ */
+export function replaceInChecklist(data, query, replacement, target = null) {
+    let replaced = 0;
+    replaceableCells(data).forEach((cell) => {
+        if (!isTarget(cell, target)) return;
+        const count = countLiteralMatches(cell.text, query);
+        if (count === 0) return;
+        cell.write(replaceLiteral(cell.text, query, replacement));
+        replaced += count;
+    });
+    return replaced;
 }

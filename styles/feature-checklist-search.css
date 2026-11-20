@@ -94,6 +94,58 @@
   cursor: default;
 }
 
+/* --- Replace: a second row under the search field --- */
+
+.checklist-replace-toggle {
+  width: auto;
+  padding: 0 8px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.checklist-replace-toggle.is-active {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  background-color: color-mix(in srgb, var(--accent-primary) 14%, transparent);
+}
+
+.checklist-replace-row {
+  padding-top: 0;
+}
+
+.checklist-replace-row[hidden] {
+  display: none;
+}
+
+.checklist-replace-row .checklist-search-count {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.checklist-replace-btn {
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--border-muted);
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.checklist-replace-btn:hover:not(:disabled) {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.checklist-replace-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 .checklist-search-results {
   max-height: min(260px, 36vh);
   overflow-y: auto;

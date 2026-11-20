@@ -273,7 +273,22 @@
                         <span id="checklist-search-count" class="checklist-search-count" aria-live="polite">0 results</span>
                         <button id="checklist-search-prev" class="checklist-search-btn" type="button" title="Previous result" aria-label="Previous result">↑</button>
                         <button id="checklist-search-next" class="checklist-search-btn" type="button" title="Next result" aria-label="Next result">↓</button>
+                        <button id="checklist-replace-toggle" class="checklist-search-btn checklist-replace-toggle" type="button" title="Replace" aria-label="Toggle replace" aria-expanded="false" aria-controls="checklist-replace-row">Replace</button>
                         <button id="checklist-search-close" class="checklist-search-btn" type="button" title="Close search" aria-label="Close search">×</button>
+                    </div>
+                    <div id="checklist-replace-row" class="checklist-search-toolbar checklist-replace-row" hidden>
+                        <input
+                            id="checklist-replace-input"
+                            class="checklist-search-input"
+                            type="text"
+                            placeholder="Replace with"
+                            aria-label="Replace with"
+                            autocomplete="off"
+                            spellcheck="false"
+                        >
+                        <span id="checklist-replace-count" class="checklist-search-count" aria-live="polite"></span>
+                        <button id="checklist-replace-one" class="checklist-replace-btn" type="button" title="현재 결과의 셀에서 바꾸기 (Enter)">이 셀 바꾸기</button>
+                        <button id="checklist-replace-all" class="checklist-replace-btn" type="button" title="시나리오 전체에서 바꾸기">모두 바꾸기</button>
                     </div>
                     <div id="checklist-search-results" class="checklist-search-results" role="listbox" aria-label="Table search results"></div>
                 </div>
