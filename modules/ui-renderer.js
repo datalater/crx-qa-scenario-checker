@@ -58,7 +58,8 @@ export function formatChecklistCellContent(rawValue, options = {}) {
     // rendered as usual, and nothing inside the fence is read as a token.
     return splitUiFences(String(rawValue)).map(piece => (
         piece.type === 'ui'
-            ? renderUiSketchHtml(piece.source).replace('<div class="ui-sketch"', '<div class="ui-sketch" contenteditable="false"')
+            // The frame scrolls; the drawing inside keeps its own width.
+            ? `<div class="ui-sketch-frame" contenteditable="false">${renderUiSketchHtml(piece.source)}</div>`
             : formatChecklistCellText(piece.value, options)
     )).join('');
 }

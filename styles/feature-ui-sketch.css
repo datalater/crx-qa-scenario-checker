@@ -170,11 +170,10 @@
 /* --- In a table cell --- */
 
 /*
- * A sketch does not wrap, so its full width would widen the column of an
- * auto-layout table. It asks for no width of its own, takes the cell's, and
- * scrolls sideways when the cell is narrower than the drawing.
+ * A sketch would widen the column of an auto-layout table by its full width,
+ * so its frame asks for no width of its own and takes the cell's.
  */
-.cell-content .ui-sketch {
+.cell-content .ui-sketch-frame {
   width: 0;
   min-width: 100%;
   margin: 4px 0;
@@ -183,4 +182,17 @@
   background: var(--bg-color);
   border: 1px solid var(--border-muted);
   border-radius: 6px;
+}
+
+/*
+ * Inside the frame the drawing is laid out at its natural width instead of
+ * being squeezed into a narrow cell: up to the limit below it keeps every
+ * piece on one line and the frame scrolls sideways. Only a drawing wider than
+ * the limit wraps its text. It is never narrower than the cell, so `---`
+ * still reaches the right edge.
+ */
+.cell-content .ui-sketch {
+  width: max-content;
+  min-width: 100%;
+  max-width: var(--ui-sketch-cell-width, 480px);
 }

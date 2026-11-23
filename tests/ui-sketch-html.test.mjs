@@ -50,7 +50,7 @@ test('a cell draws the fence and still renders the text around it', () => {
     const stored = toStepLines('select box가 표시된다 `[!note]`\n\n```ui\n@radio({radio}) -- @label({email})\n```');
     const html = formatChecklistCellContent(stepLinesToText(stored));
     assert(html.includes('checklist-alert-token--note'));
-    assert(html.includes('<div class="ui-sketch" contenteditable="false"'));
+    assert(html.includes('<div class="ui-sketch-frame" contenteditable="false"><div class="ui-sketch"'));
     assert(html.includes('<span class="ui-sketch__role-name">radio</span>'));
     assert(!html.includes('```'));
 });
