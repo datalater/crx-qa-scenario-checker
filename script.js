@@ -2663,6 +2663,7 @@ function setupNoteImages() {
     });
     noteCells = createNoteCellController({ assets: noteAssets, notify: showStatusMessage });
     noteCells.setupTable(document.getElementById('checklist-table'));
+    UI.setupChecklistCellFocus(document.getElementById('checklist-table'));
     noteImageManager = createNoteImageManager({
         assets: noteAssets,
         getReferences: collectNoteImageReferences,

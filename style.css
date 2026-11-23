@@ -1483,6 +1483,13 @@
     cursor: text;
   }
 
+  /* The space around a cell's text edits the cell too (see
+     setupChecklistCellFocus), so it shows the same cursor as the text. */
+  td:has(> .cell-content[contenteditable]),
+  td:has(> .checklist-divider-inner > .cell-content[contenteditable]) {
+    cursor: text;
+  }
+
   .cell-content:hover {
     background-color: rgba(255, 255, 255, 0.03);
   }

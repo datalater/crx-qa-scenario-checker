@@ -851,6 +851,37 @@ function mountStepTextCell(cell, { index, field, value, rich = false, onUpdateSt
     return cell;
 }
 
+/**
+ * A cell's editable text is only as tall as its own lines, so in a row made
+ * tall by another column most of the cell is empty space around it. A press
+ * on that space edits the cell too, with the caret at the end of its text.
+ */
+export function setupChecklistCellFocus(table) {
+    if (!table) return;
+    table.addEventListener('mousedown', (event) => {
+        if (event.button !== 0 || event.defaultPrevented) return;
+        const { target } = event;
+        // Only the bare cell (or a divider's layout wrapper) counts: a press on
+        // the text, a chip, a checkbox or a button keeps its own meaning.
+        const isEmptyArea = target instanceof HTMLTableCellElement
+            || target.classList?.contains('checklist-divider-inner')
+            || target.classList?.contains('checklist-divider-spacer');
+        if (!isEmptyArea) return;
+        const editable = target.closest('td')?.querySelector(':scope .cell-content[contenteditable]');
+        if (!editable) return;
+
+        // Without this the browser moves the caret to wherever it guesses.
+        event.preventDefault();
+        editable.focus();
+        const range = document.createRange();
+        range.selectNodeContents(editable);
+        range.collapse(false);
+        const selection = document.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+    });
+}
+
 function blurOnEscape(editable) {
     editable.addEventListener('keydown', (event) => {
         if (event.key !== 'Escape') return;
