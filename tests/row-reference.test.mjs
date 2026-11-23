@@ -106,3 +106,35 @@ test('a plain click on one of several selected rows keeps that row alone', () =>
     const several = nextRowSelection(nextRowSelection(null, 1, {}, [1, 2, 3]), 3, { toggle: true }, [1, 2, 3]);
     assertDeepEqual(picked(nextRowSelection(several, 3, {}, [1, 2, 3])), [3]);
 });
+
+const withCode = () => [
+    { divider: '#1 제목' },
+    { given: ['a'], when: [], then: [] },
+    { divider: { value: '### spec', type: 'code', lang: 'markdown' } },
+    { given: ['b'], when: [], then: [] },
+    { divider: { value: '#2 색 있는 제목', color: '#f85149' } },
+    { given: ['c'], when: [], then: [] }
+];
+
+test('a selected code divider stands for itself, not for the rows below it', () => {
+    assertDeepEqual(expandRowSelection(withCode(), [2]), [2]);
+    assertDeepEqual(expandRowSelection(withCode(), [2, 3]), [2, 3]);
+});
+
+test('a text divider stands for its section up to the next text divider, code dividers included', () => {
+    assertDeepEqual(expandRowSelection(withCode(), [0]), [1, 2, 3]);
+    assertDeepEqual(expandRowSelection(withCode(), [4]), [5]);
+});
+
+test('a code divider is referenced with its content, its section, and no step number', () => {
+    const data = { steps: withCode() };
+    const values = [0, 0, 0, 0];
+    ensureRowIds(data.steps, [2, 3], () => values.shift() ?? 0.5);
+    const reference = buildRowReference({ data, indexes: [2, 3], file: 'f.json' });
+    assertDeepEqual(reference.rows[0], {
+        id: 'r-aaaa', number: null, section: '#1 제목',
+        divider: { value: '### spec', type: 'code', lang: 'markdown' }
+    });
+    assertEqual(reference.rows[1].section, '#1 제목', 'a code divider does not start a section');
+    assertEqual(reference.rows[1].number, 2);
+});

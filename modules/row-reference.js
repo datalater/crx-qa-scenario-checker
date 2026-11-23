@@ -4,7 +4,7 @@
  * each row's id). Whoever receives it can read the snapshot right away and,
  * later, look the same rows up in the file to see how they have changed.
  */
-import { getDividerTitle, isDivider } from './divider-model.js';
+import { DEFAULT_DIVIDER_TYPE, getDividerTitle, isDivider, parseDivider } from './divider-model.js';
 
 export const ROW_REFERENCE_KIND = 'rows';
 
@@ -38,8 +38,20 @@ export function nextRowSelection(selection, index, { toggle = false, range = fal
 }
 
 /**
- * The step rows a selection stands for, in file order. A selected divider
- * stands for its whole section: every step down to the next divider.
+ * Only a text divider is a section heading. A code divider is content of its
+ * own (a spec, a sketch): it belongs to the section it sits in and does not
+ * start a new one.
+ */
+function isSectionHeading(step) {
+    return parseDivider(step?.divider)?.type === DEFAULT_DIVIDER_TYPE;
+}
+
+/**
+ * The rows a selection stands for, in file order.
+ *   a step            itself
+ *   a code divider    itself
+ *   a text divider    its whole section: every step and code divider down to
+ *                     the next text divider
  */
 export function expandRowSelection(steps, indexes) {
     const list = Array.isArray(steps) ? steps : [];
@@ -47,11 +59,11 @@ export function expandRowSelection(steps, indexes) {
     [...indexes].forEach((index) => {
         const step = list[index];
         if (!step) return;
-        if (!isDivider(step.divider)) {
+        if (!isSectionHeading(step)) {
             rows.add(index);
             return;
         }
-        for (let i = index + 1; i < list.length && !isDivider(list[i]?.divider); i += 1) rows.add(i);
+        for (let i = index + 1; i < list.length && !isSectionHeading(list[i]); i += 1) rows.add(i);
     });
     return [...rows].sort((a, b) => a - b);
 }
@@ -82,18 +94,21 @@ export function ensureRowIds(steps, indexes, random = Math.random) {
     return changed;
 }
 
-/** The title of the section each row belongs to, and its number among the steps. */
+/** The title of the section each row belongs to, and a step's number among the steps. */
 function describeRows(steps) {
     const described = new Map();
     let section = '';
     let number = 0;
     steps.forEach((step, index) => {
-        if (isDivider(step?.divider)) {
+        if (isSectionHeading(step)) {
             section = getDividerTitle(step.divider);
-            return;
+        } else if (isDivider(step?.divider)) {
+            // A code divider has a section but no step number.
+            described.set(index, { section, number: null });
+        } else {
+            number += 1;
+            described.set(index, { section, number });
         }
-        number += 1;
-        described.set(index, { section, number });
     });
     return described;
 }
