@@ -39,10 +39,40 @@
   flex: 0 0 auto;
 }
 
+/* A long label is cut in the middle: the head gives way, the tail stays. */
 .note-chip__label {
+  display: flex;
+  min-width: 0;
+}
+
+.note-chip__head {
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  /* `pre` keeps a space that falls right at the cut between head and tail. */
+  white-space: pre;
+}
+
+.note-chip__tail {
+  flex: 0 0 auto;
+  white-space: pre;
+}
+
+/*
+ * A chip does not wrap, so in an auto-layout table its full length would
+ * widen the column. A note cell therefore asks for no width of its own and
+ * takes the column's instead; chips are then cut to fit. The 16px make up for
+ * the negative side margins of .cell-content.
+ */
+.col-note .cell-content {
+  width: 0;
+  min-width: calc(100% + 16px);
+}
+
+/* A divider title has no column to size against, so its chips are capped. */
+.checklist-divider-content .note-chip {
+  max-width: min(100%, 48ch);
 }
 
 /* --- Image preview on hover --- */

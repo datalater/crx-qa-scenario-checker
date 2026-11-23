@@ -97,10 +97,35 @@ const NOTE_CHIP_ICONS = {
 function renderNoteChip(token) {
     const target = escapeChecklistAttribute(token.target);
     const hint = token.type === 'image' ? '클릭: 크게 보기' : '클릭: 새 탭에서 열기';
+    // The whole label is in the tooltip, since the chip may cut it short.
+    const title = `${escapeChecklistAttribute(token.label)}\n${target}\n${hint}`;
     return `<span class="note-chip note-chip--${token.type}" contenteditable="false" role="${token.type === 'image' ? 'button' : 'link'}"`
-        + ` data-note-${token.type}="${target}" title="${target}\n${hint}">`
+        + ` data-note-${token.type}="${target}" title="${title}">`
         + `<span class="note-chip__icon">${NOTE_CHIP_ICONS[token.type]}</span>`
-        + `<span class="note-chip__label">${escapeChecklistHtml(token.label)}</span></span>`;
+        + `<span class="note-chip__label">${renderNoteChipLabel(token.label)}</span></span>`;
+}
+
+const NOTE_CHIP_TAIL_LENGTH = 14;
+
+/**
+ * A long label is split so that a narrow cell cuts it in the middle: the
+ * head shrinks behind an ellipsis and the tail always shows. Both ends tell
+ * links apart (`GET /api/v1/…/zoom-host-accounts`), and with enough room the
+ * two parts read as the label written.
+ */
+export function splitNoteChipLabel(label) {
+    const chars = Array.from(String(label ?? ''));
+    if (chars.length <= NOTE_CHIP_TAIL_LENGTH * 2) return { head: chars.join(''), tail: '' };
+    return {
+        head: chars.slice(0, -NOTE_CHIP_TAIL_LENGTH).join(''),
+        tail: chars.slice(-NOTE_CHIP_TAIL_LENGTH).join('')
+    };
+}
+
+function renderNoteChipLabel(label) {
+    const { head, tail } = splitNoteChipLabel(label);
+    const headHtml = `<span class="note-chip__head">${escapeChecklistHtml(head)}</span>`;
+    return tail ? `${headHtml}<span class="note-chip__tail">${escapeChecklistHtml(tail)}</span>` : headHtml;
 }
 
 function escapeChecklistAttribute(value) {

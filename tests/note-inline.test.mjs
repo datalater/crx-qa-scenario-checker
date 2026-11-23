@@ -7,7 +7,7 @@ import {
     isNoteAssetPath,
     isSafeLinkUrl
 } from '../modules/note-inline.js';
-import { formatChecklistCellContent } from '../modules/ui-renderer.js';
+import { formatChecklistCellContent, splitNoteChipLabel } from '../modules/ui-renderer.js';
 import { assert, assertDeepEqual, assertEqual, test } from './lib/test-runner.mjs';
 
 const pick = token => ({ type: token.type, label: token.label, target: token.target });
@@ -117,4 +117,28 @@ test('a links-only cell renders link chips and leaves image syntax as text', () 
     assert(html.includes('data-note-link="https://b.dev"'));
     assert(!html.includes('data-note-image'));
     assert(html.includes('![shot](assets/a.png)'));
+});
+
+test('a long chip label splits into a head that can shrink and a tail that stays', () => {
+    const label = 'GET /api/v1/lms/management/proctoring/zoom-host-accounts';
+    const { head, tail } = splitNoteChipLabel(label);
+    assertEqual(tail, '-host-accounts');
+    assertEqual(head + tail, label);
+    assertDeepEqual(splitNoteChipLabel('Figma 로그인 모달'), { head: 'Figma 로그인 모달', tail: '' });
+});
+
+test('a split label reads the same and shows whole in the tooltip', () => {
+    const label = 'GET /api/v1/lms/management/proctoring/zoom-host-accounts';
+    const html = formatChecklistCellContent(`[${label}](https://a.dev/x)`, { rich: true });
+    assert(html.includes('<span class="note-chip__head">GET /api/v1/lms/management/proctoring/zoom</span>'));
+    assert(html.includes('<span class="note-chip__tail">-host-accounts</span>'));
+    assert(html.includes(`title="${label}\nhttps://a.dev/x`));
+});
+
+test('a label is never cut inside an emoji', () => {
+    const label = `${'가'.repeat(20)}😀${'나'.repeat(13)}`;
+    const { head, tail } = splitNoteChipLabel(label);
+    assertEqual(head + tail, label);
+    assertEqual(Array.from(tail).length, 14);
+    assertEqual(tail.startsWith('😀'), true);
 });
