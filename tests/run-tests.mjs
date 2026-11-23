@@ -24,6 +24,7 @@ import './diagram-zoom.test.mjs';
 import './pass-summary-refresh.test.mjs';
 import './step-lines.test.mjs';
 import './surround-selection.test.mjs';
+import './row-reference.test.mjs';
 import './note-inline.test.mjs';
 import './note-assets.test.mjs';
 import './checklist-filter.test.mjs';

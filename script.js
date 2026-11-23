@@ -4,7 +4,8 @@ import {
     CHECKLIST_FILTER_STORAGE_KEY,
     PANEL_VISIBILITY_STORAGE_KEY,
     SCROLL_POSITIONS_STORAGE_KEY,
-    CHECKLIST_STICKY_STORAGE_KEY
+    CHECKLIST_STICKY_STORAGE_KEY,
+    ROOT_PATHS_STORAGE_KEY
 } from './constants/storage.js';
 import { AUTOSAVE_DELAY_MS, WORKSPACE_VERSION, DEFAULT_FILE_NAME } from './configs/workspace.js';
 import { EDITOR_CONFIG } from './configs/editor-config.js';
@@ -60,6 +61,13 @@ import { createNoteAssetStore } from './modules/note-assets.js';
 import { createNoteCellController } from './modules/note-cell-controller.js';
 import { createNoteImageManager } from './modules/note-image-manager.js';
 import { setupSurroundSelection } from './modules/surround-selection.js';
+import {
+    buildReferenceFilePath,
+    buildRowReference,
+    ensureRowIds,
+    expandRowSelection,
+    nextRowSelection
+} from './modules/row-reference.js';
 import { renderOpenFileTabs, closeOpenFileTab, closeTabsWhere, syncOpenFileIds } from './modules/open-file-tabs.js';
 
 // --- Global State Mirroring the original ---
@@ -285,6 +293,7 @@ function init() {
     setupDeletedFileHistoryManager();
     setupNoteImages();
     setupSurroundSelection();
+    setupChecklistRowSelection();
     setupChecklistDensityToggle();
     setupChecklistStickyHeadings();
     setupChecklistFilter();
@@ -1549,6 +1558,14 @@ function getContextTargetFolderId() {
 function openChecklistContextMenu(target) {
     if (!EL.checklistContextMenu || target == null) return;
     checklistContextTarget = target;
+    // The menu acts on the selection; a row outside it becomes the selection.
+    if (!getSelectedStepIndexes().has(target.index)) setChecklistRowSelection([target.index], target.index);
+    const referenceItem = document.getElementById('checklist-context-copy-reference');
+    if (referenceItem) {
+        const count = expandRowSelection(currentData?.steps, getSelectedStepIndexes()).length;
+        referenceItem.textContent = `행 참조 복사 (${count})`;
+        referenceItem.disabled = count === 0;
+    }
     EL.checklistContextPin.textContent = currentData?.steps?.[target.index]?.pinned === true
         ? '행 고정 해제' : '행 고정';
 
@@ -2596,6 +2613,8 @@ function renderChecklist() {
             },
             onOpenChecklistContextMenu: openChecklistContextMenu,
             onNoteCellMount: noteCells?.mountCell,
+            onSelectRow: handleChecklistRowClick,
+            selectedStepIndexes: getSelectedStepIndexes(),
             activeFilter: checklistFilter,
             searchResults: checklistSearchResults,
             activeSearchResult: checklistSearchResults[checklistSearchResultIndex] || null
@@ -2673,6 +2692,178 @@ function setupNoteImages() {
         statusLabel: document.getElementById('statusbar-images-label')
     });
     void noteImageManager.refresh();
+}
+
+// ---------- row selection and row references ----------
+
+/**
+ * Selected rows are remembered as the step objects themselves, not as
+ * positions: inserting or deleting a row moves positions, and a scenario
+ * re-read from the JSON editor makes new objects, which empties the selection
+ * instead of leaving it pointing at the wrong rows.
+ */
+const selectedSteps = new Set();
+let selectionAnchorStep = null;
+
+function getSelectedStepIndexes() {
+    const indexes = new Set();
+    (currentData?.steps || []).forEach((step, index) => {
+        if (selectedSteps.has(step)) indexes.add(index);
+    });
+    return indexes;
+}
+
+function setChecklistRowSelection(indexes, anchorIndex = null) {
+    const steps = currentData?.steps || [];
+    selectedSteps.clear();
+    [...indexes].forEach((index) => { if (steps[index]) selectedSteps.add(steps[index]); });
+    selectionAnchorStep = anchorIndex === null ? null : steps[anchorIndex] || null;
+    const selected = getSelectedStepIndexes();
+    [EL.checklistPinnedBody, EL.checklistBody].forEach((body) => {
+        body?.querySelectorAll('tr[data-step-index]').forEach((row) => {
+            row.classList.toggle('selected-row', selected.has(Number(row.dataset.stepIndex)));
+        });
+    });
+}
+
+function handleChecklistRowClick(index, event) {
+    const steps = currentData?.steps || [];
+    const order = [...(EL.checklistBody?.querySelectorAll('tr[data-step-index]') || [])]
+        .map(row => Number(row.dataset.stepIndex));
+    const anchorIndex = steps.indexOf(selectionAnchorStep);
+    const next = nextRowSelection(
+        { selected: getSelectedStepIndexes(), anchor: anchorIndex < 0 ? null : anchorIndex },
+        index,
+        { toggle: event?.metaKey === true || event?.ctrlKey === true, range: event?.shiftKey === true },
+        order
+    );
+    setChecklistRowSelection(next.selected, next.anchor);
+    // Picking rows ends the editing of a cell elsewhere, so that copy means
+    // the rows and not that cell's (empty) text selection.
+    if ((event?.metaKey || event?.ctrlKey || event?.shiftKey) && document.activeElement?.classList?.contains('cell-content')) {
+        document.activeElement.blur();
+    }
+
+    const bounds = Editor.findStepBounds(EL.editing.value, index);
+    if (!bounds) {
+        clearStepHighlight();
+        return;
+    }
+    renderStepHighlight(bounds);
+    scrollToLine(bounds.start);
+}
+
+/** The real path of the opened folder, which a browser never reveals. */
+function readRootPaths() {
+    try {
+        const stored = JSON.parse(localStorage.getItem(ROOT_PATHS_STORAGE_KEY) || '{}');
+        return stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
+    } catch (_) {
+        return {};
+    }
+}
+
+function getRootPath() {
+    const rootName = boundDirectoryHandle?.name || '';
+    const path = rootName ? readRootPaths()[rootName] : '';
+    return typeof path === 'string' ? path : '';
+}
+
+function updateRootPathStatus() {
+    const button = document.getElementById('statusbar-root');
+    if (!button) return;
+    const rootName = boundDirectoryHandle?.name || '';
+    button.hidden = !rootName;
+    if (!rootName) return;
+    const path = getRootPath();
+    document.getElementById('statusbar-root-label').textContent = path || `${rootName} · 경로 미설정`;
+    button.title = path
+        ? '행 참조에 쓰는 폴더의 실제 경로입니다. 클릭해서 바꿉니다.'
+        : '폴더의 실제 경로를 적어 두면 행 참조의 file이 절대 경로가 됩니다. 클릭해서 설정합니다.';
+}
+
+function editRootPath() {
+    const rootName = boundDirectoryHandle?.name || '';
+    if (!rootName) return;
+    const answer = prompt(
+        `"${rootName}" 폴더의 실제 경로를 입력하세요.\n예: /Users/me/work/${rootName}\n비우면 설정을 지웁니다.`,
+        getRootPath()
+    );
+    if (answer === null) return;
+    const paths = readRootPaths();
+    const path = answer.trim().replace(/\/+$/, '');
+    if (path) paths[rootName] = path;
+    else delete paths[rootName];
+    try {
+        localStorage.setItem(ROOT_PATHS_STORAGE_KEY, JSON.stringify(paths));
+    } catch (_) { /* storage unavailable */ }
+    updateRootPathStatus();
+}
+
+/** The selected rows as a reference (see modules/row-reference.js), or null. */
+function buildSelectedRowReference() {
+    if (!currentData || !Array.isArray(currentData.steps)) return null;
+    const indexes = expandRowSelection(currentData.steps, getSelectedStepIndexes());
+    if (indexes.length === 0) return null;
+    // An id written now is what finds the row again after the file changes.
+    if (ensureRowIds(currentData.steps, indexes)) syncToEditor();
+    const activeFile = Workspace.getActiveFile(workspace);
+    return buildRowReference({
+        data: currentData,
+        indexes,
+        file: buildReferenceFilePath({
+            rootPath: getRootPath(),
+            rootName: boundDirectoryHandle?.name || '',
+            path: buildFileLocation(activeFile)?.path || activeFile?.name || ''
+        })
+    });
+}
+
+async function copySelectedRowReference() {
+    const reference = buildSelectedRowReference();
+    if (!reference) {
+        showStatusMessage('복사할 행이 없습니다. 행을 먼저 선택하세요.', 'error');
+        return;
+    }
+    try {
+        await navigator.clipboard.writeText(JSON.stringify(reference, null, 2));
+        showStatusMessage(`${reference.rows.length}개 행의 참조를 복사했습니다.`);
+    } catch (error) {
+        console.error('[qa-scenario] failed to copy row reference', error);
+        showStatusMessage('클립보드에 복사하지 못했습니다.', 'error');
+    }
+}
+
+function setupChecklistRowSelection() {
+    const table = document.getElementById('checklist-table');
+    // A click with a modifier selects rows; it must not also move the caret
+    // into a cell or start a text selection across rows. Inside the cell
+    // being edited the modifiers keep their text meaning.
+    table?.addEventListener('mousedown', (event) => {
+        if (event.button !== 0 || !(event.metaKey || event.ctrlKey || event.shiftKey)) return;
+        if (!event.target.closest?.('tr[data-step-index]')) return;
+        const cell = event.target.closest('.cell-content');
+        if (cell ? cell === document.activeElement : event.target.closest('.cm-editor, input, select, button, textarea, label')) return;
+        event.preventDefault();
+    });
+
+    // Copy with rows selected and no text in hand copies the rows.
+    document.addEventListener('copy', (event) => {
+        if (selectedSteps.size === 0 || isTextEditingElement(document.activeElement)) return;
+        if (!document.getSelection()?.isCollapsed) return;
+        if (!checklistSearchScopeActive && !EL.checklistPane?.contains(document.activeElement)) return;
+        const reference = buildSelectedRowReference();
+        if (!reference) return;
+        event.clipboardData.setData('text/plain', JSON.stringify(reference, null, 2));
+        event.preventDefault();
+        showStatusMessage(`${reference.rows.length}개 행의 참조를 복사했습니다.`);
+    });
+
+    document.getElementById('statusbar-root')?.addEventListener('click', editRootPath);
+    document.getElementById('checklist-context-copy-reference')?.addEventListener('click', () => {
+        closeChecklistContextMenu();
+        void copySelectedRowReference();
+    });
 }
 
 function isStepArrayField(field) {
@@ -3130,10 +3321,7 @@ function navigateChecklistSearchResult(index) {
         EL.checklistSearchResults?.querySelector('.is-current')?.scrollIntoView({ block: 'nearest' });
         const row = EL.checklistBody?.querySelector(`[data-step-index="${result.stepIndex}"]`);
         row?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-        if (row) {
-            EL.checklistBody.querySelectorAll('.selected-row').forEach(item => item.classList.remove('selected-row'));
-            row.classList.add('selected-row');
-        }
+        setChecklistRowSelection([result.stepIndex], result.stepIndex);
         const bounds = Editor.findStepBounds(EL.editing.value, result.stepIndex);
         if (bounds) renderStepHighlight(bounds);
     });
@@ -3726,6 +3914,7 @@ function updateFolderWritePermissionUi() {
     // Every change of the opened folder or its permission passes through
     // here, and each one changes which images can be read.
     noteAssets?.reset();
+    updateRootPathStatus();
     if (!EL.btnRequestWrite) return;
     const shouldShow = Boolean(boundDirectoryHandle && !boundDirectoryWriteEnabled);
     EL.btnRequestWrite.hidden = !shouldShow;

@@ -871,6 +871,8 @@ export function setupChecklistCellFocus(table) {
     if (!table) return;
     table.addEventListener('mousedown', (event) => {
         if (event.button !== 0 || event.defaultPrevented) return;
+        // With a modifier the press selects rows instead of editing one.
+        if (event.metaKey || event.ctrlKey || event.shiftKey) return;
         const { target } = event;
         // Only the bare cell (or a divider's layout wrapper) counts: a press on
         // the text, a chip, a checkbox or a button keeps its own meaning.
@@ -1152,11 +1154,22 @@ export function renderChecklist(container, data, options = {}) {
     const {
         onUpdatePass, onUpdateStep, onHighlightStep, onScenarioTitleUpdate,
         onAddStep, onAddDivider, onOpenChecklistContextMenu,
-        onNoteCellMount, activeFilter = 'all',
+        onNoteCellMount, onSelectRow, selectedStepIndexes = new Set(), activeFilter = 'all',
         searchResults = [], activeSearchResult = null, pinnedOnly = false
     } = options;
     if (!container) return;
     const canInsertRows = typeof onAddStep === 'function' || typeof onAddDivider === 'function';
+    // The caller may own the selection (several rows, kept across renders);
+    // without one, a click selects the single row here.
+    const selectRow = (row, index, event) => {
+        if (typeof onSelectRow === 'function') {
+            onSelectRow(index, event);
+            return;
+        }
+        container.querySelectorAll('tr').forEach(other => other.classList.remove('selected-row'));
+        row.classList.add('selected-row');
+        onHighlightStep(index);
+    };
 
     // Rows are rebuilt from scratch. Detach the old rows before destroying
     // their editors: CodeMirror's destroy removes its DOM, and doing that
@@ -1294,14 +1307,8 @@ export function renderChecklist(container, data, options = {}) {
                     noteCell.classList.add('is-search-field-match');
                 }
             }
-            dividerRow.addEventListener('click', () => {
-                const rows = container.querySelectorAll('tr');
-                rows.forEach((row) => {
-                    row.classList.remove('selected-row');
-                });
-                dividerRow.classList.add('selected-row');
-                onHighlightStep(index);
-            });
+            if (selectedStepIndexes.has(index)) dividerRow.classList.add('selected-row');
+            dividerRow.addEventListener('click', event => selectRow(dividerRow, index, event));
             if (typeof onOpenChecklistContextMenu === 'function') {
                 dividerRow.addEventListener('contextmenu', (event) => {
                     event.preventDefault();
@@ -1373,14 +1380,8 @@ export function renderChecklist(container, data, options = {}) {
             }
         });
 
-        tr.addEventListener('click', () => {
-            const rows = container.querySelectorAll('tr');
-            rows.forEach((row) => {
-                row.classList.remove('selected-row');
-            });
-            tr.classList.add('selected-row');
-            onHighlightStep(index);
-        });
+        if (selectedStepIndexes.has(index)) tr.classList.add('selected-row');
+        tr.addEventListener('click', event => selectRow(tr, index, event));
         if (typeof onOpenChecklistContextMenu === 'function') {
             tr.addEventListener('contextmenu', (event) => {
                 event.preventDefault();
