@@ -7,3 +7,4 @@ export const PANEL_VISIBILITY_STORAGE_KEY = 'qa-scenarios-panel-visibility-v1';
 export const SCROLL_POSITIONS_STORAGE_KEY = 'qa-scenarios-scroll-positions-v1';
 export const CHECKLIST_STICKY_STORAGE_KEY = 'qa-scenarios-checklist-sticky-v1';
 export const ROOT_PATHS_STORAGE_KEY = 'qa-scenarios-root-paths-v1';
+export const CHECKLIST_COLUMNS_STORAGE_KEY = 'qa-scenarios-checklist-columns-v1';

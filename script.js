@@ -1,6 +1,7 @@
 import {
     WORKSPACE_STORAGE_KEY,
     CHECKLIST_DENSITY_STORAGE_KEY,
+    CHECKLIST_COLUMNS_STORAGE_KEY,
     CHECKLIST_FILTER_STORAGE_KEY,
     PANEL_VISIBILITY_STORAGE_KEY,
     SCROLL_POSITIONS_STORAGE_KEY,
@@ -62,6 +63,12 @@ import { createNoteCellController } from './modules/note-cell-controller.js';
 import { createNoteImageManager } from './modules/note-image-manager.js';
 import { setupSurroundSelection } from './modules/surround-selection.js';
 import {
+    CHECKLIST_COLUMNS,
+    describeVisibleColumns,
+    readHiddenColumns,
+    toggleHiddenColumn
+} from './modules/checklist-columns.js';
+import {
     buildReferenceFilePath,
     buildRowReference,
     ensureRowIds,
@@ -97,7 +104,9 @@ const EL = {
     btnEditorReplaceAll: document.getElementById('btn-editor-replace-all'),
     scenarioTitle: document.getElementById('scenario-title'),
     checklistProgress: document.getElementById('checklist-progress'),
-    checklistDensityToggle: document.getElementById('checklist-density-toggle'),
+    checklistColumnsToggle: document.getElementById('checklist-columns-toggle'),
+    checklistColumnsLabel: document.getElementById('checklist-columns-label'),
+    checklistColumnsMenu: document.getElementById('checklist-columns-menu'),
     checklistStickyToggle: document.getElementById('checklist-sticky-toggle'),
     checklistSearchToggle: document.getElementById('checklist-search-toggle'),
     checklistSearchPanel: document.getElementById('checklist-search-panel'),
@@ -188,7 +197,7 @@ const EL = {
 
 let currentData = null;
 let workspace = null;
-let checklistShowNote = false;
+let checklistHiddenColumns = [];
 let checklistFilter = 'all';
 let checklistSearchResults = [];
 let checklistSearchResultIndex = -1;
@@ -294,7 +303,7 @@ function init() {
     setupNoteImages();
     setupSurroundSelection();
     setupChecklistRowSelection();
-    setupChecklistDensityToggle();
+    setupChecklistColumns();
     setupChecklistStickyHeadings();
     setupChecklistFilter();
     setupChecklistSearch();
@@ -2872,25 +2881,97 @@ function isStepArrayField(field) {
     return field === 'given' || field === 'when' || field === 'then';
 }
 
-function setChecklistDensity(showRef, options = {}) {
+/**
+ * Applies the hidden columns to the table and to the picker. The button is
+ * marked like the row filter whenever some column is hidden, so a missing
+ * column is never a silent state.
+ */
+function setChecklistHiddenColumns(hidden, options = {}) {
     const { persist = true } = options;
-    checklistShowNote = showRef === true;
+    checklistHiddenColumns = hidden;
 
-    if (EL.checklistView) {
-        EL.checklistView.classList.toggle('is-note-visible', checklistShowNote);
-    }
-    if (EL.checklistDensityToggle) {
-        EL.checklistDensityToggle.setAttribute('aria-pressed', checklistShowNote ? 'true' : 'false');
-        EL.checklistDensityToggle.classList.toggle('is-active', checklistShowNote);
-        const label = checklistShowNote ? 'Hide note column' : 'Show note column';
-        EL.checklistDensityToggle.title = label;
-        EL.checklistDensityToggle.setAttribute('aria-label', label);
-    }
+    CHECKLIST_COLUMNS.forEach(({ id }) => {
+        EL.checklistView?.classList.toggle(`hide-col-${id}`, hidden.includes(id));
+    });
+    if (EL.checklistColumnsLabel) EL.checklistColumnsLabel.textContent = describeVisibleColumns(hidden);
+    EL.checklistColumnsToggle?.classList.toggle('is-filtered', hidden.length > 0);
+    EL.checklistColumnsMenu?.querySelectorAll('[data-column]').forEach((item) => {
+        const visible = !hidden.includes(item.dataset.column);
+        item.setAttribute('aria-checked', visible ? 'true' : 'false');
+        // The last visible column stays: a table with no column says nothing.
+        item.disabled = visible && hidden.length === CHECKLIST_COLUMNS.length - 1;
+    });
+
     if (persist) {
         try {
-            localStorage.setItem(CHECKLIST_DENSITY_STORAGE_KEY, checklistShowNote ? 'trace' : 'check');
+            localStorage.setItem(CHECKLIST_COLUMNS_STORAGE_KEY, JSON.stringify(hidden));
         } catch (_) { /* storage unavailable */ }
     }
+    // Pinned titles are measured against the header, whose height can change.
+    scheduleStickyHeadingUpdate();
+}
+
+function closeChecklistColumnsMenu(options = {}) {
+    if (!EL.checklistColumnsMenu || EL.checklistColumnsMenu.hidden) return;
+    EL.checklistColumnsMenu.hidden = true;
+    EL.checklistColumnsToggle?.setAttribute('aria-expanded', 'false');
+    if (options.restoreFocus) EL.checklistColumnsToggle?.focus();
+}
+
+function setupChecklistColumns() {
+    let stored = null;
+    let legacy = null;
+    try {
+        stored = localStorage.getItem(CHECKLIST_COLUMNS_STORAGE_KEY);
+        legacy = localStorage.getItem(CHECKLIST_DENSITY_STORAGE_KEY);
+    } catch (_) { /* storage unavailable */ }
+
+    const menu = EL.checklistColumnsMenu;
+    CHECKLIST_COLUMNS.forEach(({ id, label }) => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'checklist-filter-item';
+        item.dataset.column = id;
+        item.setAttribute('role', 'menuitemcheckbox');
+        const check = document.createElement('span');
+        check.className = 'checklist-columns-check';
+        check.setAttribute('aria-hidden', 'true');
+        check.textContent = '✓';
+        item.append(check, label);
+        // The menu stays open: several columns are often switched in one go.
+        item.addEventListener('click', () => {
+            setChecklistHiddenColumns(toggleHiddenColumn(checklistHiddenColumns, id));
+        });
+        item.addEventListener('keydown', (event) => {
+            if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+            event.preventDefault();
+            const items = [...menu.querySelectorAll('[data-column]:not(:disabled)')];
+            const index = items.indexOf(item);
+            items[(index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus();
+        });
+        menu?.append(item);
+    });
+    setChecklistHiddenColumns(readHiddenColumns(stored, legacy), { persist: false });
+
+    EL.checklistColumnsToggle?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (!menu.hidden) return closeChecklistColumnsMenu();
+        closeChecklistFilterMenu();
+        menu.hidden = false;
+        EL.checklistColumnsToggle.setAttribute('aria-expanded', 'true');
+        menu.querySelector('[data-column]:not(:disabled)')?.focus();
+    });
+    document.addEventListener('click', (event) => {
+        if (!menu || menu.hidden) return;
+        if (menu.contains(event.target) || EL.checklistColumnsToggle?.contains(event.target)) return;
+        closeChecklistColumnsMenu();
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape' || !menu || menu.hidden) return;
+        event.preventDefault();
+        event.stopPropagation();
+        closeChecklistColumnsMenu({ restoreFocus: true });
+    });
 }
 
 function applyChecklistFilterToControl() {
@@ -2918,6 +2999,7 @@ function applyChecklistFilterToControl() {
 
 function openChecklistFilterMenu() {
     if (!EL.checklistFilterMenu) return;
+    closeChecklistColumnsMenu();
     applyChecklistFilterToControl();
     EL.checklistFilterMenu.hidden = false;
     EL.checklistFilterToggle?.setAttribute('aria-expanded', 'true');
@@ -3121,21 +3203,6 @@ function observePinnedChecklistRows() {
     });
 }
 
-function setupChecklistDensityToggle() {
-    let stored = null;
-    try {
-        stored = localStorage.getItem(CHECKLIST_DENSITY_STORAGE_KEY);
-    } catch (_) { /* storage unavailable */ }
-
-    setChecklistDensity(stored === 'trace', { persist: false });
-
-    if (EL.checklistDensityToggle) {
-        EL.checklistDensityToggle.addEventListener('click', () => {
-            setChecklistDensity(!checklistShowNote);
-        });
-    }
-}
-
 function isChecklistSearchOpen() {
     return Boolean(EL.checklistSearchPanel && !EL.checklistSearchPanel.hidden);
 }
@@ -3314,8 +3381,10 @@ function navigateChecklistSearchResult(index) {
         } catch (_) { /* storage unavailable */ }
     }
 
-    // A match in the note column is only visible with that column shown.
-    if (result.field === 'note' && !checklistShowNote) setChecklistDensity(true);
+    // A match in a hidden column is only visible with that column shown.
+    if (checklistHiddenColumns.includes(result.field)) {
+        setChecklistHiddenColumns(checklistHiddenColumns.filter(column => column !== result.field));
+    }
     renderChecklist();
 
     requestAnimationFrame(() => {

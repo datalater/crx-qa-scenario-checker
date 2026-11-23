@@ -894,13 +894,15 @@ export function setupChecklistCellFocus(table) {
 
 // Which cell of a neighbouring row an arrow key lands in, by the cell left.
 // A step column keeps its column; a divider row offers its title, and its
-// note when it has one. Leaving a divider title downwards enters Given.
+// note when it has one. Leaving a divider title downwards enters Given, or
+// the first step column that is shown.
 const NAVIGATION_FIELDS = {
     given: ['given', 'divider'],
     when: ['when', 'divider'],
     then: ['then', 'divider'],
     note: ['note', 'divider'],
-    divider: ['divider', 'given']
+    // Given may be hidden, so the title falls through to the next column.
+    divider: ['divider', 'given', 'when', 'then', 'note']
 };
 
 /**
@@ -951,7 +953,7 @@ function settleCaretInText(cell) {
 export function setupChecklistCellNavigation(table) {
     if (!table) return;
     const editableCells = row => [...row.querySelectorAll('.cell-content[contenteditable]')]
-        // A hidden note column has cells, but they cannot take the caret.
+        // A hidden column has cells, but they cannot take the caret.
         .filter(cell => cell.offsetParent !== null);
 
     table.addEventListener('keydown', (event) => {

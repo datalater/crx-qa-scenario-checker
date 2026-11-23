@@ -28,6 +28,7 @@ import './checklist-cell-navigation.test.mjs';
 import './row-reference.test.mjs';
 import './note-inline.test.mjs';
 import './note-assets.test.mjs';
+import './checklist-columns.test.mjs';
 import './checklist-filter.test.mjs';
 import './checklist-search-manager.test.mjs';
 import './panel-visibility.test.mjs';

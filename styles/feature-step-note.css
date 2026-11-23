@@ -70,15 +70,47 @@
   background-color: color-mix(in srgb, var(--accent-primary) 14%, transparent);
 }
 
-/* --- Note column: an editable cell like the others, hidden in Check mode --- */
+/* --- Note column: an editable cell like the others --- */
 
 .col-note {
   width: 22%;
   min-width: 180px;
 }
 
-.spreadsheet-view:not(.is-note-visible) .col-note {
+/* Columns unchecked in the column picker (modules/checklist-columns.js). */
+.spreadsheet-view.hide-col-given .col-given,
+.spreadsheet-view.hide-col-when .col-when,
+.spreadsheet-view.hide-col-then .col-then,
+.spreadsheet-view.hide-col-pass .col-pass,
+.spreadsheet-view.hide-col-note .col-note {
   display: none;
+}
+
+/*
+ * The column widths are shares of the whole table. With a column gone the
+ * shares no longer add up, and the leftover would go to the narrow `#` and
+ * Pass columns; the text columns share it instead.
+ */
+.spreadsheet-view[class*="hide-col-"] :is(.col-given, .col-when, .col-then, .col-note) {
+  width: auto;
+}
+
+/* A picker item shows a check while its column is visible. */
+.checklist-columns-check {
+  flex: 0 0 12px;
+  width: 12px;
+  text-align: center;
+  color: var(--accent-primary);
+  visibility: hidden;
+}
+
+.checklist-filter-item[aria-checked="true"] .checklist-columns-check {
+  visibility: visible;
+}
+
+.checklist-filter-item:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 /* The note beside a section title reads like any other note, not a title. */
