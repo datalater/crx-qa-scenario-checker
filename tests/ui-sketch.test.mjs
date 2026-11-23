@@ -72,3 +72,29 @@ test('a block keeps blank lines as gaps and isolates a broken line', () => {
 test('the inserted template parses without errors', () => {
     assertEqual(parseUiBlock(EMPTY_UI_SKETCH).every(row => row.type === 'line'), true);
 });
+
+test('quotes scope a role like parentheses do', () => {
+    assertDeepEqual(
+        parseUiLine('@title"시간표 설정" --- @cta01"[반영 설정]" @cta02"[[일괄 삭제]]"'),
+        parseUiLine('@title(시간표 설정) --- @cta01([반영 설정]) @cta02([[일괄 삭제]])')
+    );
+    assertDeepEqual(parseUiLine('@label"이름" 필수'), [role('label', text('이름')), text('필수')]);
+});
+
+test('quoted content keeps parentheses, even unbalanced ones', () => {
+    assertDeepEqual(parseUiLine('@help"8~20자 (영문, 숫자 포함"'), [role('help', text('8~20자 (영문, 숫자 포함'))]);
+    assertDeepEqual(parseUiLine('@note"웃음 :)" --- 끝'), [role('note', text('웃음 :)')), spacer, text('끝')]);
+});
+
+test('a quoted role holds roles in parentheses, and an escaped quote is content', () => {
+    assertDeepEqual(parseUiLine('@header"@title(제목) --- @cta([삭제])"'), [
+        role('header', role('title', text('제목')), spacer, role('cta', button('삭제')))
+    ]);
+    assertDeepEqual(parseUiLine('@quote"그는 \\"좋아\\"라고 했다"'), [role('quote', text('그는 "좋아"라고 했다'))]);
+});
+
+test('a quote away from a role name is plain text, and an unclosed one is an error', () => {
+    assertDeepEqual(parseUiLine('그는 "좋아"라고 했다'), [text('그는 "좋아"라고 했다')]);
+    assertDeepEqual(parseUiLine('@title "띄어 쓴 따옴표"'), [role('title', text('"띄어 쓴 따옴표"'))]);
+    assertEqual(parseUiBlock('@title"닫는 따옴표 없음 --- [확인]')[0].type, 'error');
+});

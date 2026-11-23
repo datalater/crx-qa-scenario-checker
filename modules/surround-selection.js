@@ -33,8 +33,8 @@ export function surroundText(text, start, end, open) {
 
 /**
  * In a ui block, `@title 시간표 설정` with the content selected should become
- * `@title(시간표 설정)`: a parenthesis only scopes a role when it touches the
- * name. True when the single space before `start` is that gap.
+ * `@title(시간표 설정)`: a parenthesis or a quote only scopes a role when it
+ * touches the name. True when the single space before `start` is that gap.
  */
 export function isRoleGapBefore(text, start) {
     return /(^|[\s(])@[A-Za-z][\w-]* $/.test(text.slice(0, start));
@@ -58,7 +58,7 @@ function wrapTextarea(field, open) {
     field.setSelectionRange(end, end);
     document.execCommand('insertText', false, SURROUND_PAIRS[open]);
     // The opening mark replaces the gap after a role name, if there is one.
-    const closesGap = open === '(' && field.classList.contains('cm-ui-source') && isRoleGapBefore(field.value, start);
+    const closesGap = (open === '(' || open === '"') && field.classList.contains('cm-ui-source') && isRoleGapBefore(field.value, start);
     field.setSelectionRange(closesGap ? start - 1 : start, start);
     document.execCommand('insertText', false, open);
     const shift = closesGap ? 0 : 1;

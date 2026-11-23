@@ -5,14 +5,16 @@
  *   @title(시간표 설정) --- @cta([삭제])
  *
  *   @role(content)   the role covers what is inside the parentheses
- *   @role content    without them: up to the next @role, a `---`, or the line end
+ *   @role"content"   the same with quotes, for content that has parentheses
+ *   @role content    without either: up to the next @role, a `---`, or the line end
  *   ---              pushes what follows to the far side of the line
  *   [text]           a button; [[text]] an emphasized one
  *   {name}           a value filled in later
  *   blank line       vertical space
  *
- * Roles nest, and a role is only read at the start of a word, so the `@` in
- * `a@b.com` is text. `\` takes the next character literally.
+ * Roles nest (inside quotes, with parentheses: quotes cannot hold quotes),
+ * and a role is only read at the start of a word, so the `@` in `a@b.com` is
+ * text. `\` takes the next character literally.
  *
  * Parsing is pure, so it is tested without an editor.
  */
@@ -28,19 +30,20 @@ export const EMPTY_UI_SKETCH = "@title(제목) --- [버튼]\n@description(설명
  */
 export const UI_SYNTAX_HELP = [
   ["@역할(내용)", "괄호 안이 그 역할의 범위. 역할 안에 역할을 넣을 수 있음"],
-  ["@역할 내용", "괄호 생략: 다음 @역할, ---, 줄 끝 중 먼저 나오는 곳까지"],
+  ['@역할"내용"', "따옴표 안이 범위. 내용에 괄호가 있을 때 편함"],
+  ["@역할 내용", "둘 다 생략: 다음 @역할, ---, 줄 끝 중 먼저 나오는 곳까지"],
   ["---", "뒤따르는 내용을 줄의 반대쪽 끝으로 밀기"],
   ["[버튼]", "버튼"],
   ["[[버튼]]", "강조 버튼"],
   ["{변수}", "나중에 값이 들어갈 자리"],
   ["빈 줄", "세로 간격"],
-  ["\\) \\@ \\[", "기호를 글자 그대로 쓰기"],
+  ['\\) \\" \\@ \\[', "기호를 글자 그대로 쓰기"],
 ];
 
 const ROLE = /^@([A-Za-z][\w-]*)/;
 const SHORTHAND_END = /(^|\s)(@[A-Za-z]|---(\s|$))/;
 
-/** Thrown for a `@role(` whose closing parenthesis is missing. */
+/** Thrown for a `@role(` or `@role"` whose closing mark is missing. */
 export class UnclosedRoleError extends Error {}
 
 function matchingParen(source, open) {
@@ -49,6 +52,14 @@ function matchingParen(source, open) {
     if (source[i] === "\\") i += 1;
     else if (source[i] === "(") depth += 1;
     else if (source[i] === ")" && (depth -= 1) === 0) return i;
+  }
+  return -1;
+}
+
+function closingQuote(source, open) {
+  for (let i = open + 1; i < source.length; i += 1) {
+    if (source[i] === "\\") i += 1;
+    else if (source[i] === '"') return i;
   }
   return -1;
 }
@@ -82,8 +93,8 @@ export function parseUiLine(source) {
       flush();
       const open = i + match[0].length;
       let inner;
-      if (source[open] === "(") {
-        const close = matchingParen(source, open);
+      if (source[open] === "(" || source[open] === '"') {
+        const close = source[open] === "(" ? matchingParen(source, open) : closingQuote(source, open);
         if (close < 0) throw new UnclosedRoleError(match[1]);
         inner = source.slice(open + 1, close);
         i = close + 1;

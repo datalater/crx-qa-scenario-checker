@@ -62,7 +62,7 @@ function renderRows(source) {
     if (row.type === "gap") return el("div", "cm-ui-gap");
     if (row.type === "error") {
       const error = el("div", "cm-ui-error", row.raw);
-      error.title = "닫는 괄호가 없습니다";
+      error.title = "닫는 괄호나 따옴표가 없습니다";
       return error;
     }
     const line = el("div", "cm-ui-line");
@@ -159,7 +159,7 @@ class UiSketchController {
       row.append(el("code", "", syntax), el("span", "", meaning));
       panel.appendChild(row);
     });
-    panel.appendChild(el("div", "cm-ui-help-note", "</> 또는 그림 더블클릭으로 원문을 고칩니다. 내용을 선택하고 ( 를 누르면 괄호로 감쌉니다."));
+    panel.appendChild(el("div", "cm-ui-help-note", "</> 또는 그림 더블클릭으로 원문을 고칩니다. 내용을 선택하고 ( 나 \" 를 누르면 그 기호로 감쌉니다."));
     // Moving from the button onto the panel keeps it open, so it can be read.
     panel.addEventListener("mouseenter", () => clearTimeout(this.helpTimer));
     panel.addEventListener("mouseleave", () => this.closeHelpSoon());
@@ -504,7 +504,7 @@ const uiSketchTheme = EditorView.theme({
     color: "#f85149",
     whiteSpace: "pre-wrap",
   },
-  ".cm-ui-error::before": { content: '"⚠ 닫는 괄호가 없습니다  "', opacity: "0.8" },
+  ".cm-ui-error::before": { content: '"⚠ 닫는 괄호나 따옴표가 없습니다  "', opacity: "0.8" },
 
   // Content only: the role layer disappears.
   '.cm-ui-stage[data-mode="content"] .cm-ui-role-name': { display: "none" },
