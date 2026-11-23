@@ -1,0 +1,71 @@
+import { isInsideUiFence, renderUiSketchHtml, splitUiFences } from '../modules/ui-sketch-html.js';
+import { formatChecklistCellContent } from '../modules/ui-renderer.js';
+import { stepLinesToText, toStepLines } from '../modules/step-lines.js';
+import { assert, assertDeepEqual, assertEqual, test } from './lib/test-runner.mjs';
+
+test('a sketch is a grid whose last column of each line runs to the edge', () => {
+    const html = renderUiSketchHtml('A -- B --- C\n-- D');
+    assert(html.startsWith('<div class="ui-sketch" style="grid-template-columns:max-content minmax(0, 1fr)">'));
+    assert(html.includes('style="grid-row:1;grid-column:1"><span class="ui-sketch__text">A</span>'));
+    assert(html.includes('style="grid-row:1;grid-column:2 / -1"><span class="ui-sketch__text">B</span><span class="ui-sketch__spacer"></span>'));
+    assert(html.includes('style="grid-row:2;grid-column:1"></div>'), 'the empty first column of `-- D`');
+    assert(html.includes('style="grid-row:2;grid-column:2 / -1"><span class="ui-sketch__text">D</span>'));
+});
+
+test('roles, buttons and values are drawn, and a group is marked', () => {
+    const html = renderUiSketchHtml('@header(@title(제목) --- [[저장]] {count})');
+    assert(html.includes('<span class="ui-sketch__role has-spacer is-group"><span class="ui-sketch__role-name">header</span>'));
+    assert(html.includes('<span class="ui-sketch__role"><span class="ui-sketch__role-name">title</span>'));
+    assert(html.includes('<span class="ui-sketch__button is-primary">저장</span>'));
+    assert(html.includes('<span class="ui-sketch__var">count</span>'));
+});
+
+test('content is escaped, and a broken line shows as written', () => {
+    const html = renderUiSketchHtml('@a(<img src=x onerror="1">)\n\n@b(닫지 않음');
+    assert(!html.includes('<img'));
+    assert(html.includes('&lt;img src=x onerror=&quot;1&quot;&gt;'));
+    assert(html.includes('class="ui-sketch__gap"'));
+    assert(html.includes('class="ui-sketch__error"'));
+    assert(html.includes('@b(닫지 않음'));
+});
+
+test('cell text splits into the text around a fence and the fence itself', () => {
+    assertDeepEqual(splitUiFences('위 문장\n\n```ui\n@a(1)\n-- 2\n```\n아래 문장'), [
+        { type: 'text', value: '위 문장\n' },
+        { type: 'ui', source: '@a(1)\n-- 2' },
+        { type: 'text', value: '아래 문장' }
+    ]);
+    assertDeepEqual(splitUiFences('```ui\n@a(1)\n```'), [{ type: 'ui', source: '@a(1)' }]);
+    assertDeepEqual(splitUiFences('```ui\n1\n```\n```ui\n2\n```').map(piece => piece.type), ['ui', 'ui']);
+});
+
+test('only a closed, whole-line ui fence counts', () => {
+    assertDeepEqual(splitUiFences('```ui\n@a(1)'), [{ type: 'text', value: '```ui\n@a(1)' }]);
+    assertDeepEqual(splitUiFences('글자 ```ui\nx\n```').map(piece => piece.type), ['text']);
+    assertDeepEqual(splitUiFences('```ts\nconst a = 1;\n```').map(piece => piece.type), ['text']);
+    assertDeepEqual(splitUiFences(''), []);
+});
+
+test('a cell draws the fence and still renders the text around it', () => {
+    const stored = toStepLines('select box가 표시된다 `[!note]`\n\n```ui\n@radio({radio}) -- @label({email})\n```');
+    const html = formatChecklistCellContent(stepLinesToText(stored));
+    assert(html.includes('checklist-alert-token--note'));
+    assert(html.includes('<div class="ui-sketch" contenteditable="false"'));
+    assert(html.includes('<span class="ui-sketch__role-name">radio</span>'));
+    assert(!html.includes('```'));
+});
+
+test('nothing inside a fence is read as a cell token', () => {
+    const html = formatChecklistCellContent('```ui\n@a(`code` [x](https://a.dev))\n```', { rich: true });
+    assert(!html.includes('inline-code'));
+    assert(!html.includes('note-chip'));
+    assert(html.includes('`code`'));
+});
+
+test('a position is known to be inside a ui fence', () => {
+    const text = '앞\n```ui\n@title 제목\n```\n@title 뒤';
+    assertEqual(isInsideUiFence(text, text.indexOf('제목')), true);
+    assertEqual(isInsideUiFence(text, text.indexOf('뒤')), false);
+    assertEqual(isInsideUiFence(text, 0), false);
+    assertEqual(isInsideUiFence('```ui\n@title 제목', 12), true);
+});

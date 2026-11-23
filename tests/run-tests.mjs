@@ -18,6 +18,7 @@ import './table-visibility.test.mjs';
 import './table-widget-height.test.mjs';
 import './mermaid-flow.test.mjs';
 import './ui-sketch.test.mjs';
+import './ui-sketch-html.test.mjs';
 import './diagram-export.test.mjs';
 import './diagram-zoom.test.mjs';
 import './pass-summary-refresh.test.mjs';

@@ -2,6 +2,7 @@ import { getActiveFile } from './workspace-manager.js';
 import { getChecklistAlertConfig, renderChecklistAlertToken } from './checklist-alerts.js';
 import { findNoteInlineTokens } from './note-inline.js';
 import { stepLinesToText } from './step-lines.js';
+import { renderUiSketchHtml, splitUiFences } from './ui-sketch-html.js';
 import { CODE_VIEWS, hasCodeView, resolveCodeView, storedCodeView } from './code-view.js';
 import { applyCodeHeight, createCodeHeightHandle, parseCodeHeightPx } from './code-height.js';
 import {
@@ -45,13 +46,23 @@ export function createTreeRowActions(actions) {
 }
 
 /**
- * Renders a cell's text. Every cell understands backtick tokens. `rich`
+ * Renders a cell's text. Every cell understands backtick tokens and ```ui
+ * fences. `rich`
  * adds chips: `true` for links and images (the note column), `'links'` for
  * links only (a text divider); what is not a chip stays as written.
  */
 export function formatChecklistCellContent(rawValue, options = {}) {
     if (!rawValue) return '-';
-    const source = String(rawValue);
+    // A ```ui fence is drawn as a sketch in any cell; the text around it is
+    // rendered as usual, and nothing inside the fence is read as a token.
+    return splitUiFences(String(rawValue)).map(piece => (
+        piece.type === 'ui'
+            ? renderUiSketchHtml(piece.source).replace('<div class="ui-sketch"', '<div class="ui-sketch" contenteditable="false"')
+            : formatChecklistCellText(piece.value, options)
+    )).join('');
+}
+
+function formatChecklistCellText(source, options) {
     const { rich } = options;
     if (rich !== true && rich !== 'links') return formatChecklistCodeTokens(source);
 

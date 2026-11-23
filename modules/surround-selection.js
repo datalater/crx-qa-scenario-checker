@@ -8,6 +8,7 @@
  * and the JSON editor is left as it is.
  */
 import { getSelectionOffsets, setSelectionOffsets } from './note-cell-controller.js';
+import { isInsideUiFence } from './ui-sketch-html.js';
 
 export const SURROUND_PAIRS = Object.freeze({
     '(': ')',
@@ -68,11 +69,15 @@ function wrapTextarea(field, open) {
 function wrapEditable(host, offsets, open) {
     const start = Math.min(offsets.start, offsets.end);
     const end = Math.max(offsets.start, offsets.end);
+    // In a ```ui fence written in a cell, as in a ui block's source field.
+    const text = host.textContent;
+    const closesGap = (open === '(' || open === '"') && isRoleGapBefore(text, start) && isInsideUiFence(text, start);
     setSelectionOffsets(host, end);
     document.execCommand('insertText', false, SURROUND_PAIRS[open]);
-    setSelectionOffsets(host, start);
+    setSelectionOffsets(host, closesGap ? start - 1 : start, start);
     document.execCommand('insertText', false, open);
-    setSelectionOffsets(host, start + 1, end + 1);
+    const shift = closesGap ? 0 : 1;
+    setSelectionOffsets(host, start + shift, end + shift);
 }
 
 export function setupSurroundSelection(root = document) {

@@ -8,6 +8,7 @@
 @import url("styles/feature-divider-color.css") layer(features);
 @import url("styles/feature-step-note.css") layer(features);
 @import url("styles/feature-note-inline.css") layer(features);
+@import url("styles/feature-ui-sketch.css") layer(features);
 @import url("styles/feature-code-height.css") layer(features);
 @import url("styles/feature-checklist-search.css") layer(features);
 @import url("styles/feature-open-file-tabs.css") layer(features);

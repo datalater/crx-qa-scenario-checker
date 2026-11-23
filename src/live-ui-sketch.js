@@ -3,7 +3,8 @@
  * role named above the content it covers. The stored text is unchanged; the
  * `</>` button (or a double click) opens it for editing under the drawing.
  *
- * Syntax and parsing: ui-sketch.js.
+ * Syntax and parsing: ui-sketch.js. The drawing itself is shared with the
+ * table cells: modules/ui-sketch-html.js and styles/feature-ui-sketch.css.
  */
 import { isolateHistory } from "@codemirror/commands";
 import { StateEffect, StateField } from "@codemirror/state";
@@ -12,7 +13,8 @@ import { findFences } from "./live-diagram.js";
 import { planTableDeletion } from "./markdown-table.js";
 import { joinFence, splitFence } from "./mermaid-flow.js";
 import { PALETTE } from "./theme-palette.js";
-import { UI_FENCE_INFO, UI_SYNTAX_HELP, countUiColumns, hasSpacer, parseUiBlock, splitUiColumns } from "./ui-sketch.js";
+import { renderUiSketchHtml } from "../modules/ui-sketch-html.js";
+import { UI_FENCE_INFO, UI_SYNTAX_HELP } from "./ui-sketch.js";
 
 /** Opens the source of the block starting at this position (after `/ui`). */
 export const openUiSourceEffect = StateEffect.define();
@@ -33,9 +35,14 @@ function readMode() {
   return "both";
 }
 
-// One choice for every block: switching views is about how to read, not
-// about one block.
+// One choice for every sketch on the page, in blocks and in table cells:
+// switching views is about how to read, not about one block. The stylesheet
+// reads it from the root element.
 let currentMode = readMode();
+const publishMode = () => {
+  if (typeof document !== "undefined") document.documentElement.dataset.uiSketchMode = currentMode;
+};
+publishMode();
 
 const el = (tag, className, text) => {
   const node = document.createElement(tag);
@@ -43,50 +50,6 @@ const el = (tag, className, text) => {
   if (text != null) node.textContent = text;
   return node;
 };
-
-function renderNode(node) {
-  if (node.type === "text") return el("span", "cm-ui-text", node.value);
-  if (node.type === "spacer") return el("span", "cm-ui-spacer");
-  if (node.type === "var") return el("span", "cm-ui-var", node.name);
-  if (node.type === "button") return el("span", `cm-ui-button${node.primary ? " is-primary" : ""}`, node.value);
-  const role = el("span", `cm-ui-role${hasSpacer(node.children) ? " has-spacer" : ""}`);
-  if (node.children.some((child) => child.type === "role")) role.classList.add("is-group");
-  const body = el("span", "cm-ui-role-body");
-  body.append(...node.children.map(renderNode));
-  role.append(el("span", "cm-ui-role-name", node.name), body);
-  return role;
-}
-
-/**
- * The block is one grid, so a column starts at the same place on every line.
- * Each line's last column runs to the right edge: a line without any `--`
- * takes the full width, and `---` inside it still reaches the far side.
- */
-function renderRows(source) {
-  const rows = parseUiBlock(source);
-  const columnCount = countUiColumns(rows);
-  const cells = [];
-  rows.forEach((row, index) => {
-    const gridRow = String(index + 1);
-    if (row.type !== "line") {
-      const cell = row.type === "gap" ? el("div", "cm-ui-gap") : el("div", "cm-ui-error", row.raw);
-      if (row.type === "error") cell.title = "닫는 괄호나 따옴표가 없습니다";
-      cell.style.gridRow = gridRow;
-      cell.style.gridColumn = "1 / -1";
-      cells.push(cell);
-      return;
-    }
-    const columns = splitUiColumns(row.nodes);
-    columns.forEach((nodes, column) => {
-      const cell = el("div", "cm-ui-line");
-      cell.style.gridRow = gridRow;
-      cell.style.gridColumn = column === columns.length - 1 ? `${column + 1} / -1` : String(column + 1);
-      cell.append(...nodes.map(renderNode));
-      cells.push(cell);
-    });
-  });
-  return { cells, columnCount };
-}
 
 class UiSketchController {
   constructor(view, wrap, block, openSource) {
@@ -249,10 +212,7 @@ class UiSketchController {
 
   refresh() {
     const { inner } = this;
-    const { cells, columnCount } = renderRows(inner);
-    // Every column but the last is as wide as its widest content.
-    this.stage.style.gridTemplateColumns = `${"max-content ".repeat(columnCount - 1)}minmax(0, 1fr)`;
-    this.stage.replaceChildren(...cells);
+    this.stage.innerHTML = renderUiSketchHtml(inner);
     this.applyMode();
     this.source.hidden = !this.sourceOpen;
     this.sourceToggle.classList.toggle("is-on", this.sourceOpen);
@@ -262,7 +222,6 @@ class UiSketchController {
   }
 
   applyMode() {
-    this.stage.dataset.mode = currentMode;
     this.modeButtons.forEach((button) => button.classList.toggle("is-on", button.dataset.mode === currentMode));
   }
 
@@ -316,6 +275,7 @@ class UiSketchController {
 
 function setMode(mode) {
   currentMode = mode;
+  publishMode();
   try {
     localStorage.setItem(MODE_STORAGE_KEY, mode);
   } catch (_) { /* storage unavailable */ }
@@ -377,8 +337,6 @@ const liveUiSketches = StateField.define({
 // ---------- theme ----------
 
 const ACCENT = "#2f81f7";
-const ROLE_COLOR = "#a371f7";
-const VAR_COLOR = "#d29922";
 
 const uiSketchTheme = EditorView.theme({
   ".cm-ui-wrap": {
@@ -467,84 +425,7 @@ const uiSketchTheme = EditorView.theme({
   ".cm-ui-mode:last-child": { borderRadius: "0 4px 4px 0" },
   ".cm-ui-mode.is-on": { position: "relative" },
 
-  ".cm-ui-stage": {
-    display: "grid",
-    alignItems: "end",
-    gap: "6px 8px",
-    padding: "14px 16px",
-    overflowX: "auto",
-  },
-  ".cm-ui-line": { display: "flex", alignItems: "flex-end", gap: "8px", minHeight: "22px" },
-  ".cm-ui-gap": { height: "12px" },
-  ".cm-ui-spacer": { flex: "1 1 24px", minWidth: "24px" },
-  ".cm-ui-text": { whiteSpace: "pre-wrap" },
-  ".cm-ui-button": {
-    display: "inline-block",
-    padding: "3px 12px",
-    border: "1px solid #30363d",
-    borderRadius: "6px",
-    fontSize: "12px",
-    fontWeight: "600",
-    whiteSpace: "nowrap",
-  },
-  ".cm-ui-button.is-primary": { backgroundColor: "#30363d", borderColor: "#484f58" },
-  ".cm-ui-var": {
-    padding: "0 5px",
-    borderRadius: "4px",
-    fontFamily: "var(--font-code, monospace)",
-    fontSize: "0.9em",
-    color: VAR_COLOR,
-    backgroundColor: `color-mix(in srgb, ${VAR_COLOR} 14%, transparent)`,
-  },
-  ".cm-ui-role": { display: "inline-flex", flexDirection: "column", minWidth: "0" },
-  ".cm-ui-role.has-spacer": { flex: "1 1 auto" },
-  ".cm-ui-role-name": {
-    paddingBottom: "1px",
-    fontFamily: "var(--font-code, monospace)",
-    fontSize: "9px",
-    fontWeight: "700",
-    lineHeight: "1.3",
-    letterSpacing: "0.04em",
-    color: ROLE_COLOR,
-    whiteSpace: "nowrap",
-  },
-  // The line under a role name is as long as what the role covers. A role
-  // only names its content: the same role looks different from screen to
-  // screen, so no name carries a style.
-  ".cm-ui-role-body": {
-    display: "flex",
-    alignItems: "flex-end",
-    gap: "8px",
-    paddingTop: "3px",
-    borderTop: `1px solid color-mix(in srgb, ${ROLE_COLOR} 45%, transparent)`,
-  },
-  ".cm-ui-error": {
-    fontFamily: "var(--font-code, monospace)",
-    fontSize: "12px",
-    color: "#f85149",
-    whiteSpace: "pre-wrap",
-  },
-  ".cm-ui-error::before": { content: '"⚠ 닫는 괄호나 따옴표가 없습니다  "', opacity: "0.8" },
-
-  // Content only: the role layer disappears.
-  '.cm-ui-stage[data-mode="content"] .cm-ui-role-name': { display: "none" },
-  '.cm-ui-stage[data-mode="content"] .cm-ui-role-body': { borderTop: "none", paddingTop: "0" },
-
-  // Roles only: each role becomes a named slot; a group keeps its members.
-  '.cm-ui-stage[data-mode="roles"] .cm-ui-role:not(.is-group) > .cm-ui-role-body': { display: "none" },
-  '.cm-ui-stage[data-mode="roles"] .cm-ui-role.is-group > .cm-ui-role-body': {
-    padding: "0",
-    border: "none",
-    backgroundColor: "transparent",
-  },
-  '.cm-ui-stage[data-mode="roles"] .cm-ui-role:not(.is-group) > .cm-ui-role-name': {
-    padding: "3px 9px",
-    border: `1px dashed color-mix(in srgb, ${ROLE_COLOR} 70%, transparent)`,
-    borderRadius: "5px",
-    fontSize: "11px",
-    color: PALETTE.text,
-  },
-  '.cm-ui-stage[data-mode="roles"] .cm-ui-line > :not(.cm-ui-role):not(.cm-ui-spacer)': { opacity: "0.45" },
+  ".cm-ui-stage": { padding: "14px 16px", overflowX: "auto" },
 
   ".cm-ui-source": {
     display: "block",
