@@ -1386,6 +1386,12 @@
     background-color: rgba(88, 166, 255, 0.1);
   }
 
+  /* Several rows can be selected at once, so each one is marked at its edge
+     as well as by its tint. */
+  tr.selected-row > td:first-child {
+    box-shadow: inset 3px 0 0 var(--accent-primary);
+  }
+
   tr.checklist-divider-row {
     background: rgba(56, 139, 253, 0.12);
   }
