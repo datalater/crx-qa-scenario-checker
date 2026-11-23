@@ -2744,7 +2744,8 @@ function handleChecklistRowClick(index, event) {
         document.activeElement.blur();
     }
 
-    const bounds = Editor.findStepBounds(EL.editing.value, index);
+    // The JSON editor marks the row that was clicked while it is selected.
+    const bounds = next.selected.has(index) ? Editor.findStepBounds(EL.editing.value, index) : null;
     if (!bounds) {
         clearStepHighlight();
         return;

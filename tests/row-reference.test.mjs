@@ -93,3 +93,16 @@ test('the file path uses the real root when it is known, else the folder name', 
     assertEqual(buildReferenceFilePath({ rootName: 'qa', path: 'a/b.json' }), 'qa/a/b.json');
     assertEqual(buildReferenceFilePath({ path: 'b.json' }), 'b.json');
 });
+
+test('a second plain click on the only selected row clears the selection', () => {
+    const once = nextRowSelection(null, 2, {}, [1, 2, 3]);
+    const twice = nextRowSelection(once, 2, {}, [1, 2, 3]);
+    assertDeepEqual(picked(twice), []);
+    assertEqual(twice.anchor, null);
+    assertDeepEqual(picked(nextRowSelection(twice, 2, {}, [1, 2, 3])), [2], 'a third click selects it again');
+});
+
+test('a plain click on one of several selected rows keeps that row alone', () => {
+    const several = nextRowSelection(nextRowSelection(null, 1, {}, [1, 2, 3]), 3, { toggle: true }, [1, 2, 3]);
+    assertDeepEqual(picked(nextRowSelection(several, 3, {}, [1, 2, 3])), [3]);
+});

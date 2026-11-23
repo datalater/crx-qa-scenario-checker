@@ -13,7 +13,7 @@ const ID_LENGTH = 4;
 
 /**
  * The selection after a click on the row `index`.
- *   plain click   that row alone
+ *   plain click   that row alone; on the only selected row, nothing selected
  *   toggle        adds or removes that row (Cmd/Ctrl)
  *   range         every row from the anchor to that row, in display order (Shift)
  * `order` lists the visible rows as they are displayed.
@@ -32,6 +32,8 @@ export function nextRowSelection(selection, index, { toggle = false, range = fal
         else selected.add(index);
         return { selected, anchor: index };
     }
+    // A second click on the one selected row lets go of it.
+    if (selected.size === 1 && selected.has(index)) return { selected: new Set(), anchor: null };
     return { selected: new Set([index]), anchor: index };
 }
 
