@@ -1,6 +1,7 @@
 import { getActiveFile } from './workspace-manager.js';
 import { getChecklistAlertConfig, renderChecklistAlertToken } from './checklist-alerts.js';
 import { findNoteInlineTokens } from './note-inline.js';
+import { hasAdjacentVisualLine } from '../src/table-cell-navigation.js';
 import { stepLinesToText } from './step-lines.js';
 import { renderUiSketchHtml, splitUiFences } from './ui-sketch-html.js';
 import { CODE_VIEWS, hasCodeView, resolveCodeView, storedCodeView } from './code-view.js';
@@ -886,12 +887,99 @@ export function setupChecklistCellFocus(table) {
         // Without this the browser moves the caret to wherever it guesses.
         event.preventDefault();
         editable.focus();
-        const range = document.createRange();
-        range.selectNodeContents(editable);
-        range.collapse(false);
-        const selection = document.getSelection();
-        selection.removeAllRanges();
-        selection.addRange(range);
+        placeCaretAtEdge(editable, false);
+    });
+}
+
+// Which cell of a neighbouring row an arrow key lands in, by the cell left.
+// A step column keeps its column; a divider row offers its title, and its
+// note when it has one. Leaving a divider title downwards enters Given.
+const NAVIGATION_FIELDS = {
+    given: ['given', 'divider'],
+    when: ['when', 'divider'],
+    then: ['then', 'divider'],
+    note: ['note', 'divider'],
+    divider: ['divider', 'given']
+};
+
+/**
+ * The cell to move to from `field` of row `from`, as `{ row, field }`, or
+ * null at the edge of the table. `rows` lists the editable fields of each
+ * row in display order; rows with none (a code divider) are stepped over.
+ */
+export function findCellNavigationTarget(rows, from, field, direction) {
+    const wanted = NAVIGATION_FIELDS[field];
+    if (!wanted) return null;
+    for (let row = from + direction; row >= 0 && row < rows.length; row += direction) {
+        const match = wanted.find(candidate => rows[row].includes(candidate));
+        if (match) return { row, field: match };
+    }
+    return null;
+}
+
+/**
+ * Puts the caret at the start or the end of the cell's text, inside a text
+ * node. A caret set on the element itself has no measurable position, and
+ * the line probe below needs one.
+ */
+function placeCaretAtEdge(cell, atStart) {
+    const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+    let node = walker.nextNode();
+    if (!atStart) for (let next = node; next; next = walker.nextNode()) node = next;
+    const range = document.createRange();
+    if (node) range.setStart(node, atStart ? 0 : node.length);
+    else range.selectNodeContents(cell);
+    range.collapse(true);
+    const selection = document.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+}
+
+/** The same caret, moved off the cell element into the text it points at. */
+function settleCaretInText(cell) {
+    const selection = document.getSelection();
+    if (!selection?.isCollapsed || selection.anchorNode !== cell) return;
+    placeCaretAtEdge(cell, selection.anchorOffset === 0);
+}
+
+/**
+ * ArrowUp on a cell's first line moves to the cell above, ArrowDown on its
+ * last line to the cell below; inside the text the keys move the caret as
+ * usual. Wrapped lines count, since the probe asks the browser.
+ */
+export function setupChecklistCellNavigation(table) {
+    if (!table) return;
+    const editableCells = row => [...row.querySelectorAll('.cell-content[contenteditable]')]
+        // A hidden note column has cells, but they cannot take the caret.
+        .filter(cell => cell.offsetParent !== null);
+
+    table.addEventListener('keydown', (event) => {
+        if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+        if (event.defaultPrevented || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
+        // An IME owns the arrows while it is composing.
+        if (event.isComposing || event.keyCode === 229) return;
+        const cell = event.target;
+        if (!cell.classList?.contains('cell-content') || !cell.isContentEditable) return;
+        const up = event.key === 'ArrowUp';
+        settleCaretInText(cell);
+        if (hasAdjacentVisualLine(cell, up ? 'backward' : 'forward') !== false) return;
+
+        const rows = [...cell.closest('tbody').querySelectorAll('tr[data-step-index]')];
+        const target = findCellNavigationTarget(
+            rows.map(row => editableCells(row).map(other => other.dataset.field)),
+            rows.indexOf(cell.closest('tr')),
+            cell.dataset.field,
+            up ? -1 : 1
+        );
+        if (!target) return;
+        const next = editableCells(rows[target.row]).find(other => other.dataset.field === target.field);
+        if (!next) return;
+
+        event.preventDefault();
+        next.focus();
+        // Arriving from below continues on the last line, from above on the first.
+        placeCaretAtEdge(next, !up);
+        next.scrollIntoView({ block: 'nearest' });
     });
 }
 

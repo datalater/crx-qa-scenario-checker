@@ -14,7 +14,7 @@ export function focusTableCellFromEmptyArea(event, container, cell) {
 
 // Probe the browser's visual-line movement (including wrapped lines), then
 // restore the caret so the normal arrow key can handle movement within a cell.
-function hasAdjacentVisualLine(cell, direction) {
+export function hasAdjacentVisualLine(cell, direction) {
   const selection = cell.ownerDocument.getSelection();
   if (!selection || !selection.isCollapsed || !selection.rangeCount ||
       !cell.contains(selection.anchorNode) || typeof selection.modify !== "function") return null;
