@@ -7,8 +7,13 @@
 .ui-sketch {
   --ui-sketch-role: #a371f7;
   --ui-sketch-var: #d29922;
+  /* What a role adds above its content: its name, and the line under it. */
+  --ui-sketch-name-height: calc(9px * 1.3 + 1px);
+  --ui-sketch-rule-height: 4px;
   display: grid;
-  align-items: end;
+  /* Pieces of a line start at the same height, so role names line up even
+     when one piece wraps onto more lines than its neighbours. */
+  align-items: start;
   gap: 6px 8px;
   font-family: var(--font-ui, sans-serif);
   font-size: 13px;
@@ -25,9 +30,8 @@
 
 .ui-sketch__line {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 8px;
-  min-height: 22px;
 }
 
 .ui-sketch__gap {
@@ -39,7 +43,10 @@
   min-width: 24px;
 }
 
+/* Text and values are padded like a button, so the first line of each sits
+   level with a button's label now that pieces align at the top. */
 .ui-sketch__text {
+  padding-block: 3px;
   white-space: pre-wrap;
 }
 
@@ -59,6 +66,7 @@
 }
 
 .ui-sketch__var {
+  margin-block: 4px;
   padding: 0 5px;
   border-radius: 4px;
   font-family: var(--font-code, monospace);
@@ -78,7 +86,8 @@
 }
 
 .ui-sketch__role-name {
-  padding-bottom: 1px;
+  box-sizing: border-box;
+  height: var(--ui-sketch-name-height);
   font-family: var(--font-code, monospace);
   font-size: 9px;
   font-weight: 700;
@@ -95,9 +104,9 @@
  */
 .ui-sketch__role-body {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 8px;
-  padding-top: 3px;
+  padding-top: calc(var(--ui-sketch-rule-height) - 1px);
   border-top: 1px solid color-mix(in srgb, var(--ui-sketch-role) 45%, transparent);
 }
 
@@ -111,6 +120,16 @@
 .ui-sketch__error::before {
   content: "⚠ 닫는 괄호나 따옴표가 없습니다  ";
   opacity: 0.8;
+}
+
+/*
+ * Beside a role, content that has no role of its own starts where the role's
+ * content starts, below the name, instead of level with the name.
+ */
+:root:not([data-ui-sketch-mode="content"], [data-ui-sketch-mode="roles"])
+  :is(.ui-sketch__line.has-role, .ui-sketch__role-body:has(> .ui-sketch__role))
+  > :not(.ui-sketch__role, .ui-sketch__spacer) {
+  margin-top: calc(var(--ui-sketch-name-height) + var(--ui-sketch-rule-height));
 }
 
 /* --- Content only: the role layer disappears --- */
@@ -136,6 +155,7 @@
 }
 
 [data-ui-sketch-mode="roles"] .ui-sketch__role:not(.is-group) > .ui-sketch__role-name {
+  height: auto;
   padding: 3px 9px;
   border: 1px dashed color-mix(in srgb, var(--ui-sketch-role) 70%, transparent);
   border-radius: 5px;

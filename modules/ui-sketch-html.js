@@ -44,9 +44,12 @@ export function renderUiSketchHtml(source) {
                 + ` title="닫는 괄호나 따옴표가 없습니다">${escapeHtml(row.raw)}</div>`;
         }
         const columns = splitUiColumns(row.nodes);
+        // On a line with a role, content without one sits below the level of
+        // the role names, in whichever column it is.
+        const lineClass = row.nodes.some(node => node.type === 'role') ? 'ui-sketch__line has-role' : 'ui-sketch__line';
         return columns.map((nodes, column) => {
             const gridColumn = column === columns.length - 1 ? `${column + 1} / -1` : String(column + 1);
-            return `<div class="ui-sketch__line" style="grid-row:${gridRow};grid-column:${gridColumn}">`
+            return `<div class="${lineClass}" style="grid-row:${gridRow};grid-column:${gridColumn}">`
                 + `${nodes.map(renderNode).join('')}</div>`;
         }).join('');
     }).join('');

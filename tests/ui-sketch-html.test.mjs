@@ -69,3 +69,9 @@ test('a position is known to be inside a ui fence', () => {
     assertEqual(isInsideUiFence(text, 0), false);
     assertEqual(isInsideUiFence('```ui\n@title 제목', 12), true);
 });
+
+test('every column of a line with a role is marked, so loose content can sit level with role content', () => {
+    const html = renderUiSketchHtml('@label(이름) -- [입력] -- 필수\n일반 줄 -- [버튼]');
+    assertEqual(html.split('class="ui-sketch__line has-role"').length - 1, 3);
+    assertEqual(html.split('class="ui-sketch__line"').length - 1, 2);
+});
