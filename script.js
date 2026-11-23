@@ -1563,7 +1563,7 @@ function openChecklistContextMenu(target) {
     const referenceItem = document.getElementById('checklist-context-copy-reference');
     if (referenceItem) {
         const count = expandRowSelection(currentData?.steps, getSelectedStepIndexes()).length;
-        referenceItem.textContent = `행 참조 복사 (${count})`;
+        referenceItem.textContent = count > 0 ? `행 ${count}개 참조 복사` : '행 참조 복사';
         referenceItem.disabled = count === 0;
     }
     EL.checklistContextPin.textContent = currentData?.steps?.[target.index]?.pinned === true
