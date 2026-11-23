@@ -1,4 +1,4 @@
-import { EMPTY_UI_SKETCH, hasSpacer, parseUiBlock, parseUiLine } from '../src/ui-sketch.js';
+import { EMPTY_UI_SKETCH, countUiColumns, hasSpacer, parseUiBlock, parseUiLine, splitUiColumns } from '../src/ui-sketch.js';
 import { assertDeepEqual, assertEqual, test } from './lib/test-runner.mjs';
 
 const text = value => ({ type: 'text', value });
@@ -97,4 +97,31 @@ test('a quote away from a role name is plain text, and an unclosed one is an err
     assertDeepEqual(parseUiLine('그는 "좋아"라고 했다'), [text('그는 "좋아"라고 했다')]);
     assertDeepEqual(parseUiLine('@title "띄어 쓴 따옴표"'), [role('title', text('"띄어 쓴 따옴표"'))]);
     assertEqual(parseUiBlock('@title"닫는 따옴표 없음 --- [확인]')[0].type, 'error');
+});
+
+const column = { type: 'column' };
+
+test('two dashes start a column, three still space the line', () => {
+    assertDeepEqual(parseUiLine('A -- B --- C'), [text('A'), column, text('B'), spacer, text('C')]);
+    assertDeepEqual(splitUiColumns(parseUiLine('A -- B --- C')), [[text('A')], [text('B'), spacer, text('C')]]);
+    assertDeepEqual(splitUiColumns(parseUiLine('-- D')), [[], [text('D')]]);
+    assertDeepEqual(splitUiColumns(parseUiLine('no marks')), [[text('no marks')]]);
+});
+
+test('a role without parentheses ends at a column mark', () => {
+    assertDeepEqual(parseUiLine('@label 이름 -- @field [입력]'), [
+        role('label', text('이름')), column, role('field', button('입력'))
+    ]);
+});
+
+test('inside a role, or without space around them, two dashes are text', () => {
+    assertDeepEqual(parseUiLine('@range(1 -- 10)'), [role('range', text('1 -- 10'))]);
+    assertDeepEqual(parseUiLine('a--b \\-- c'), [text('a--b -- c')]);
+    assertDeepEqual(parseUiLine('a ---- b'), [text('a ---- b')]);
+});
+
+test('a block has as many columns as its widest line', () => {
+    assertEqual(countUiColumns(parseUiBlock('A -- B --- C\n-- D')), 2);
+    assertEqual(countUiColumns(parseUiBlock('a\n\nb -- c -- d\n@x(닫지 않음 -- y')), 3);
+    assertEqual(countUiColumns(parseUiBlock('plain')), 1);
 });

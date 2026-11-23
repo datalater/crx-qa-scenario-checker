@@ -12,7 +12,7 @@ import { findFences } from "./live-diagram.js";
 import { planTableDeletion } from "./markdown-table.js";
 import { joinFence, splitFence } from "./mermaid-flow.js";
 import { PALETTE } from "./theme-palette.js";
-import { UI_FENCE_INFO, UI_SYNTAX_HELP, hasSpacer, parseUiBlock } from "./ui-sketch.js";
+import { UI_FENCE_INFO, UI_SYNTAX_HELP, countUiColumns, hasSpacer, parseUiBlock, splitUiColumns } from "./ui-sketch.js";
 
 /** Opens the source of the block starting at this position (after `/ui`). */
 export const openUiSourceEffect = StateEffect.define();
@@ -57,18 +57,35 @@ function renderNode(node) {
   return role;
 }
 
+/**
+ * The block is one grid, so a column starts at the same place on every line.
+ * Each line's last column runs to the right edge: a line without any `--`
+ * takes the full width, and `---` inside it still reaches the far side.
+ */
 function renderRows(source) {
-  return parseUiBlock(source).map((row) => {
-    if (row.type === "gap") return el("div", "cm-ui-gap");
-    if (row.type === "error") {
-      const error = el("div", "cm-ui-error", row.raw);
-      error.title = "닫는 괄호나 따옴표가 없습니다";
-      return error;
+  const rows = parseUiBlock(source);
+  const columnCount = countUiColumns(rows);
+  const cells = [];
+  rows.forEach((row, index) => {
+    const gridRow = String(index + 1);
+    if (row.type !== "line") {
+      const cell = row.type === "gap" ? el("div", "cm-ui-gap") : el("div", "cm-ui-error", row.raw);
+      if (row.type === "error") cell.title = "닫는 괄호나 따옴표가 없습니다";
+      cell.style.gridRow = gridRow;
+      cell.style.gridColumn = "1 / -1";
+      cells.push(cell);
+      return;
     }
-    const line = el("div", "cm-ui-line");
-    line.append(...row.nodes.map(renderNode));
-    return line;
+    const columns = splitUiColumns(row.nodes);
+    columns.forEach((nodes, column) => {
+      const cell = el("div", "cm-ui-line");
+      cell.style.gridRow = gridRow;
+      cell.style.gridColumn = column === columns.length - 1 ? `${column + 1} / -1` : String(column + 1);
+      cell.append(...nodes.map(renderNode));
+      cells.push(cell);
+    });
   });
+  return { cells, columnCount };
 }
 
 class UiSketchController {
@@ -232,7 +249,10 @@ class UiSketchController {
 
   refresh() {
     const { inner } = this;
-    this.stage.replaceChildren(...renderRows(inner));
+    const { cells, columnCount } = renderRows(inner);
+    // Every column but the last is as wide as its widest content.
+    this.stage.style.gridTemplateColumns = `${"max-content ".repeat(columnCount - 1)}minmax(0, 1fr)`;
+    this.stage.replaceChildren(...cells);
     this.applyMode();
     this.source.hidden = !this.sourceOpen;
     this.sourceToggle.classList.toggle("is-on", this.sourceOpen);
@@ -448,9 +468,9 @@ const uiSketchTheme = EditorView.theme({
   ".cm-ui-mode.is-on": { position: "relative" },
 
   ".cm-ui-stage": {
-    display: "flex",
-    flexDirection: "column",
-    gap: "6px",
+    display: "grid",
+    alignItems: "end",
+    gap: "6px 8px",
     padding: "14px 16px",
     overflowX: "auto",
   },

@@ -8,6 +8,8 @@
  *   @role"content"   the same with quotes, for content that has parentheses
  *   @role content    without either: up to the next @role, a `---`, or the line end
  *   ---              pushes what follows to the far side of the line
+ *   --               starts the next column: the nth `--` of every line in the
+ *                    block sits on the same vertical line
  *   [text]           a button; [[text]] an emphasized one
  *   {name}           a value filled in later
  *   blank line       vertical space
@@ -33,6 +35,7 @@ export const UI_SYNTAX_HELP = [
   ['@역할"내용"', "따옴표 안이 범위. 내용에 괄호가 있을 때 편함"],
   ["@역할 내용", "둘 다 생략: 다음 @역할, ---, 줄 끝 중 먼저 나오는 곳까지"],
   ["---", "뒤따르는 내용을 줄의 반대쪽 끝으로 밀기"],
+  ["--", "다음 칸 시작. 모든 줄의 n번째 -- 가 같은 세로선에 놓임"],
   ["[버튼]", "버튼"],
   ["[[버튼]]", "강조 버튼"],
   ["{변수}", "나중에 값이 들어갈 자리"],
@@ -41,7 +44,8 @@ export const UI_SYNTAX_HELP = [
 ];
 
 const ROLE = /^@([A-Za-z][\w-]*)/;
-const SHORTHAND_END = /(^|\s)(@[A-Za-z]|---(\s|$))/;
+// A role without parentheses also stops at a column mark.
+const SHORTHAND_END = /(^|\s)(@[A-Za-z]|---?(\s|$))/;
 
 /** Thrown for a `@role(` or `@role"` whose closing mark is missing. */
 export class UnclosedRoleError extends Error {}
@@ -67,9 +71,13 @@ function closingQuote(source, open) {
 /**
  * One line as nodes:
  *   { type: "text", value } | { type: "button", value, primary } |
- *   { type: "var", name } | { type: "spacer" } | { type: "role", name, children }
+ *   { type: "var", name } | { type: "spacer" } | { type: "role", name, children } |
+ *   { type: "column" }
+ *
+ * A column mark only splits the line itself. Inside a role (`nested`) two
+ * dashes are just text, since a role cannot straddle two columns.
  */
-export function parseUiLine(source) {
+export function parseUiLine(source, nested = false) {
   const nodes = [];
   let text = "";
   const flush = () => {
@@ -89,6 +97,10 @@ export function parseUiLine(source) {
       flush();
       nodes.push({ type: "spacer" });
       i += 3;
+    } else if (!nested && /^--(?=\s|$)/.test(rest) && (i === 0 || /\s/.test(source[i - 1]))) {
+      flush();
+      nodes.push({ type: "column" });
+      i += 2;
     } else if (atWordStart(i) && (match = ROLE.exec(rest))) {
       flush();
       const open = i + match[0].length;
@@ -104,7 +116,7 @@ export function parseUiLine(source) {
         inner = source.slice(open, end);
         i = end;
       }
-      nodes.push({ type: "role", name: match[1], children: parseUiLine(inner) });
+      nodes.push({ type: "role", name: match[1], children: parseUiLine(inner, true) });
     } else if ((match = /^\[\[([^[\]\n]+)\]\]/.exec(rest))) {
       flush();
       nodes.push({ type: "button", value: match[1], primary: true });
@@ -141,6 +153,26 @@ export function parseUiBlock(source) {
       throw error;
     }
   });
+}
+
+/**
+ * A line's nodes as its columns: `A -- B --- C` is `[[A], [B, spacer, C]]`,
+ * and a line starting with `--` has an empty first column.
+ */
+export function splitUiColumns(nodes) {
+  const columns = [[]];
+  nodes.forEach((node) => {
+    if (node.type === "column") columns.push([]);
+    else columns[columns.length - 1].push(node);
+  });
+  return columns;
+}
+
+/** How many columns the block needs: the most any of its lines uses. */
+export function countUiColumns(rows) {
+  return rows.reduce((most, row) => (
+    row.type === "line" ? Math.max(most, splitUiColumns(row.nodes).length) : most
+  ), 1);
 }
 
 /** True when a `---` sits somewhere inside, so the piece must stretch. */
