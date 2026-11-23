@@ -7,11 +7,15 @@
  *   @role(content)   the role covers what is inside the parentheses
  *   @role"content"   the same with quotes, for content that has parentheses
  *   @role content    without either: up to the next @role, a `---`, or the line end
+ *   @role:when"…"    a directive: a condition or state the role appears in.
+ *                    It runs from the colon to the opening `"` or `(`, spaces
+ *                    included, so it needs one of them; more colons, more
+ *                    directives
  *   ---              pushes what follows to the far side of the line
  *   --               starts the next column: the nth `--` of every line in the
  *                    block sits on the same vertical line
  *   [text]           a button; [[text]] an emphasized one
- *   {name}           a value filled in later
+ *   {name}           a value filled in later (any name: {count}, {날짜})
  *   blank line       vertical space
  *
  * Roles nest (inside quotes, with parentheses: quotes cannot hold quotes),
@@ -34,6 +38,7 @@ export const UI_SYNTAX_HELP = [
   ["@역할(내용)", "괄호 안이 그 역할의 범위. 역할 안에 역할을 넣을 수 있음"],
   ['@역할"내용"', "따옴표 안이 범위. 내용에 괄호가 있을 때 편함"],
   ["@역할 내용", "둘 다 생략: 다음 @역할, ---, 줄 끝 중 먼저 나오는 곳까지"],
+  ['@역할:조건"내용"', '조건·상태 표시. : 뒤부터 여는 " 나 ( 앞까지, 띄어쓰기 가능'],
   ["---", "뒤따르는 내용을 줄의 반대쪽 끝으로 밀기"],
   ["--", "다음 칸 시작. 모든 줄의 n번째 -- 가 같은 세로선에 놓임"],
   ["[버튼]", "버튼"],
@@ -47,8 +52,22 @@ const ROLE = /^@([A-Za-z][\w-]*)/;
 // A role without parentheses also stops at a column mark.
 const SHORTHAND_END = /(^|\s)(@[A-Za-z]|---?(\s|$))/;
 
-/** Thrown for a `@role(` or `@role"` whose closing mark is missing. */
-export class UnclosedRoleError extends Error {}
+/**
+ * Thrown for a line that cannot be read. `reason` is `unclosed` for a
+ * `@role(` or `@role"` whose closing mark is missing, and `directive` for a
+ * `@role:when` that is not followed by a scope.
+ */
+export class UnclosedRoleError extends Error {
+  constructor(role, reason = "unclosed") {
+    super(role);
+    this.reason = reason;
+  }
+}
+
+export const UI_ERROR_MESSAGES = {
+  unclosed: "닫는 괄호나 따옴표가 없습니다",
+  directive: '조건(:) 뒤에는 "내용" 이나 (내용) 이 와야 합니다',
+};
 
 function matchingParen(source, open) {
   let depth = 0;
@@ -69,10 +88,36 @@ function closingQuote(source, open) {
 }
 
 /**
+ * The directives after a role name, and where its scope opens. From the
+ * colon at `from` they run to the first `"` or `(`; a colon in between
+ * starts another one.
+ */
+function readDirectives(source, from, role) {
+  const directives = [];
+  let current = "";
+  for (let i = from + 1; i < source.length; i += 1) {
+    const char = source[i];
+    if (char === "\\" && i + 1 < source.length) {
+      current += source[i + 1];
+      i += 1;
+    } else if (char === '"' || char === "(") {
+      directives.push(current);
+      return { directives: directives.map((item) => item.trim()).filter(Boolean), open: i };
+    } else if (char === ":") {
+      directives.push(current);
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  throw new UnclosedRoleError(role, "directive");
+}
+
+/**
  * One line as nodes:
  *   { type: "text", value } | { type: "button", value, primary } |
- *   { type: "var", name } | { type: "spacer" } | { type: "role", name, children } |
- *   { type: "column" }
+ *   { type: "var", name } | { type: "spacer" } | { type: "column" } |
+ *   { type: "role", name, children, directives? }
  *
  * A column mark only splits the line itself. Inside a role (`nested`) two
  * dashes are just text, since a role cannot straddle two columns.
@@ -103,7 +148,9 @@ export function parseUiLine(source, nested = false) {
       i += 2;
     } else if (atWordStart(i) && (match = ROLE.exec(rest))) {
       flush();
-      const open = i + match[0].length;
+      let open = i + match[0].length;
+      let directives = [];
+      if (source[open] === ":") ({ directives, open } = readDirectives(source, open, match[1]));
       let inner;
       if (source[open] === "(" || source[open] === '"') {
         const close = source[open] === "(" ? matchingParen(source, open) : closingQuote(source, open);
@@ -116,7 +163,9 @@ export function parseUiLine(source, nested = false) {
         inner = source.slice(open, end);
         i = end;
       }
-      nodes.push({ type: "role", name: match[1], children: parseUiLine(inner, true) });
+      const role = { type: "role", name: match[1], children: parseUiLine(inner, true) };
+      if (directives.length) role.directives = directives;
+      nodes.push(role);
     } else if ((match = /^\[\[([^[\]\n]+)\]\]/.exec(rest))) {
       flush();
       nodes.push({ type: "button", value: match[1], primary: true });
@@ -125,7 +174,7 @@ export function parseUiLine(source, nested = false) {
       flush();
       nodes.push({ type: "button", value: match[1], primary: false });
       i += match[0].length;
-    } else if ((match = /^\{([A-Za-z][\w.-]*)\}/.exec(rest))) {
+    } else if ((match = /^\{([^\s{}][^{}\n]*)\}/.exec(rest))) {
       flush();
       nodes.push({ type: "var", name: match[1] });
       i += match[0].length;
@@ -149,7 +198,7 @@ export function parseUiBlock(source) {
     try {
       return { type: "line", nodes: parseUiLine(line) };
     } catch (error) {
-      if (error instanceof UnclosedRoleError) return { type: "error", raw: line };
+      if (error instanceof UnclosedRoleError) return { type: "error", raw: line, reason: error.reason };
       throw error;
     }
   });

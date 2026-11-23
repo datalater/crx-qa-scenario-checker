@@ -75,3 +75,14 @@ test('every column of a line with a role is marked, so loose content can sit lev
     assertEqual(html.split('class="ui-sketch__line has-role"').length - 1, 3);
     assertEqual(html.split('class="ui-sketch__line"').length - 1, 2);
 });
+
+test('directives are drawn beside the role name, apart from it', () => {
+    const html = renderUiSketchHtml('@cta:disabled:선택 <시>([적용]) @plain(내용)');
+    assert(html.includes('<span class="ui-sketch__role-name">cta<span class="ui-sketch__directive">disabled</span><span class="ui-sketch__directive">선택 &lt;시&gt;</span></span>'));
+    assert(html.includes('<span class="ui-sketch__role-name">plain</span>'));
+});
+
+test('an error line says what is wrong with it', () => {
+    assert(renderUiSketchHtml('@a:b 내용').includes('data-message="조건(:) 뒤에는 &quot;내용&quot; 이나 (내용) 이 와야 합니다"'));
+    assert(renderUiSketchHtml('@a(닫지 않음').includes('data-message="닫는 괄호나 따옴표가 없습니다"'));
+});

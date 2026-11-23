@@ -125,3 +125,56 @@ test('a block has as many columns as its widest line', () => {
     assertEqual(countUiColumns(parseUiBlock('a\n\nb -- c -- d\n@x(닫지 않음 -- y')), 3);
     assertEqual(countUiColumns(parseUiBlock('plain')), 1);
 });
+
+const withDirectives = (name, directives, ...children) => ({ type: 'role', name, children, directives });
+
+test('a directive runs from the colon to the scope, spaces included', () => {
+    assertDeepEqual(parseUiLine('@description:전체 미반영 선택 시"전체 미반영 할 수 없는 일정"'), [
+        withDirectives('description', ['전체 미반영 선택 시'], text('전체 미반영 할 수 없는 일정'))
+    ]);
+    assertDeepEqual(parseUiLine('@cta:disabled([적용])'), [withDirectives('cta', ['disabled'], button('적용'))]);
+});
+
+test('more colons give more directives, and empty ones are dropped', () => {
+    assertDeepEqual(parseUiLine('@cta:disabled : 전체 반영 선택 시 :([적용])'), [
+        withDirectives('cta', ['disabled', '전체 반영 선택 시'], button('적용'))
+    ]);
+    assertDeepEqual(parseUiLine('@cta:([적용])'), [role('cta', button('적용'))]);
+});
+
+test('a directive sits on any role of a line, nested ones too', () => {
+    assertDeepEqual(parseUiLine('@label:선택 시"{날짜} · {시간}" --- @count"{count}명"'), [
+        withDirectives('label', ['선택 시'], { type: 'var', name: '날짜' }, text('·'), { type: 'var', name: '시간' }),
+        spacer,
+        role('count', { type: 'var', name: 'count' }, text('명'))
+    ]);
+    assertDeepEqual(parseUiLine('@row(@help:error"필수 항목입니다")'), [
+        role('row', withDirectives('help', ['error'], text('필수 항목입니다')))
+    ]);
+});
+
+test('an escaped mark is part of the directive', () => {
+    assertDeepEqual(parseUiLine('@a:값이 \\"x\\" 일 때\\: 표시"내용"'), [
+        withDirectives('a', ['값이 "x" 일 때: 표시'], text('내용'))
+    ]);
+});
+
+test('a directive without a scope is an error of its own kind', () => {
+    const [row] = parseUiBlock('@description:disabled 내용');
+    assertEqual(row.type, 'error');
+    assertEqual(row.reason, 'directive');
+    assertEqual(parseUiBlock('@title(닫지 않음')[0].reason, 'unclosed');
+    assertEqual(parseUiBlock('@a:b"닫지 않음')[0].reason, 'unclosed');
+});
+
+test('a colon that does not touch the role name is content', () => {
+    assertDeepEqual(parseUiLine('@time 12:30 --- 끝'), [role('time', text('12:30')), spacer, text('끝')]);
+    assertDeepEqual(parseUiLine('메모: @note(내용)'), [text('메모:'), role('note', text('내용'))]);
+});
+
+test('a value may be named in any script', () => {
+    assertDeepEqual(parseUiLine('{날짜} {assignedCourses.length} {a b}'), [
+        { type: 'var', name: '날짜' }, { type: 'var', name: 'assignedCourses.length' }, { type: 'var', name: 'a b' }
+    ]);
+    assertDeepEqual(parseUiLine('{} { x}'), [text('{} { x}')]);
+});

@@ -3,7 +3,7 @@
  * used by the live markdown widget and by the table cells, so a sketch looks
  * the same wherever it is written. Styles: styles/feature-ui-sketch.css.
  */
-import { countUiColumns, hasSpacer, parseUiBlock, splitUiColumns } from '../src/ui-sketch.js';
+import { UI_ERROR_MESSAGES, countUiColumns, hasSpacer, parseUiBlock, splitUiColumns } from '../src/ui-sketch.js';
 
 const escapeHtml = value => String(value)
     .replace(/&/g, '&amp;')
@@ -21,8 +21,13 @@ function renderNode(node) {
     const classes = ['ui-sketch__role'];
     if (hasSpacer(node.children)) classes.push('has-spacer');
     if (node.children.some(child => child.type === 'role')) classes.push('is-group');
+    // A directive says when or in what state the role appears; it sits beside
+    // the name, set apart from it.
+    const directives = (node.directives || [])
+        .map(directive => `<span class="ui-sketch__directive">${escapeHtml(directive)}</span>`)
+        .join('');
     return `<span class="${classes.join(' ')}">`
-        + `<span class="ui-sketch__role-name">${escapeHtml(node.name)}</span>`
+        + `<span class="ui-sketch__role-name">${escapeHtml(node.name)}${directives}</span>`
         + `<span class="ui-sketch__role-body">${node.children.map(renderNode).join('')}</span></span>`;
 }
 
@@ -40,8 +45,9 @@ export function renderUiSketchHtml(source) {
             return `<div class="ui-sketch__gap" style="grid-row:${gridRow};grid-column:1 / -1"></div>`;
         }
         if (row.type === 'error') {
+            const message = escapeHtml(UI_ERROR_MESSAGES[row.reason] || UI_ERROR_MESSAGES.unclosed);
             return `<div class="ui-sketch__error" style="grid-row:${gridRow};grid-column:1 / -1"`
-                + ` title="닫는 괄호나 따옴표가 없습니다">${escapeHtml(row.raw)}</div>`;
+                + ` title="${message}" data-message="${message}">${escapeHtml(row.raw)}</div>`;
         }
         const columns = splitUiColumns(row.nodes);
         // On a line with a role, content without one sits below the level of
