@@ -328,9 +328,9 @@ export function updateChecklistProgressIndicator(indicator, currentData) {
 }
 
 const PASS_TOGGLE_LABELS = {
-    none: '미확인. 클릭: 통과로 표시 · ⌥클릭: 실패로 표시',
-    pass: '통과. 클릭: 미확인으로 · ⌥클릭: 실패로 표시',
-    fail: '실패. 클릭: 미확인으로'
+    none: '미확인. 클릭: 통과로 표시 · 우클릭 또는 ⌥클릭: 실패로 표시',
+    pass: '통과. 클릭: 미확인으로 · 우클릭 또는 ⌥클릭: 실패로 표시',
+    fail: '실패. 클릭 또는 우클릭: 미확인으로'
 };
 
 /** Shows a verdict on its toggle (see modules/pass-state.js). */
@@ -1503,11 +1503,18 @@ export function renderChecklist(container, data, options = {}) {
         // failure. The verdict is not a row selection, so the click stops here.
         const passToggle = tr.querySelector('.pass-toggle');
         applyPassToggleState(passToggle, getPassState(step));
-        passToggle.addEventListener('click', (event) => {
+        const changePass = (event, fail) => {
             event.stopPropagation();
-            const next = nextPassState(passToggle.dataset.state, { fail: event.altKey });
+            const next = nextPassState(passToggle.dataset.state, { fail });
             applyPassToggleState(passToggle, next);
             onUpdatePass(index, next);
+        };
+        passToggle.addEventListener('click', event => changePass(event, event.altKey));
+        // A right click on the verdict marks the failure itself. It must not
+        // reach the row, which would open the row menu instead.
+        passToggle.addEventListener('contextmenu', (event) => {
+            event.preventDefault();
+            changePass(event, true);
         });
         if (index === 0 && canInsertRows) {
             appendAddRowButton(container, 0, {

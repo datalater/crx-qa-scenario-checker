@@ -2979,8 +2979,12 @@ function setupChecklistRowSelection() {
     // A click with a modifier selects rows; it must not also move the caret
     // into a cell or start a text selection across rows. Inside the cell
     // being edited the modifiers keep their text meaning.
+    // A right press opens the row menu; like a click with a modifier, it is
+    // about the row and must not put a cell into editing on the way.
     table?.addEventListener('mousedown', (event) => {
-        if (event.button !== 0 || !(event.metaKey || event.ctrlKey || event.shiftKey)) return;
+        const forRow = event.button === 2
+            || (event.button === 0 && (event.metaKey || event.ctrlKey || event.shiftKey));
+        if (!forRow) return;
         if (!event.target.closest?.('tr[data-step-index]')) return;
         const cell = event.target.closest('.cell-content');
         if (cell ? cell === document.activeElement : event.target.closest('.cm-editor, input, select, button, textarea, label')) return;
