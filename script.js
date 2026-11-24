@@ -44,6 +44,7 @@ import { matchShortcut, renderShortcutRows } from './modules/shortcut-registry.j
 import { createCommandPalette } from './modules/command-palette.js';
 import { createNewFileCommand } from './modules/new-file-command.js';
 import { createOpenFileCommand } from './modules/open-file-command.js';
+import { createGoToSectionCommand, listSections } from './modules/go-to-section-command.js';
 import { canMoveFolder, applyFolderMove, joinFolderPath, remapPathPrefix } from './modules/folder-move.js';
 import { directoriesMatch, directoryHasEntry } from './modules/directory-verify.js';
 import { createContextMenu } from './modules/tab-context-menu.js';
@@ -2450,6 +2451,11 @@ function setupCommandPalette() {
                 if (fileId !== workspace.uiState.activeFileId) activateFileFromTab(fileId);
             }
         }),
+        createGoToSectionCommand({
+            getSections: () => listSections(currentData?.steps),
+            getCurrentRowIndex: getChecklistCurrentRowIndex,
+            go: goToChecklistSection
+        }),
         createNewFileCommand({
             getBaseFolderLabel: () => Workspace.getFolderById(workspace, getPaletteBaseFolderId())?.name || '',
             getRootFolderLabel: () => Workspace.getFolderById(workspace, getRootFolderId())?.name || '',
@@ -2486,6 +2492,9 @@ function setupCommandPalette() {
         } else if (matchShortcut(event, 'openFile')) {
             event.preventDefault();
             commandPalette.open({ commandId: 'openFile' });
+        } else if (matchShortcut(event, 'goToSection')) {
+            event.preventDefault();
+            commandPalette.open({ commandId: 'goToSection' });
         } else if (matchShortcut(event, 'toggleFileTree')) {
             event.preventDefault();
             togglePanelVisibility('fileTree');
@@ -3146,6 +3155,38 @@ function layoutChecklistStickyRows(scroller) {
 }
 
 /** Scrolls the original row just below the occupied sticky stack. */
+/**
+ * The row the reader is at: the selected one, else the first row showing
+ * below the header and the pinned titles. -1 when the table is empty.
+ */
+function getChecklistCurrentRowIndex() {
+    const selected = [...getSelectedStepIndexes()];
+    if (selected.length) return Math.min(...selected);
+    const scroller = getChecklistScroller();
+    const headCell = scroller?.querySelector('thead th');
+    if (!scroller || !headCell) return -1;
+    const top = headCell.getBoundingClientRect().bottom + layoutChecklistStickyRows(scroller);
+    const rows = [...(EL.checklistBody?.querySelectorAll('tr[data-step-index]') || [])];
+    // Section titles stay pinned at the top after they are scrolled past, so
+    // where they are drawn says nothing about where the reader is.
+    const row = rows.find(candidate => !candidate.classList.contains('is-sticky-heading')
+        && candidate.getBoundingClientRect().bottom > top + 1);
+    return row ? Number(row.dataset.stepIndex) : -1;
+}
+
+/** Scrolls a section's divider to the top of the table and selects it. */
+function goToChecklistSection(index) {
+    if (!currentData?.steps?.[index]) return;
+    // Also clears a row filter that hides the divider.
+    scrollStickyHeadingToOrigin({ dataset: { stepIndex: String(index) } });
+    setChecklistRowSelection([index], index);
+    const bounds = Editor.findStepBounds(EL.editing.value, index);
+    if (bounds) {
+        renderStepHighlight(bounds);
+        scrollToLine(bounds.start);
+    }
+}
+
 function scrollStickyHeadingToOrigin(row) {
     const scroller = getChecklistScroller();
     const headCell = scroller?.querySelector('thead th');

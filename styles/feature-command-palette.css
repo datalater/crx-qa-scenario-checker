@@ -111,7 +111,24 @@
   }
 
   .command-palette-item-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .command-palette-item-description {
+    flex: 0 0 auto;
+  }
+
+  /* The colour of a section's divider; the default is the divider blue. */
+  .command-palette-swatch {
+    flex: 0 0 auto;
+    align-self: center;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: rgb(56, 139, 253);
   }
 
   .command-palette-item-description {

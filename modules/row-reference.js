@@ -4,7 +4,9 @@
  * each row's id). Whoever receives it can read the snapshot right away and,
  * later, look the same rows up in the file to see how they have changed.
  */
-import { DEFAULT_DIVIDER_TYPE, getDividerTitle, isDivider, parseDivider } from './divider-model.js';
+import { getDividerTitle, isDivider, isSectionHeading as isHeadingDivider } from './divider-model.js';
+
+const isSectionHeading = step => isHeadingDivider(step?.divider);
 
 export const ROW_REFERENCE_KIND = 'rows';
 
@@ -35,15 +37,6 @@ export function nextRowSelection(selection, index, { toggle = false, range = fal
     // A second click on the one selected row lets go of it.
     if (selected.size === 1 && selected.has(index)) return { selected: new Set(), anchor: null };
     return { selected: new Set([index]), anchor: index };
-}
-
-/**
- * Only a text divider is a section heading. A code divider is content of its
- * own (a spec, a sketch): it belongs to the section it sits in and does not
- * start a new one.
- */
-function isSectionHeading(step) {
-    return parseDivider(step?.divider)?.type === DEFAULT_DIVIDER_TYPE;
 }
 
 /**

@@ -193,6 +193,15 @@ export function isDivider(raw) {
     return parseDivider(raw) !== null;
 }
 
+/**
+ * Only a text divider is a section heading. A code divider is content of its
+ * own (a spec, a sketch): it belongs to the section it sits in and does not
+ * start a new one.
+ */
+export function isSectionHeading(raw) {
+    return parseDivider(raw)?.type === DEFAULT_DIVIDER_TYPE;
+}
+
 /** Display/search text; an empty divider shows a fixed label. */
 export function getDividerTitle(raw) {
     const divider = parseDivider(raw);

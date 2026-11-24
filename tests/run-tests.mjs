@@ -4,6 +4,7 @@ import './shortcut-registry.test.mjs';
 import './new-entry-path.test.mjs';
 import './open-file-tabs.test.mjs';
 import './open-file-command.test.mjs';
+import './go-to-section-command.test.mjs';
 import './folder-move.test.mjs';
 import './sticky-heading.test.mjs';
 import './editor-find-replace-manager.test.mjs';

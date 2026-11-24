@@ -8,7 +8,9 @@ import { SHORTCUTS } from '../configs/shortcuts.js';
  *
  * command: { id, label, shortcutId?, run(api) }
  * api.pick({ placeholder, getItems(query), onSelect(item), emptyText? })
- *     item: { label, description?, badge?, shortcutId? }
+ *     item: { label, description?, badge?, shortcutId?, swatch? }
+ *           swatch: a colour for a dot before the label, or 'default'
+ *           isCurrent: the list opens with this item highlighted
  * api.prompt({ placeholder, getPreview(value) -> { text, error }, onSubmit(value) })
  * A command that opens neither view is considered done and closes the palette.
  */
@@ -70,6 +72,12 @@ export function createCommandPalette({ root, backdrop, input, list, preview, com
 
             const main = document.createElement('span');
             main.className = 'command-palette-item-main';
+            if (item.swatch) {
+                const swatch = document.createElement('span');
+                swatch.className = 'command-palette-swatch';
+                if (item.swatch !== 'default') swatch.style.backgroundColor = item.swatch;
+                main.append(swatch);
+            }
             const label = document.createElement('span');
             label.className = 'command-palette-item-label';
             label.textContent = item.label;
@@ -114,6 +122,13 @@ export function createCommandPalette({ root, backdrop, input, list, preview, com
         input.value = '';
         input.placeholder = view.placeholder || '';
         refreshItems();
+        // A list may open on one of its items (the current section, ...);
+        // typing a query starts from the top again.
+        const start = items.findIndex(item => item.isCurrent === true);
+        if (start > 0) {
+            activeIndex = start;
+            renderList();
+        }
         input.focus();
     }
 

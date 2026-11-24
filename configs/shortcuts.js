@@ -77,6 +77,11 @@ export const SHORTCUTS = [
         bindings: [{ codes: ['KeyP'], keys: ['p'], meta: true, ctrl: false, shift: false, alt: false, platform: 'mac' }]
     },
     {
+        id: 'goToSection',
+        label: 'Go to section (divider)',
+        bindings: [{ codes: ['KeyO'], keys: ['o'], primary: true, shift: true, alt: false }]
+    },
+    {
         id: 'newFile',
         label: 'New file',
         bindings: [{ codes: ['KeyN'], keys: ['n'], meta: true, ctrl: false, shift: false, alt: true, platform: 'mac' }]
