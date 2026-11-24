@@ -2904,10 +2904,16 @@ function updateRootPathStatus() {
     button.hidden = !rootName;
     if (!rootName) return;
     const path = getRootPath();
-    document.getElementById('statusbar-root-label').textContent = path || `${rootName} · 경로 미설정`;
+    // This is about what a copied row reference says, not about whether the
+    // folder is connected: the item names that purpose, so an unset path
+    // does not read as a folder that failed to open.
+    document.getElementById('statusbar-root-label').textContent = path
+        ? `참조 경로: ${path}`
+        : `참조 경로: ${rootName}/… (폴더 이름만)`;
     button.title = path
-        ? '행 참조에 쓰는 폴더의 실제 경로입니다. 클릭해서 바꿉니다.'
-        : '폴더의 실제 경로를 적어 두면 행 참조의 file이 절대 경로가 됩니다. 클릭해서 설정합니다.';
+        ? '행 참조 복사의 file에 쓰는 폴더의 실제 경로입니다. 클릭해서 바꿉니다.'
+        : '폴더는 정상적으로 연결되어 있습니다. 다만 브라우저는 폴더의 실제 위치를 알려주지 않아서, '
+            + '행 참조 복사의 file이 폴더 이름부터 시작합니다. 실제 경로를 적어 두면 절대 경로가 됩니다. 클릭해서 설정합니다.';
 }
 
 function editRootPath() {
