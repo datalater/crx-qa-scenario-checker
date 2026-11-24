@@ -63,7 +63,7 @@ import { createNoteAssetStore } from './modules/note-assets.js';
 import { createNoteCellController } from './modules/note-cell-controller.js';
 import { createNoteImageManager } from './modules/note-image-manager.js';
 import { setupSurroundSelection } from './modules/surround-selection.js';
-import { getPassState, looksLikeLegacyPass, nextPassState, resetFailedToUnchecked, setPassState } from './modules/pass-state.js';
+import { looksLikeLegacyPass, resetFailedToUnchecked, setPassState } from './modules/pass-state.js';
 import {
     CHECKLIST_COLUMNS,
     describeVisibleColumns,
@@ -1578,11 +1578,6 @@ function openChecklistContextMenu(target) {
         referenceItem.textContent = count > 0 ? `행 ${count}개 참조 복사` : '행 참조 복사';
         referenceItem.disabled = count === 0;
     }
-    const failItem = document.getElementById('checklist-context-fail');
-    if (failItem) {
-        failItem.hidden = target.isDivider === true;
-        failItem.textContent = getPassState(currentData?.steps?.[target.index]) === 'fail' ? '실패 표시 해제' : '실패로 표시';
-    }
     EL.checklistContextPin.textContent = currentData?.steps?.[target.index]?.pinned === true
         ? '행 고정 해제' : '행 고정';
 
@@ -1623,15 +1618,6 @@ function openShortcutsModal() {
 function closeShortcutsModal() {
     if (EL.shortcutsModal) EL.shortcutsModal.classList.add('is-hidden');
     if (EL.shortcutsBackdrop) EL.shortcutsBackdrop.classList.add('is-hidden');
-}
-
-function handleChecklistContextFail() {
-    const step = currentData?.steps?.[checklistContextTarget?.index];
-    closeChecklistContextMenu();
-    if (!step || UI.isChecklistDividerStep(step)) return;
-    setPassState(step, nextPassState(getPassState(step), { fail: true }));
-    syncToEditor();
-    renderChecklist();
 }
 
 /**
@@ -4768,7 +4754,6 @@ function setupWindowListeners() {
     if (EL.treeContextDelete) {
         EL.treeContextDelete.addEventListener('click', handleTreeContextDelete);
     }
-    document.getElementById('checklist-context-fail')?.addEventListener('click', handleChecklistContextFail);
     EL.checklistContextPin?.addEventListener('click', handleChecklistContextPin);
     if (EL.checklistContextDelete) {
         EL.checklistContextDelete.addEventListener('click', handleChecklistContextDelete);
