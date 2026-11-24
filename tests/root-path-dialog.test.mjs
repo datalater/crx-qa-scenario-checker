@@ -18,5 +18,5 @@ test('only an absolute path can be saved', () => {
 test('a path not ending in the opened folder is allowed with a warning', () => {
     const result = checkRootPath('/Users/me/other', 'qa');
     assertEqual(result.error, undefined);
-    assertEqual(result.warning.includes('qa'), true);
+    assertEqual(result.warning, '경로 끝 폴더가 연 폴더(qa)와 다릅니다.');
 });

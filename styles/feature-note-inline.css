@@ -397,8 +397,8 @@
 
 .root-path-dialog {
   margin: auto;
-  width: min(520px, calc(100vw - 48px));
-  padding: 18px 20px;
+  width: min(460px, calc(100vw - 48px));
+  padding: 16px 18px;
   color: var(--text-primary);
   background: var(--pane-bg);
   border: 1px solid var(--border-color);
@@ -413,7 +413,7 @@
 .root-path-dialog form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .root-path-dialog h3 {
@@ -424,9 +424,14 @@
 .root-path-dialog__intro {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
   font-size: 12px;
-  line-height: 1.6;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.root-path-dialog__note {
+  font-size: 11px;
   color: var(--text-secondary);
 }
 
@@ -481,7 +486,7 @@
 }
 
 .root-path-dialog__preview {
-  padding: 8px 10px;
+  padding: 6px 8px;
   font-size: 11px;
   color: var(--text-secondary);
   background: var(--bg-color);
