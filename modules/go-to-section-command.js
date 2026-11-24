@@ -67,6 +67,7 @@ export function createGoToSectionCommand({ getSections, getCurrentRowIndex, go }
     return {
         id: 'goToSection',
         label: '구간으로 이동',
+        name: 'Go to Section',
         shortcutId: 'goToSection',
         run: (api) => {
             const sections = getSections();

@@ -24,6 +24,7 @@ export function createNewFileCommand({ getBaseFolderLabel, getRootFolderLabel, c
     return {
         id: 'newFile',
         label: '새 파일',
+        name: 'New File',
         shortcutId: 'newFile',
         run: (api) => api.prompt({
             placeholder: '새 파일 이름 (폴더/파일 형태도 가능)',

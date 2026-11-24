@@ -24,21 +24,27 @@ export function filterFilesForPicker(files, query) {
     return scored.map((entry) => entry.file);
 }
 
-export function createOpenFileCommand({ getFiles, open }) {
+/** The file list as a palette picker; quick open and the command share it. */
+export function createOpenFilePicker({ getFiles, open }) {
+    return {
+        placeholder: '파일 이름으로 검색...',
+        emptyText: '일치하는 파일이 없습니다.',
+        getItems: (query) => filterFilesForPicker(getFiles(), query).map((file) => ({
+            label: file.name,
+            description: file.path === file.name ? '' : file.path,
+            badge: file.isActive ? '현재' : (file.isOpen ? '열림' : ''),
+            fileId: file.id
+        })),
+        onSelect: (item) => open(item.fileId)
+    };
+}
+
+export function createOpenFileCommand(source) {
     return {
         id: 'openFile',
         label: '파일 열기',
+        name: 'Open File',
         shortcutId: 'openFile',
-        run: (api) => api.pick({
-            placeholder: '파일 이름으로 검색...',
-            emptyText: '일치하는 파일이 없습니다.',
-            getItems: (query) => filterFilesForPicker(getFiles(), query).map((file) => ({
-                label: file.name,
-                description: file.path === file.name ? '' : file.path,
-                badge: file.isActive ? '현재' : (file.isOpen ? '열림' : ''),
-                fileId: file.id
-            })),
-            onSelect: (item) => open(item.fileId)
-        })
+        run: (api) => api.pick(createOpenFilePicker(source))
     };
 }

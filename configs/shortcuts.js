@@ -68,12 +68,12 @@ export const SHORTCUTS = [
     },
     {
         id: 'commandPalette',
-        label: 'Command palette (new file / folder)',
+        label: 'Command list',
         bindings: [{ codes: ['KeyP'], keys: ['p'], meta: true, ctrl: false, shift: true, alt: false, platform: 'mac' }]
     },
     {
         id: 'openFile',
-        label: 'Open file (search)',
+        label: 'Quick open (files; type > for commands)',
         bindings: [{ codes: ['KeyP'], keys: ['p'], meta: true, ctrl: false, shift: false, alt: false, platform: 'mac' }]
     },
     {

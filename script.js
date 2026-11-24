@@ -43,7 +43,7 @@ import { runNativeEditCommand } from './modules/editor-shortcut-manager.js';
 import { matchShortcut, renderShortcutRows } from './modules/shortcut-registry.js';
 import { createCommandPalette } from './modules/command-palette.js';
 import { createNewFileCommand } from './modules/new-file-command.js';
-import { createOpenFileCommand } from './modules/open-file-command.js';
+import { createOpenFileCommand, createOpenFilePicker } from './modules/open-file-command.js';
 import { createGoToSectionCommand, listSections } from './modules/go-to-section-command.js';
 import { canMoveFolder, applyFolderMove, joinFolderPath, remapPathPrefix } from './modules/folder-move.js';
 import { directoriesMatch, directoryHasEntry } from './modules/directory-verify.js';
@@ -2434,23 +2434,25 @@ async function createEntryFromPalette({ folders, file, absolute }) {
 function setupCommandPalette() {
     const input = document.getElementById('command-palette-input');
     if (!input) return;
+    const fileSource = {
+        getFiles: () => {
+            const openIds = new Set(syncOpenFileIds(workspace));
+            return workspace.files.map((file) => ({
+                id: file.id,
+                name: file.name,
+                path: buildFileLocation(file)?.path || file.name,
+                isOpen: openIds.has(file.id),
+                isActive: file.id === workspace.uiState.activeFileId
+            }));
+        },
+        open: (fileId) => {
+            if (fileId !== workspace.uiState.activeFileId) activateFileFromTab(fileId);
+        }
+    };
     // Catalog of palette commands: add an entry here to list a new command.
+    // `label` is the UI wording, `name` the English name; both are searched.
     const commands = [
-        createOpenFileCommand({
-            getFiles: () => {
-                const openIds = new Set(syncOpenFileIds(workspace));
-                return workspace.files.map((file) => ({
-                    id: file.id,
-                    name: file.name,
-                    path: buildFileLocation(file)?.path || file.name,
-                    isOpen: openIds.has(file.id),
-                    isActive: file.id === workspace.uiState.activeFileId
-                }));
-            },
-            open: (fileId) => {
-                if (fileId !== workspace.uiState.activeFileId) activateFileFromTab(fileId);
-            }
-        }),
+        createOpenFileCommand(fileSource),
         createGoToSectionCommand({
             getSections: () => listSections(currentData?.steps),
             getCurrentRowIndex: getChecklistCurrentRowIndex,
@@ -2462,15 +2464,80 @@ function setupCommandPalette() {
             create: createEntryFromPalette
         }),
         {
+            id: 'findInTable',
+            label: '표에서 검색',
+            name: 'Find in Table',
+            shortcutId: 'findOpen',
+            run: () => openChecklistSearch()
+        },
+        {
+            id: 'replaceInTable',
+            label: '표에서 찾아 바꾸기',
+            name: 'Replace in Table',
+            shortcutId: 'replaceOpen',
+            run: () => openChecklistSearch({ replace: true })
+        },
+        {
+            id: 'copyRowReference',
+            label: '선택한 행 참조 복사',
+            name: 'Copy Row Reference',
+            isAvailable: () => selectedSteps.size > 0,
+            run: () => { void copySelectedRowReference(); }
+        },
+        {
+            id: 'toggleDividersOnly',
+            label: '구분선만 보기 토글',
+            name: 'Toggle Dividers Only',
+            run: () => setChecklistFilter(checklistFilter === 'outline' ? 'all' : 'outline')
+        },
+        {
             id: 'toggleStickyHeadings',
             label: 'Sticky 제목 토글',
+            name: 'Toggle Sticky Headings',
             run: () => setChecklistStickyEnabled(!checklistStickyEnabled)
         },
         {
             id: 'toggleFileTree',
             label: '파일 트리 토글',
+            name: 'Toggle File Tree',
             shortcutId: 'toggleFileTree',
             run: () => togglePanelVisibility('fileTree')
+        },
+        {
+            id: 'toggleJsonEditor',
+            label: 'JSON Editor 토글',
+            name: 'Toggle JSON Editor',
+            run: () => togglePanelVisibility('jsonEditor')
+        },
+        {
+            id: 'toggleTableEditor',
+            label: 'Table Editor 토글',
+            name: 'Toggle Table Editor',
+            run: () => togglePanelVisibility('tableEditor')
+        },
+        {
+            id: 'manageImages',
+            label: '이미지 관리',
+            name: 'Manage Images',
+            run: () => noteImageManager?.open()
+        },
+        {
+            id: 'openFolder',
+            label: '폴더 열기',
+            name: 'Open Folder',
+            run: () => { void handleBindOpenClick({ shiftKey: false }); }
+        },
+        {
+            id: 'formatAndSave',
+            label: 'JSON 정리 후 저장',
+            name: 'Format and Save JSON',
+            run: () => runFormatAndSave()
+        },
+        {
+            id: 'showShortcuts',
+            label: '키보드 단축키 보기',
+            name: 'Show Keyboard Shortcuts',
+            run: () => openShortcutsModal()
         }
     ];
     commandPalette = createCommandPalette({
@@ -2479,19 +2546,20 @@ function setupCommandPalette() {
         input,
         list: document.getElementById('command-palette-list'),
         preview: document.getElementById('command-palette-preview'),
-        commands
+        commands,
+        quickOpen: createOpenFilePicker(fileSource)
     });
     commandPalette.setup();
     document.addEventListener('keydown', (event) => {
         if (matchShortcut(event, 'commandPalette')) {
             event.preventDefault();
-            commandPalette.open();
+            commandPalette.open({ commands: true });
         } else if (matchShortcut(event, 'newFile')) {
             event.preventDefault();
             commandPalette.open({ commandId: 'newFile' });
         } else if (matchShortcut(event, 'openFile')) {
             event.preventDefault();
-            commandPalette.open({ commandId: 'openFile' });
+            commandPalette.open();
         } else if (matchShortcut(event, 'goToSection')) {
             event.preventDefault();
             commandPalette.open({ commandId: 'goToSection' });

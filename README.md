@@ -16,6 +16,7 @@ QA Scenario Checker는 QA 시나리오 JSON을 편집하고, Given/When/Then 체
     - [markdown 라이브 표 (view)](#markdown-라이브-표-view)
     - [UI 스케치 (ui 블록)](#ui-스케치-ui-블록)
   - [문장 쓰는 법](#문장-쓰는-법)
+  - [빠른 열기와 명령 목록](#빠른-열기와-명령-목록)
   - [구간으로 이동](#구간으로-이동)
   - [Table Editor 검색](#table-editor-검색)
   - [행 참조 복사](#행-참조-복사)
@@ -295,6 +296,32 @@ after
 화면에 드러나지 않는 동작은 결과로 바꿔 씁니다. 그래도 확인할 수 없으면 시스템 문장을 두되 `화면 밖 검증` 노트를 답니다.
 
 만들 단위가 눈에 보이도록 컴포넌트 이름을 `tip` 노트로 답니다. `로그인 폼`, `ID 필드`, `계정 목록 표` 처럼 적으면 `단위` 필터로 모아 볼 수 있습니다.
+
+### 빠른 열기와 명령 목록
+
+`⌘P`로 빠른 열기 창을 엽니다. 글자를 치면 파일을 찾고, 맨 앞에 `>`를 치면 명령 목록으로 바뀝니다. `>`를 지우면 다시 파일 검색입니다. `⌘⇧P`는 `>`가 입력된 상태로 엽니다.
+
+명령마다 화면에 쓰는 한글 문구, 영어 이름, 단축키가 함께 보이고, 한글과 영어 어느 쪽으로 검색해도 찾습니다(`> 구간`, `> section`).
+
+| 명령 | 영어 이름 | 단축키 |
+| --- | --- | --- |
+| 파일 열기 | Open File | `⌘P` |
+| 구간으로 이동 | Go to Section | `⌘⇧O` |
+| 새 파일 | New File | `⌘⌥N` |
+| 표에서 검색 | Find in Table | `⌘F` |
+| 표에서 찾아 바꾸기 | Replace in Table | `⌘⌥F` |
+| 선택한 행 참조 복사 | Copy Row Reference | |
+| 구분선만 보기 토글 | Toggle Dividers Only | |
+| Sticky 제목 토글 | Toggle Sticky Headings | |
+| 파일 트리 토글 | Toggle File Tree | `⌘B` |
+| JSON Editor 토글 | Toggle JSON Editor | |
+| Table Editor 토글 | Toggle Table Editor | |
+| 이미지 관리 | Manage Images | |
+| 폴더 열기 | Open Folder | |
+| JSON 정리 후 저장 | Format and Save JSON | |
+| 키보드 단축키 보기 | Show Keyboard Shortcuts | |
+
+지금 실행할 수 없는 명령은 목록에 나오지 않습니다. `선택한 행 참조 복사`는 행을 선택했을 때만 보입니다.
 
 ### 구간으로 이동
 

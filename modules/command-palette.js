@@ -6,7 +6,12 @@ import { SHORTCUTS } from '../configs/shortcuts.js';
  *   list   - a filterable list of items (the command catalog, the file picker, ...)
  *   prompt - free text input with a live preview line
  *
- * command: { id, label, shortcutId?, run(api) }
+ * It opens on quick open: plain text searches `quickOpen` (the files), and
+ * text starting with `>` lists the commands instead, as in VS Code.
+ *
+ * command: { id, label, name, shortcutId?, isAvailable?(), run(api) }
+ *     label: what the command is called in the UI; name: its English name.
+ *     isAvailable: false hides a command that cannot run right now.
  * api.pick({ placeholder, getItems(query), onSelect(item), emptyText? })
  *     item: { label, description?, badge?, shortcutId?, swatch? }
  *           swatch: a colour for a dot before the label, or 'default'
@@ -14,7 +19,22 @@ import { SHORTCUTS } from '../configs/shortcuts.js';
  * api.prompt({ placeholder, getPreview(value) -> { text, error }, onSubmit(value) })
  * A command that opens neither view is considered done and closes the palette.
  */
-export function createCommandPalette({ root, backdrop, input, list, preview, commands }) {
+export const COMMAND_PREFIX = '>';
+
+/**
+ * The commands that can run now and match every word of the query, in
+ * catalog order. Either name of a command may be searched.
+ */
+export function filterCommands(commands, query) {
+    const tokens = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
+    return commands.filter((command) => {
+        if (typeof command.isAvailable === 'function' && !command.isAvailable()) return false;
+        const text = `${command.label} ${command.name || ''}`.toLowerCase();
+        return tokens.every(token => text.includes(token));
+    });
+}
+
+export function createCommandPalette({ root, backdrop, input, list, preview, commands, quickOpen = null }) {
     let view = null;
     let items = [];
     let activeIndex = 0;
@@ -26,16 +46,30 @@ export function createCommandPalette({ root, backdrop, input, list, preview, com
         prompt: (config) => showPrompt(config)
     };
 
+    const isCommandQuery = query => query.trimStart().startsWith(COMMAND_PREFIX);
+
+    /** Quick open: files by default, the commands after a `>`. */
     function commandCatalogView() {
         return {
             type: 'list',
-            placeholder: '명령 검색...',
-            emptyText: '일치하는 명령이 없습니다.',
+            placeholder: quickOpen
+                ? `파일 이름으로 검색 (${COMMAND_PREFIX} 를 입력하면 명령 목록)`
+                : '명령 검색...',
+            emptyText: query => (!quickOpen || isCommandQuery(query)
+                ? '일치하는 명령이 없습니다.'
+                : quickOpen.emptyText || '결과가 없습니다.'),
             getItems: (query) => {
-                const q = query.trim().toLowerCase();
-                return commands.filter((command) => !q || command.label.toLowerCase().includes(q));
+                if (quickOpen && !isCommandQuery(query)) return quickOpen.getItems(query);
+                const text = quickOpen ? query.trimStart().slice(COMMAND_PREFIX.length) : query;
+                return filterCommands(commands, text).map(command => ({
+                    label: command.label,
+                    // Both names show, so a command is found under either.
+                    description: command.name || '',
+                    shortcutId: command.shortcutId,
+                    command
+                }));
             },
-            onSelect: (command) => command.run(api)
+            onSelect: item => (item.command ? item.command.run(api) : quickOpen.onSelect(item))
         };
     }
 
@@ -60,7 +94,8 @@ export function createCommandPalette({ root, backdrop, input, list, preview, com
         if (!items.length) {
             const empty = document.createElement('li');
             empty.className = 'command-palette-empty';
-            empty.textContent = view.emptyText || '결과가 없습니다.';
+            const emptyText = typeof view.emptyText === 'function' ? view.emptyText(input.value) : view.emptyText;
+            empty.textContent = emptyText || '결과가 없습니다.';
             list.append(empty);
             return;
         }
@@ -117,9 +152,9 @@ export function createCommandPalette({ root, backdrop, input, list, preview, com
         renderList();
     }
 
-    function showList(config) {
+    function showList(config, query = '') {
         view = { type: 'list', ...config };
-        input.value = '';
+        input.value = query;
         input.placeholder = view.placeholder || '';
         refreshItems();
         // A list may open on one of its items (the current section, ...);
@@ -155,7 +190,11 @@ export function createCommandPalette({ root, backdrop, input, list, preview, com
         if (view === current) close();
     }
 
-    function open({ commandId } = {}) {
+    /**
+     * `commandId` runs one command right away; `commands: true` opens on the
+     * command list (quick open with the `>` already typed).
+     */
+    function open({ commandId, commands: listCommands = false } = {}) {
         if (!root) return;
         root.classList.remove('is-hidden');
         backdrop?.classList.remove('is-hidden');
@@ -167,7 +206,7 @@ export function createCommandPalette({ root, backdrop, input, list, preview, com
             direct.run(api);
             if (view === catalogView) close();
         } else {
-            showList(commandCatalogView());
+            showList(commandCatalogView(), listCommands && quickOpen ? COMMAND_PREFIX : '');
         }
     }
 
