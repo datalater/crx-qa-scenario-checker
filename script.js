@@ -63,6 +63,7 @@ import { createNoteAssetStore } from './modules/note-assets.js';
 import { createNoteCellController } from './modules/note-cell-controller.js';
 import { createNoteImageManager } from './modules/note-image-manager.js';
 import { setupSurroundSelection } from './modules/surround-selection.js';
+import { setupHomeEndKeys } from './modules/home-end-keys.js';
 import { looksLikeLegacyPass, resetFailedToUnchecked, setPassState } from './modules/pass-state.js';
 import {
     CHECKLIST_COLUMNS,
@@ -304,6 +305,7 @@ function init() {
     setupDeletedFileHistoryManager();
     setupNoteImages();
     setupSurroundSelection();
+    setupHomeEndKeys();
     setupChecklistRowSelection();
     setupChecklistColumns();
     setupChecklistStickyHeadings();

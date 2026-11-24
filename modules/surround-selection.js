@@ -41,12 +41,12 @@ export function isRoleGapBefore(text, start) {
     return /(^|[\s(])@[A-Za-z][\w-]* $/.test(text.slice(0, start));
 }
 
-function isPlainTextarea(target) {
+export function isPlainTextarea(target) {
     return target instanceof HTMLTextAreaElement && target.id !== 'editing' && !target.readOnly;
 }
 
 /** The editable element a keystroke lands in, unless CodeMirror owns it. */
-function editingHost(target) {
+export function editingHost(target) {
     const host = target?.closest?.('[contenteditable="true"], [contenteditable="plaintext-only"], [contenteditable=""]');
     return host && !host.classList.contains('cm-content') ? host : null;
 }
