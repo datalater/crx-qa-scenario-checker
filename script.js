@@ -64,6 +64,7 @@ import { createNoteCellController } from './modules/note-cell-controller.js';
 import { createNoteImageManager } from './modules/note-image-manager.js';
 import { setupSurroundSelection } from './modules/surround-selection.js';
 import { setupHomeEndKeys } from './modules/home-end-keys.js';
+import { openRootPathDialog } from './modules/root-path-dialog.js';
 import { looksLikeLegacyPass, resetFailedToUnchecked, setPassState } from './modules/pass-state.js';
 import {
     CHECKLIST_COLUMNS,
@@ -2919,19 +2920,23 @@ function updateRootPathStatus() {
 function editRootPath() {
     const rootName = boundDirectoryHandle?.name || '';
     if (!rootName) return;
-    const answer = prompt(
-        `"${rootName}" 폴더의 실제 경로를 입력하세요.\n예: /Users/me/work/${rootName}\n비우면 설정을 지웁니다.`,
-        getRootPath()
-    );
-    if (answer === null) return;
-    const paths = readRootPaths();
-    const path = answer.trim().replace(/\/+$/, '');
-    if (path) paths[rootName] = path;
-    else delete paths[rootName];
-    try {
-        localStorage.setItem(ROOT_PATHS_STORAGE_KEY, JSON.stringify(paths));
-    } catch (_) { /* storage unavailable */ }
-    updateRootPathStatus();
+    const activeFile = Workspace.getActiveFile(workspace);
+    const filePath = buildFileLocation(activeFile)?.path || activeFile?.name || '';
+    openRootPathDialog({
+        rootName,
+        current: getRootPath(),
+        preview: rootPath => buildReferenceFilePath({ rootPath, rootName, path: filePath }),
+        onSave: (path) => {
+            const paths = readRootPaths();
+            if (path) paths[rootName] = path;
+            else delete paths[rootName];
+            try {
+                localStorage.setItem(ROOT_PATHS_STORAGE_KEY, JSON.stringify(paths));
+            } catch (_) { /* storage unavailable */ }
+            updateRootPathStatus();
+            showStatusMessage(path ? '참조 경로를 저장했습니다.' : '참조 경로 설정을 지웠습니다.');
+        }
+    });
 }
 
 /** The selected rows as a reference (see modules/row-reference.js), or null. */
