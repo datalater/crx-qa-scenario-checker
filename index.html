@@ -235,6 +235,16 @@
                                     <span class="checklist-filter-swatch checklist-filter-swatch--none"></span>Dividers only
                                 </button>
                                 <div class="checklist-filter-separator" role="separator"></div>
+                                <div role="group" aria-labelledby="checklist-pass-group-label">
+                                <div id="checklist-pass-group-label" class="checklist-filter-group-label">Pass</div>
+                                <button class="checklist-filter-item" type="button" role="option" data-filter="failed">
+                                    <span class="checklist-filter-swatch is-tone-caution"></span>Failed
+                                </button>
+                                <button class="checklist-filter-item" type="button" role="option" data-filter="unchecked">
+                                    <span class="checklist-filter-swatch checklist-filter-swatch--none"></span>Unchecked
+                                </button>
+                                </div>
+                                <div class="checklist-filter-separator" role="separator"></div>
                                 <div role="group" aria-labelledby="checklist-notes-group-label">
                                 <div id="checklist-notes-group-label" class="checklist-filter-group-label">Alerts</div>
                                 <button class="checklist-filter-item" type="button" role="option" data-filter="note">
@@ -362,6 +372,7 @@
             <div class="context-submenu" role="menu"></div>
         </div>
         <button id="checklist-context-copy-reference" class="tree-context-menu-item" type="button" role="menuitem">행 참조 복사</button>
+        <button id="checklist-context-fail" class="tree-context-menu-item" type="button" role="menuitem">실패로 표시</button>
         <button id="checklist-context-pin" class="tree-context-menu-item" type="button" role="menuitem">행 고정</button>
         <button id="checklist-context-delete" class="tree-context-menu-item danger" type="button" role="menuitem">행 삭제</button>
     </div>

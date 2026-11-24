@@ -20,7 +20,7 @@ export function plainSectionTitle(title) {
 }
 
 /**
- * The sections in file order: `{ index, title, color, passed, total }`, where
+ * The sections in file order: `{ index, title, color, passed, failed, total }`, where
  * `index` is the divider's position among the steps and the counts cover the
  * step rows down to the next text divider.
  */
@@ -33,6 +33,7 @@ export function listSections(steps) {
                 title: plainSectionTitle(getDividerTitle(step.divider)),
                 color: parseDivider(step.divider)?.color || '',
                 passed: 0,
+                failed: 0,
                 total: 0
             });
             return;
@@ -41,6 +42,7 @@ export function listSections(steps) {
         if (!current || isDivider(step?.divider)) return;
         current.total += 1;
         if (step?.pass === true) current.passed += 1;
+        else if (step?.pass === false) current.failed += 1;
     });
     return sections;
 }
@@ -80,7 +82,8 @@ export function createGoToSectionCommand({ getSections, getCurrentRowIndex, go }
                     description: sections[current] === section ? '현재 구간' : '',
                     isCurrent: sections[current] === section,
                     // A section without steps has no progress to show.
-                    badge: section.total ? `${section.passed}/${section.total}` : '',
+                    badge: !section.total ? ''
+                        : `${section.passed}/${section.total}${section.failed ? ` · 실패 ${section.failed}` : ''}`,
                     swatch: section.color || 'default',
                     sectionIndex: section.index
                 })),

@@ -15,6 +15,7 @@ QA Scenario Checker는 QA 시나리오 JSON을 편집하고, Given/When/Then 체
   - [구분선 타입과 색상](#구분선-타입과-색상)
     - [markdown 라이브 표 (view)](#markdown-라이브-표-view)
     - [UI 스케치 (ui 블록)](#ui-스케치-ui-블록)
+  - [판정 (pass)](#판정-pass)
   - [문장 쓰는 법](#문장-쓰는-법)
   - [빠른 열기와 명령 목록](#빠른-열기와-명령-목록)
   - [구간으로 이동](#구간으로-이동)
@@ -114,7 +115,7 @@ demo-private/          전체 제외
       "given": ["User is on the login page"],
       "when": ["User enters valid credentials"],
       "then": ["Dashboard is displayed"],
-      "pass": false
+      "pass": true
     },
     {
       "divider": "Error cases"
@@ -122,8 +123,7 @@ demo-private/          전체 제외
     {
       "given": ["User is on the login page"],
       "when": ["User enters a wrong password"],
-      "then": ["An error message is displayed"],
-      "pass": false
+      "then": ["An error message is displayed"]
     }
   ]
 }
@@ -265,6 +265,30 @@ Given/When/Then/Note 셀에도 같은 ` ```ui ` 펜스를 쓸 수 있습니다. 
 - 보기 전환(`역할 + 내용`/`내용만`/`역할만`)은 markdown 구분선의 블록에서 고르며, 셀의 그림에도 함께 적용됩니다.
 - 셀에는 막대(`?`, `</>`, `삭제`)와 `/ui` 자동완성이 없습니다. 펜스를 직접 입력합니다.
 
+### 판정 (`pass`)
+
+행의 판정은 세 가지입니다. "아직 확인 안 함"은 값을 적지 않는 것으로 저장하므로, `false`는 언제나 실패만 뜻합니다. JSON을 읽는 사람이나 LLM이 `false`가 미확인인지 실패인지 물을 필요가 없습니다.
+
+| 상태 | 저장 | 표에서 |
+| --- | --- | --- |
+| 미확인 | `pass` 키 없음 | 빈 칸 |
+| 통과 | `"pass": true` | 초록 체크 |
+| 실패 | `"pass": false` | 빨간 X |
+
+| 동작 | 결과 |
+| --- | --- |
+| 클릭 | 미확인 ↔ 통과. 실패 상태에서 누르면 미확인으로 |
+| `⌥`/`Alt` + 클릭 | 실패로 표시. 다시 하면 미확인으로 |
+| 우클릭 → `실패로 표시` / `실패 표시 해제` | 같은 동작 |
+| 헤더의 `Pass` 클릭 | 모든 행을 통과로. 이미 모두 통과면 모두 미확인으로 |
+
+- 헤더의 진척도는 통과 / 전체이고, 실패가 있으면 `3/8 · 실패 1`처럼 덧붙이며 빨갛게 바뀝니다. 구간으로 이동 목록의 숫자도 같습니다.
+- 행 필터의 `Failed`, `Unchecked`로 실패한 행이나 아직 확인하지 않은 행만 모아 볼 수 있습니다.
+- 실패 사유는 Note 칸에 적습니다.
+- 새로 만든 행과 내보낸 JSON에는 `pass`가 없으면 그대로 없습니다. `false`로 채우지 않습니다.
+
+**예전 파일 정리.** 이 구분이 생기기 전의 파일은 미확인을 `"pass": false`로 저장했기 때문에, 열면 그 행들이 모두 실패로 보입니다. 그런 파일을 열면 상태 표시줄에 안내가 뜹니다. 명령 목록(`⌘⇧P`)의 `실패 표시를 모두 미확인으로 되돌리기`가 그 파일의 `false`를 한 번에 미확인으로 바꿉니다. 파일마다 한 번씩 실행합니다.
+
 ### 문장 쓰는 법
 
 셀의 첫 줄에서 `↑`를 누르면 윗행의 같은 열로, 마지막 줄에서 `↓`를 누르면 아랫행의 같은 열로 커서가 옮겨 갑니다. 줄이 여러 개인 셀 안에서는 평소처럼 줄 사이를 움직이고, 열 폭 때문에 자동으로 꺾인 줄도 한 줄로 칩니다. 구분선 행에서는 제목(Note 열에서는 구분선의 노트)으로 들어가고, code 구분선은 건너뜁니다.
@@ -311,6 +335,7 @@ after
 | 표에서 검색 | Find in Table | `⌘F` |
 | 표에서 찾아 바꾸기 | Replace in Table | `⌘⌥F` |
 | 선택한 행 참조 복사 | Copy Row Reference | |
+| 실패 표시를 모두 미확인으로 되돌리기 | Reset Failed to Unchecked | |
 | 구분선만 보기 토글 | Toggle Dividers Only | |
 | Sticky 제목 토글 | Toggle Sticky Headings | |
 | 파일 트리 토글 | Toggle File Tree | `⌘B` |
@@ -321,7 +346,7 @@ after
 | JSON 정리 후 저장 | Format and Save JSON | |
 | 키보드 단축키 보기 | Show Keyboard Shortcuts | |
 
-지금 실행할 수 없는 명령은 목록에 나오지 않습니다. `선택한 행 참조 복사`는 행을 선택했을 때만 보입니다.
+지금 실행할 수 없는 명령은 목록에 나오지 않습니다. `선택한 행 참조 복사`는 행을 선택했을 때만, `실패 표시를 모두 미확인으로 되돌리기`는 실패한 행이 있을 때만 보입니다.
 
 ### 구간으로 이동
 
@@ -381,8 +406,7 @@ text 구분선을 선택하면 그 구간 전체, 곧 다음 text 구분선 전�
       "section": "#1 수업 감독 활성화",
       "given": ["-"],
       "when": ["토글 > true"],
-      "then": ["select box 표시"],
-      "pass": false
+      "then": ["select box 표시"]
     }
   ]
 }
@@ -402,7 +426,6 @@ text 구분선을 선택하면 그 구간 전체, 곧 다음 text 구분선 전�
   "given": ["초기 비밀번호가 발급된 상태"],
   "when": ["초기 비밀번호로 로그인한다"],
   "then": ["비밀번호 재설정 화면으로 이동한다"],
-  "pass": false,
   "note": [
     "[PRD AC-02](https://example.com/prd#ac-02) ![재설정 화면](assets/20261116-143205.png)",
     "`[!caution]` 문구가 Figma와 다름"
@@ -482,6 +505,8 @@ text 구분선에도 같은 방식으로 노트를 쓸 수 있습니다. 구분�
 | --- | --- |
 | `All rows` | 전체 |
 | `Dividers only` | 구분선만. 시나리오 구조를 한눈에 봅니다 |
+| `Failed` | 실패로 표시한 행 |
+| `Unchecked` | 아직 판정하지 않은 행 |
 | `Note` ~ `Caution` | Given/When/Then/Note 중 어느 셀에든 그 alert 토큰(`` `[!warning]` `` 등)이 있는 행 |
 
 구분선은 그 아래에 남은 행이 있을 때만 함께 보입니다. 빈 구간의 제목이 떠 있지 않습니다.

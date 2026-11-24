@@ -63,6 +63,7 @@ import { createNoteAssetStore } from './modules/note-assets.js';
 import { createNoteCellController } from './modules/note-cell-controller.js';
 import { createNoteImageManager } from './modules/note-image-manager.js';
 import { setupSurroundSelection } from './modules/surround-selection.js';
+import { getPassState, looksLikeLegacyPass, nextPassState, resetFailedToUnchecked, setPassState } from './modules/pass-state.js';
 import {
     CHECKLIST_COLUMNS,
     describeVisibleColumns,
@@ -707,6 +708,7 @@ function loadActiveFile() {
         }
     }
     scrollOwnerKey = activeFile ? getScrollKey(activeFile) : null;
+    hintLegacyPass();
     renderTree();
     updateSaveIndicator('saved');
     activeFileDirty = false;
@@ -1576,6 +1578,11 @@ function openChecklistContextMenu(target) {
         referenceItem.textContent = count > 0 ? `행 ${count}개 참조 복사` : '행 참조 복사';
         referenceItem.disabled = count === 0;
     }
+    const failItem = document.getElementById('checklist-context-fail');
+    if (failItem) {
+        failItem.hidden = target.isDivider === true;
+        failItem.textContent = getPassState(currentData?.steps?.[target.index]) === 'fail' ? '실패 표시 해제' : '실패로 표시';
+    }
     EL.checklistContextPin.textContent = currentData?.steps?.[target.index]?.pinned === true
         ? '행 고정 해제' : '행 고정';
 
@@ -1616,6 +1623,43 @@ function openShortcutsModal() {
 function closeShortcutsModal() {
     if (EL.shortcutsModal) EL.shortcutsModal.classList.add('is-hidden');
     if (EL.shortcutsBackdrop) EL.shortcutsBackdrop.classList.add('is-hidden');
+}
+
+function handleChecklistContextFail() {
+    const step = currentData?.steps?.[checklistContextTarget?.index];
+    closeChecklistContextMenu();
+    if (!step || UI.isChecklistDividerStep(step)) return;
+    setPassState(step, nextPassState(getPassState(step), { fail: true }));
+    syncToEditor();
+    renderChecklist();
+}
+
+/**
+ * Files written before failures existed stored "not checked" as
+ * `pass: false`, which now reads as failed. One command turns them back.
+ */
+function countFailedSteps() {
+    return (currentData?.steps || [])
+        .filter(step => !UI.isChecklistDividerStep(step) && step?.pass === false).length;
+}
+
+function resetFailedStepsToUnchecked() {
+    const count = countFailedSteps();
+    if (count === 0) return;
+    if (!confirm(`이 파일에서 실패(pass: false)로 표시된 행 ${count}개를 미확인으로 바꿀까요?\n예전에 "아직 확인 안 함"으로 저장된 false를 정리할 때 씁니다. 실제로 실패한 행도 함께 미확인이 됩니다.`)) return;
+    resetFailedToUnchecked(currentData.steps, step => !UI.isChecklistDividerStep(step));
+    syncToEditor();
+    renderChecklist();
+    showStatusMessage(`${count}개 행을 미확인으로 바꿨습니다.`);
+}
+
+/** Says so once when an opened file looks like it predates failures. */
+function hintLegacyPass() {
+    if (!looksLikeLegacyPass(currentData?.steps, step => !UI.isChecklistDividerStep(step))) return;
+    showStatusMessage(
+        `pass: false 행 ${countFailedSteps()}개가 실패로 표시됩니다. 미확인이었다면 ⌘⇧P → "미확인으로 되돌리기"로 정리하세요.`,
+        'error'
+    );
 }
 
 function handleChecklistContextPin() {
@@ -2485,6 +2529,13 @@ function setupCommandPalette() {
             run: () => { void copySelectedRowReference(); }
         },
         {
+            id: 'resetFailedToUnchecked',
+            label: '실패 표시를 모두 미확인으로 되돌리기',
+            name: 'Reset Failed to Unchecked',
+            isAvailable: () => countFailedSteps() > 0,
+            run: () => resetFailedStepsToUnchecked()
+        },
+        {
             id: 'toggleDividersOnly',
             label: '구분선만 보기 토글',
             name: 'Toggle Dividers Only',
@@ -2655,7 +2706,7 @@ function renderChecklist() {
         UI.renderChecklist(container, currentData, {
             pinnedOnly,
             onUpdatePass: (idx, val) => {
-                currentData.steps[idx].pass = val;
+                setPassState(currentData.steps[idx], val);
                 syncToEditor();
                 refreshPeer(pinnedOnly);
             },
@@ -2692,7 +2743,8 @@ function renderChecklist() {
                 EL.scenarioTitle.classList.toggle('is-primary', isPrimary);
             },
             onAddStep: pinnedOnly ? undefined : (insertIndex) => {
-                insertChecklistEntry(insertIndex, JSON.parse('{"given":[],"when":[],"then":[],"pass":false}'));
+                // A new row has no verdict yet, so it carries no `pass`.
+                insertChecklistEntry(insertIndex, { given: [], when: [], then: [] });
             },
             onAddDivider: pinnedOnly ? undefined : (insertIndex) => {
                 insertChecklistEntry(insertIndex, { divider: true });
@@ -3614,10 +3666,11 @@ function clearHighlightIfNoSelection() {
 
 function toggleAllPass() {
     if (!hasSteps(currentData)) return;
-    const nextValue = !areAllStepsPassed(currentData.steps);
+    // Everything passed, or back to nothing checked: never to "all failed".
+    const nextState = areAllStepsPassed(currentData.steps) ? 'none' : 'pass';
     currentData.steps.forEach(step => {
         if (UI.isChecklistDividerStep(step)) return;
-        step.pass = nextValue;
+        setPassState(step, nextState);
     });
     syncToEditor();
     renderChecklist();
@@ -4711,6 +4764,7 @@ function setupWindowListeners() {
     if (EL.treeContextDelete) {
         EL.treeContextDelete.addEventListener('click', handleTreeContextDelete);
     }
+    document.getElementById('checklist-context-fail')?.addEventListener('click', handleChecklistContextFail);
     EL.checklistContextPin?.addEventListener('click', handleChecklistContextPin);
     if (EL.checklistContextDelete) {
         EL.checklistContextDelete.addEventListener('click', handleChecklistContextDelete);

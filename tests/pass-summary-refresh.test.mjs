@@ -47,9 +47,9 @@ function createSummaryHarness(steps) {
 test('progress text follows a single pass change', () => {
     const h = createSummaryHarness([
         { divider: 'group' },
-        { pass: false },
-        { pass: false },
-        { pass: false }
+        {},
+        {},
+        {}
     ]);
     assertEqual(h.progress.textContent, '0/3');
 
@@ -57,13 +57,13 @@ test('progress text follows a single pass change', () => {
     h.refreshPassSummary();
     assertEqual(h.progress.textContent, '1/3');
 
-    h.data.steps[1].pass = false;
+    delete h.data.steps[1].pass;
     h.refreshPassSummary();
     assertEqual(h.progress.textContent, '0/3');
 });
 
 test('progress turns complete only when every step passes', () => {
-    const h = createSummaryHarness([{ pass: true }, { pass: false }]);
+    const h = createSummaryHarness([{ pass: true }, {}]);
     assertEqual(h.progress.classes.has('is-complete'), false);
 
     h.data.steps[1].pass = true;
@@ -73,14 +73,14 @@ test('progress turns complete only when every step passes', () => {
 });
 
 test('the toggle and the counter never disagree', () => {
-    const h = createSummaryHarness([{ pass: false }, { pass: false }]);
+    const h = createSummaryHarness([{}, {}]);
 
     h.data.steps.forEach((step) => { step.pass = true; });
     h.refreshPassSummary();
     assertEqual(h.toggle.classes.has('all-passed'), true);
     assertEqual(h.progress.classes.has('is-complete'), true);
 
-    h.data.steps[0].pass = false;
+    delete h.data.steps[0].pass;
     h.refreshPassSummary();
     assertEqual(h.toggle.classes.has('all-passed'), false);
     assertEqual(h.progress.classes.has('is-complete'), false);
@@ -106,17 +106,29 @@ test('progress reappears once a step exists', () => {
     const h = createSummaryHarness([{ divider: 'group' }]);
     assertEqual(h.progress.hidden, true);
 
-    h.data.steps.push({ pass: false });
+    h.data.steps.push({});
     h.refreshPassSummary();
     assertEqual(h.progress.hidden, false);
     assertEqual(h.progress.textContent, '0/1');
 });
 
 test('progress exposes a readable title for screen readers', () => {
-    const h = createSummaryHarness([{ pass: true }, { pass: false }]);
+    const h = createSummaryHarness([{ pass: true }, {}]);
     assertEqual(h.progress.title, '1 of 2 steps passed');
 
     h.data.steps[1].pass = true;
     h.refreshPassSummary();
     assertEqual(h.progress.title, 'All 2 steps passed');
+});
+
+test('failures are called out in the counter, unchecked rows are not', () => {
+    const h = createSummaryHarness([{ pass: true }, { pass: false }, {}, {}]);
+    assertEqual(h.progress.textContent, '1/4 · 실패 1');
+    assertEqual(h.progress.classes.has('has-failed'), true);
+    assertEqual(h.progress.title, '1 of 4 steps passed, 1 failed');
+
+    delete h.data.steps[1].pass;
+    h.refreshPassSummary();
+    assertEqual(h.progress.textContent, '1/4');
+    assertEqual(h.progress.classes.has('has-failed'), false);
 });

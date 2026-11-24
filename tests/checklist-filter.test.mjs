@@ -17,8 +17,8 @@ const scenario = [
     { given: ['`[!CAUTION]` q2'], when: [], then: [], pass: false }
 ];
 
-test('filters are all, outline, and the five alerts', () => {
-    assertDeepEqual(CHECKLIST_FILTERS, ['all', 'outline', 'note', 'tip', 'important', 'warning', 'caution']);
+test('filters are all, outline, the two verdicts, and the five alerts', () => {
+    assertDeepEqual(CHECKLIST_FILTERS, ['all', 'outline', 'failed', 'unchecked', 'note', 'tip', 'important', 'warning', 'caution']);
 });
 
 test('an unknown filter falls back to all', () => {
@@ -83,4 +83,19 @@ test('a filter matching nothing hides every row', () => {
 test('visibility handles an empty or invalid step list', () => {
     assertDeepEqual(buildChecklistVisibility([], 'all'), []);
     assertDeepEqual(buildChecklistVisibility(null, 'caution'), []);
+});
+
+test('the verdict filters keep failed rows, or rows not checked yet', () => {
+    const steps = [
+        { divider: 'A' },
+        { given: ['passed'], pass: true },
+        { given: ['failed'], pass: false },
+        { divider: 'B' },
+        { given: ['not checked'] },
+        { divider: 'C' },
+        { given: ['passed too'], pass: true }
+    ];
+    assertDeepEqual(buildChecklistVisibility(steps, 'failed'), [true, false, true, false, false, false, false]);
+    assertDeepEqual(buildChecklistVisibility(steps, 'unchecked'), [false, false, false, true, true, false, false]);
+    assertEqual(stepMatchesChecklistFilter({ pass: null }, 'unchecked'), true);
 });

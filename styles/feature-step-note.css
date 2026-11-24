@@ -39,6 +39,13 @@
   background-color: color-mix(in srgb, #238636 18%, transparent);
 }
 
+/* A failure outranks everything else the counter says. */
+.checklist-progress.has-failed {
+  color: #ff7b72;
+  border-color: #da3633;
+  background-color: color-mix(in srgb, #da3633 16%, transparent);
+}
+
 .checklist-progress[hidden] {
   display: none;
 }

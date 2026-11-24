@@ -2,6 +2,7 @@ import { getActiveFile } from './workspace-manager.js';
 import { getChecklistAlertConfig, renderChecklistAlertToken } from './checklist-alerts.js';
 import { findNoteInlineTokens } from './note-inline.js';
 import { hasAdjacentVisualLine } from '../src/table-cell-navigation.js';
+import { countPassStates, getPassState, nextPassState } from './pass-state.js';
 import { stepLinesToText } from './step-lines.js';
 import { renderUiSketchHtml, splitUiFences } from './ui-sketch-html.js';
 import { CODE_VIEWS, hasCodeView, resolveCodeView, storedCodeView } from './code-view.js';
@@ -171,7 +172,10 @@ export const NOTE_ALERT_FILTERS = ['note', 'tip', 'important', 'warning', 'cauti
 
 const STEP_TEXT_FIELDS = ['given', 'when', 'then', 'note'];
 
-export const CHECKLIST_FILTERS = ['all', 'outline', ...NOTE_ALERT_FILTERS];
+/** Row filters by verdict: the rows that failed, or that are not checked yet. */
+export const PASS_FILTERS = ['failed', 'unchecked'];
+
+export const CHECKLIST_FILTERS = ['all', 'outline', ...PASS_FILTERS, ...NOTE_ALERT_FILTERS];
 
 export function normalizeChecklistFilter(value) {
     const filter = typeof value === 'string' ? value.trim().toLowerCase() : '';
@@ -185,6 +189,8 @@ export function normalizeChecklistFilter(value) {
 export function stepMatchesChecklistFilter(step, filter) {
     if (filter === 'all') return true;
     if (filter === 'outline') return false;
+    if (filter === 'failed') return getPassState(step) === 'fail';
+    if (filter === 'unchecked') return getPassState(step) === 'none';
     const token = `\`[!${filter}]\``;
     return STEP_TEXT_FIELDS.some(field => (
         stepLinesToText(step?.[field]).toLowerCase().includes(token)
@@ -288,11 +294,11 @@ export function updatePassHeaderState(passHeaderToggle, currentData) {
 
 export function computeChecklistProgress(currentData) {
     const steps = (currentData && Array.isArray(currentData.steps)) ? currentData.steps : [];
-    const checkableSteps = steps.filter(step => !isChecklistDividerStep(step));
-    const total = checkableSteps.length;
-    const passed = checkableSteps.filter(step => step?.pass === true).length;
+    const { total, passed, failed, unchecked } = countPassStates(steps, step => !isChecklistDividerStep(step));
     return {
         passed,
+        failed,
+        unchecked,
         total,
         hasSteps: total > 0,
         allPassed: total > 0 && passed === total
@@ -302,10 +308,11 @@ export function computeChecklistProgress(currentData) {
 export function updateChecklistProgressIndicator(indicator, currentData) {
     if (!indicator) return;
 
-    const { passed, total, hasSteps, allPassed } = computeChecklistProgress(currentData);
+    const { passed, failed, total, hasSteps, allPassed } = computeChecklistProgress(currentData);
 
     indicator.hidden = !hasSteps;
     indicator.classList.toggle('is-complete', allPassed);
+    indicator.classList.toggle('has-failed', failed > 0);
 
     if (!hasSteps) {
         indicator.textContent = '';
@@ -313,10 +320,26 @@ export function updateChecklistProgressIndicator(indicator, currentData) {
         return;
     }
 
-    indicator.textContent = `${passed}/${total}`;
+    // Failures are called out; rows not checked yet are simply the rest.
+    indicator.textContent = failed > 0 ? `${passed}/${total} · 실패 ${failed}` : `${passed}/${total}`;
     indicator.title = allPassed
         ? `All ${total} steps passed`
-        : `${passed} of ${total} steps passed`;
+        : `${passed} of ${total} steps passed${failed > 0 ? `, ${failed} failed` : ''}`;
+}
+
+const PASS_TOGGLE_LABELS = {
+    none: '미확인. 클릭: 통과로 표시 · ⌥클릭: 실패로 표시',
+    pass: '통과. 클릭: 미확인으로 · ⌥클릭: 실패로 표시',
+    fail: '실패. 클릭: 미확인으로'
+};
+
+/** Shows a verdict on its toggle (see modules/pass-state.js). */
+export function applyPassToggleState(toggle, state) {
+    toggle.dataset.state = state;
+    toggle.title = PASS_TOGGLE_LABELS[state];
+    toggle.setAttribute('aria-label', PASS_TOGGLE_LABELS[state]);
+    // A failure is neither on nor off, which is what "mixed" is for.
+    toggle.setAttribute('aria-checked', state === 'pass' ? 'true' : state === 'fail' ? 'mixed' : 'false');
 }
 
 export function renderFileTree(container, workspace, options = {}) {
@@ -1431,8 +1454,6 @@ export function renderChecklist(container, data, options = {}) {
         const rowSearchResults = searchResultsByStep.get(index) || [];
         if (rowSearchResults.length) tr.classList.add('is-search-match');
         if (activeSearchResult?.stepIndex === index) tr.classList.add('is-search-current');
-        const isPassed = step.pass === true;
-        
         // plaintext-only so Enter inserts a single "\n" text node. Plain
         // contenteditable builds <br>/<div> on Enter, which innerText then
         // counts alongside the existing literal "\n", doubling blank lines.
@@ -1442,10 +1463,7 @@ export function renderChecklist(container, data, options = {}) {
             <td class="col-when"><div class="cell-content" contenteditable="plaintext-only" data-index="${index}" data-field="when"></div></td>
             <td class="col-then"><div class="cell-content" contenteditable="plaintext-only" data-index="${index}" data-field="then"></div></td>
             <td class="col-pass">
-                <label class="checkbox-container">
-                    <input type="checkbox" data-index="${index}" ${isPassed ? 'checked' : ''}>
-                    <span class="checkmark"></span>
-                </label>
+                <button class="pass-toggle" type="button" role="checkbox" data-index="${index}"></button>
             </td>
             <td class="col-note"><div class="cell-content" contenteditable="plaintext-only" data-index="${index}" data-field="note"></div></td>
         `;
@@ -1481,7 +1499,16 @@ export function renderChecklist(container, data, options = {}) {
             });
         }
 
-        tr.querySelector('.col-pass input').addEventListener('change', (e) => onUpdatePass(index, e.target.checked));
+        // A click moves between unchecked and passed; Alt+click marks a
+        // failure. The verdict is not a row selection, so the click stops here.
+        const passToggle = tr.querySelector('.pass-toggle');
+        applyPassToggleState(passToggle, getPassState(step));
+        passToggle.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const next = nextPassState(passToggle.dataset.state, { fail: event.altKey });
+            applyPassToggleState(passToggle, next);
+            onUpdatePass(index, next);
+        });
         if (index === 0 && canInsertRows) {
             appendAddRowButton(container, 0, {
                 stepTitle: 'Add step above',

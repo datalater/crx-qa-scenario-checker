@@ -112,10 +112,12 @@ function buildRequiredStepWithDefaults(input) {
     const normalized = {
         ...source,
         given: toStepLines(source.given),
-        when: toStepLines(source.when),
-        pass: source.pass === true
+        when: toStepLines(source.when)
     };
     normalized['then'] = toStepLines(source['then']);
+    // A verdict is kept as written; a row without one is not checked yet and
+    // gets no `pass` at all, since `false` would read as a failure.
+    if (typeof source.pass !== 'boolean') delete normalized.pass;
     return normalized;
 }
 

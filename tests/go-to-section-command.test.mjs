@@ -21,9 +21,9 @@ const steps = () => [
 
 test('sections are the text dividers, with the progress of the rows under them', () => {
     assertDeepEqual(listSections(steps()), [
-        { index: 1, title: '#1 수업 감독 활성화', color: '', passed: 2, total: 3 },
-        { index: 6, title: 'Figma #2 LNB 구성', color: '#f85149', passed: 0, total: 0 },
-        { index: 7, title: 'divider', color: '', passed: 0, total: 1 }
+        { index: 1, title: '#1 수업 감독 활성화', color: '', passed: 2, failed: 1, total: 3 },
+        { index: 6, title: 'Figma #2 LNB 구성', color: '#f85149', passed: 0, failed: 0, total: 0 },
+        { index: 7, title: 'divider', color: '', passed: 0, failed: 0, total: 1 }
     ]);
     assertDeepEqual(listSections(null), []);
 });
@@ -67,7 +67,7 @@ test('the command lists sections, marks the current one, and goes to the chosen 
     command.run({ pick: (config) => { picker = config; } });
     const items = picker.getItems('');
     assertDeepEqual(items.map(item => [item.label, item.description, item.badge, item.swatch]), [
-        ['#1 수업 감독 활성화', '현재 구간', '2/3', 'default'],
+        ['#1 수업 감독 활성화', '현재 구간', '2/3 · 실패 1', 'default'],
         ['Figma #2 LNB 구성', '', '', '#f85149'],
         ['divider', '', '0/1', 'default']
     ]);

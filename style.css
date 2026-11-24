@@ -1624,68 +1624,38 @@
   }
 
   /* Custom Checkbox */
-  .checkbox-container {
-    display: block;
+  /* The verdict of a row: empty (not checked), a green check (passed) or a
+     red cross (failed). See modules/pass-state.js. */
+  .pass-toggle {
     position: relative;
-    cursor: pointer;
-    user-select: none;
-    height: 18px;
-  }
-
-  .col-pass .checkbox-container {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-  }
-
-  .checkbox-container input {
-    position: absolute;
-    opacity: 0;
-    cursor: pointer;
-    height: 0;
-    width: 0;
-  }
-
-  .checkmark {
-    position: absolute;
-    top: 0;
-    left: 12px;
-    height: 16px;
+    display: inline-block;
     width: 16px;
+    height: 16px;
+    padding: 0;
+    vertical-align: middle;
     background-color: var(--accent-secondary);
     border: 1px solid var(--border-color);
     border-radius: 3px;
+    cursor: pointer;
     transition:
       background-color 120ms ease,
       border-color 120ms ease;
   }
 
-  .col-pass .checkmark {
-    position: relative;
-    left: 0;
-  }
-
-  .checkbox-container:hover input ~ .checkmark {
+  .pass-toggle:hover,
+  .pass-toggle:focus-visible {
+    outline: none;
     border-color: var(--accent-primary);
   }
 
-  .checkbox-container input:checked ~ .checkmark {
+  .pass-toggle[data-state="pass"] {
     background-color: var(--success);
     border-color: var(--success);
   }
 
-  .checkmark:after {
+  .pass-toggle[data-state="pass"]::after {
     content: "";
     position: absolute;
-    display: none;
-  }
-
-  .checkbox-container input:checked ~ .checkmark:after {
-    display: block;
-  }
-
-  .checkbox-container .checkmark:after {
     left: 4px;
     top: 1px;
     width: 4px;
@@ -1693,6 +1663,28 @@
     border: solid white;
     border-width: 0 2px 2px 0;
     transform: rotate(45deg);
+  }
+
+  .pass-toggle[data-state="fail"] {
+    background-color: #da3633;
+    border-color: #da3633;
+  }
+
+  /* The cross is two bars through the centre. */
+  .pass-toggle[data-state="fail"]::before,
+  .pass-toggle[data-state="fail"]::after {
+    content: "";
+    position: absolute;
+    left: 6px;
+    top: 2px;
+    width: 2px;
+    height: 10px;
+    background-color: white;
+    transform: rotate(45deg);
+  }
+
+  .pass-toggle[data-state="fail"]::after {
+    transform: rotate(-45deg);
   }
 
   /* Empty State */

@@ -23,6 +23,7 @@ import './ui-sketch.test.mjs';
 import './ui-sketch-html.test.mjs';
 import './diagram-export.test.mjs';
 import './diagram-zoom.test.mjs';
+import './pass-state.test.mjs';
 import './pass-summary-refresh.test.mjs';
 import './step-lines.test.mjs';
 import './surround-selection.test.mjs';
