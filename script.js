@@ -265,6 +265,8 @@ const BOUND_FILE_PATH_DEFAULT_TOOLTIP = 'No file bound';
 const LOCAL_SAVE_ONLY_TOOLTIP = '로컬 저장소(localStorage)에 저장되었습니다. 현재 디스크 파일에 직접 저장할 수 없어 이 상태를 표시합니다.';
 const DIRECTORY_LOCAL_SAVE_TOOLTIP = '폴더 기반 모드에서는 현재 로컬 저장 후 필요 시 디스크 동기화를 확장할 예정입니다. 지금은 로컬 저장을 기준으로 동작합니다.';
 const STARTUP_LOADING_MIN_VISIBLE_MS = 900;
+// Restoring the folder must never lock the app: past this, the overlay goes.
+const RESTORE_TIMEOUT_MS = 15000;
 const HANDLE_DB_NAME = 'qa-scenario-handles';
 const HANDLE_DB_VERSION = 1;
 const HANDLE_STORE_NAME = 'handles';
@@ -512,7 +514,12 @@ async function attemptRestoreBoundDirectoryConnection() {
 
     let persisted = null;
     try {
-        persisted = await getBoundDirectoryHandleFromDb();
+        // The saved handle lives in IndexedDB, which can wait forever on a
+        // connection another window holds; give up on it like on the rest.
+        persisted = await Promise.race([
+            getBoundDirectoryHandleFromDb(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), RESTORE_TIMEOUT_MS))
+        ]);
     } catch (error) {
         updateLoadingStep('handle', 'warning');
         console.warn('[qa-scenario] failed to restore bound directory handle', error);
@@ -529,18 +536,28 @@ async function attemptRestoreBoundDirectoryConnection() {
 
     updateLoadingStep('handle', 'done');
     updateLoadingStep('permission', 'active');
+    let timer = null;
     try {
-        const restored = await bindAndLoadFromDirectoryHandle(handle, {
-            isRestore: true,
-            onProgress: updateLoadingStep
+        const timedOut = new Promise((resolve) => {
+            timer = setTimeout(() => resolve('timeout'), RESTORE_TIMEOUT_MS);
         });
-        if (!restored) {
+        const restored = await Promise.race([
+            bindAndLoadFromDirectoryHandle(handle, { isRestore: true, onProgress: updateLoadingStep }),
+            timedOut
+        ]);
+        if (restored === 'timeout') {
+            const stuck = loadingStepState.find(step => step.status === 'active');
+            console.warn(`[qa-scenario] folder restore did not finish in ${RESTORE_TIMEOUT_MS}ms`, stuck?.id || '');
+            updateBoundFilePathInput('Re-open folder', 'warning');
+            showStatusMessage(`폴더 연결 복원이 끝나지 않았습니다(${stuck?.label || '알 수 없는 단계'}). 📂 버튼으로 폴더를 다시 여세요.`, 'error');
+        } else if (!restored) {
             updateLoadingStep('permission', 'warning');
         }
     } catch (error) {
         updateLoadingStep('apply', 'warning');
         console.warn('[qa-scenario] auto-reconnect for directory failed', error);
     } finally {
+        clearTimeout(timer);
         await hideLoadingOverlayAfterMinimum();
     }
 }
@@ -581,6 +598,9 @@ function setLoadingSteps(steps) {
 }
 
 function updateLoadingStep(id, status) {
+    // Logged with the time since the overlay showed, so a slow or stuck step
+    // can be found in the console.
+    console.info(`[qa-scenario] startup ${id}: ${status} (+${Date.now() - loadingOverlayShownAt}ms)`);
     loadingStepState = loadingStepState.map((step) => {
         if (step.id !== id) return step;
         return { ...step, status };
