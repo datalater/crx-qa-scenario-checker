@@ -2510,6 +2510,12 @@ async function createEntryFromPalette({ folders, file, absolute }) {
     persist();
 }
 
+const PANEL_SHORTCUTS = [
+    { shortcutId: 'togglePanelFileTree', key: 'fileTree' },
+    { shortcutId: 'togglePanelJsonEditor', key: 'jsonEditor' },
+    { shortcutId: 'togglePanelTableEditor', key: 'tableEditor' }
+];
+
 function setupCommandPalette() {
     const input = document.getElementById('command-palette-input');
     if (!input) return;
@@ -2586,19 +2592,21 @@ function setupCommandPalette() {
             id: 'toggleFileTree',
             label: '파일 트리 토글',
             name: 'Toggle File Tree',
-            shortcutId: 'toggleFileTree',
+            shortcutId: 'togglePanelFileTree',
             run: () => togglePanelVisibility('fileTree')
         },
         {
             id: 'toggleJsonEditor',
             label: 'JSON Editor 토글',
             name: 'Toggle JSON Editor',
+            shortcutId: 'togglePanelJsonEditor',
             run: () => togglePanelVisibility('jsonEditor')
         },
         {
             id: 'toggleTableEditor',
             label: 'Table Editor 토글',
             name: 'Toggle Table Editor',
+            shortcutId: 'togglePanelTableEditor',
             run: () => togglePanelVisibility('tableEditor')
         },
         {
@@ -2652,6 +2660,12 @@ function setupCommandPalette() {
         } else if (matchShortcut(event, 'toggleFileTree')) {
             event.preventDefault();
             togglePanelVisibility('fileTree');
+        } else {
+            // Cmd/Ctrl+1, 2, 3: the three panel buttons of the header, in order.
+            const panel = PANEL_SHORTCUTS.find(({ shortcutId }) => matchShortcut(event, shortcutId));
+            if (!panel) return;
+            event.preventDefault();
+            togglePanelVisibility(panel.key);
         }
     });
 }

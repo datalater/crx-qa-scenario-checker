@@ -339,9 +339,9 @@ after
 | 실패 표시를 모두 미확인으로 되돌리기 | Reset Failed to Unchecked | |
 | 구분선만 보기 토글 | Toggle Dividers Only | |
 | Sticky 제목 토글 | Toggle Sticky Headings | |
-| 파일 트리 토글 | Toggle File Tree | `⌘B` |
-| JSON Editor 토글 | Toggle JSON Editor | |
-| Table Editor 토글 | Toggle Table Editor | |
+| 파일 트리 토글 | Toggle File Tree | `⌘1` (`⌘B`도 동작) |
+| JSON Editor 토글 | Toggle JSON Editor | `⌘2` |
+| Table Editor 토글 | Toggle Table Editor | `⌘3` |
 | 이미지 관리 | Manage Images | |
 | 폴더 열기 | Open Folder | |
 | JSON 정리 후 저장 | Format and Save JSON | |

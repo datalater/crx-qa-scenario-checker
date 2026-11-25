@@ -98,6 +98,21 @@ export const SHORTCUTS = [
         bindings: [{ codes: ['KeyK'], keys: ['k'], primary: true, shift: false, alt: false }]
     },
     {
+        id: 'togglePanelFileTree',
+        label: 'Toggle File tree panel',
+        bindings: [{ codes: ['Digit1', 'Numpad1'], keys: ['1'], primary: true, shift: false, alt: false }]
+    },
+    {
+        id: 'togglePanelJsonEditor',
+        label: 'Toggle JSON Editor panel',
+        bindings: [{ codes: ['Digit2', 'Numpad2'], keys: ['2'], primary: true, shift: false, alt: false }]
+    },
+    {
+        id: 'togglePanelTableEditor',
+        label: 'Toggle Table Editor panel',
+        bindings: [{ codes: ['Digit3', 'Numpad3'], keys: ['3'], primary: true, shift: false, alt: false }]
+    },
+    {
         id: 'indent',
         label: 'Indent (JSON Editor)',
         bindings: [{ codes: ['Tab'], keys: ['tab'], shift: false }]
