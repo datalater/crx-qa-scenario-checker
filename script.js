@@ -267,6 +267,13 @@ const DIRECTORY_LOCAL_SAVE_TOOLTIP = '폴더 기반 모드에서는 현재 로�
 const STARTUP_LOADING_MIN_VISIBLE_MS = 900;
 // Restoring the folder must never lock the app: past this, the overlay goes.
 const RESTORE_TIMEOUT_MS = 15000;
+const RESTORE_SKIP_DELAY_MS = 1500;
+let restoreSkip = null;
+
+function setLoadingSkipVisible(visible) {
+    const button = document.getElementById('loading-skip');
+    if (button) button.hidden = !visible;
+}
 const HANDLE_DB_NAME = 'qa-scenario-handles';
 const HANDLE_DB_VERSION = 1;
 const HANDLE_STORE_NAME = 'handles';
@@ -494,6 +501,8 @@ function loadWorkspace() {
     void attemptRestoreBoundDirectoryConnection();
 }
 
+document.getElementById('loading-skip')?.addEventListener('click', () => restoreSkip?.());
+
 async function attemptRestoreBoundDirectoryConnection() {
     const boundMeta = workspace?.uiState?.boundFile;
     // Nothing to restore: close the startup overlay. This runs in the same
@@ -504,6 +513,9 @@ async function attemptRestoreBoundDirectoryConnection() {
     }
 
     showLoadingOverlay('Restoring folder connection…');
+    // The user may always give up waiting; the button shows once the restore
+    // takes long enough to notice.
+    setTimeout(() => { if (restoreSkip) setLoadingSkipVisible(true); }, RESTORE_SKIP_DELAY_MS);
     setLoadingSteps([
         { id: 'workspace', label: 'Load saved workspace', status: 'done' },
         { id: 'handle', label: 'Find saved folder access', status: 'active' },
@@ -537,15 +549,27 @@ async function attemptRestoreBoundDirectoryConnection() {
     updateLoadingStep('handle', 'done');
     updateLoadingStep('permission', 'active');
     let timer = null;
+    let stopped = false;
     try {
         const timedOut = new Promise((resolve) => {
             timer = setTimeout(() => resolve('timeout'), RESTORE_TIMEOUT_MS);
         });
+        const skipped = new Promise((resolve) => { restoreSkip = () => resolve('skipped'); });
         const restored = await Promise.race([
-            bindAndLoadFromDirectoryHandle(handle, { isRestore: true, onProgress: updateLoadingStep }),
-            timedOut
+            bindAndLoadFromDirectoryHandle(handle, {
+                isRestore: true,
+                onProgress: updateLoadingStep,
+                isCancelled: () => stopped
+            }),
+            timedOut,
+            skipped
         ]);
-        if (restored === 'timeout') {
+        if (restored === 'timeout' || restored === 'skipped') stopped = true;
+        if (restored === 'skipped') {
+            console.warn('[qa-scenario] folder restore skipped by the user');
+            updateBoundFilePathInput('Re-open folder', 'warning');
+            showStatusMessage('폴더 연결 복원을 건너뛰었습니다. 📂 버튼으로 폴더를 다시 여세요.', 'error');
+        } else if (restored === 'timeout') {
             const stuck = loadingStepState.find(step => step.status === 'active');
             console.warn(`[qa-scenario] folder restore did not finish in ${RESTORE_TIMEOUT_MS}ms`, stuck?.id || '');
             updateBoundFilePathInput('Re-open folder', 'warning');
@@ -558,6 +582,8 @@ async function attemptRestoreBoundDirectoryConnection() {
         console.warn('[qa-scenario] auto-reconnect for directory failed', error);
     } finally {
         clearTimeout(timer);
+        restoreSkip = null;
+        setLoadingSkipVisible(false);
         await hideLoadingOverlayAfterMinimum();
     }
 }
@@ -3924,6 +3950,9 @@ async function bindAndLoadFromDirectoryHandle(handle, options = {}) {
     const reportProgress = typeof options?.onProgress === 'function'
         ? options.onProgress
         : () => {};
+    // A restore the user gave up on (or that timed out) may still finish
+    // later; it must not take over the app at that point.
+    const isCancelled = typeof options?.isCancelled === 'function' ? options.isCancelled : () => false;
     let writeGranted = false;
     let readGranted = false;
 
@@ -3951,6 +3980,8 @@ async function bindAndLoadFromDirectoryHandle(handle, options = {}) {
             });
         }
     }
+
+    if (isCancelled()) return false;
 
     if (!readGranted) {
         if (isRestore) {
@@ -3982,6 +4013,8 @@ async function bindAndLoadFromDirectoryHandle(handle, options = {}) {
         alert('Unsupported or invalid directory contents');
         return false;
     }
+
+    if (isCancelled()) return false;
 
     const lastActiveFileLocation = getLastActiveFileLocation();
     const openFilePaths = workspace?.uiState?.openFilePaths;
