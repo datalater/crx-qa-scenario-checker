@@ -65,6 +65,7 @@ import { createNoteImageManager } from './modules/note-image-manager.js';
 import { setupSurroundSelection } from './modules/surround-selection.js';
 import { setupHomeEndKeys } from './modules/home-end-keys.js';
 import { openRootPathDialog } from './modules/root-path-dialog.js';
+import { duplicateRows } from './modules/row-duplicate.js';
 import { looksLikeLegacyPass, resetFailedToUnchecked, setPassState } from './modules/pass-state.js';
 import {
     CHECKLIST_COLUMNS,
@@ -1621,6 +1622,12 @@ function openChecklistContextMenu(target) {
     checklistContextTarget = target;
     // The menu acts on the selection; a row outside it becomes the selection.
     if (!getSelectedStepIndexes().has(target.index)) setChecklistRowSelection([target.index], target.index);
+    const duplicateItem = document.getElementById('checklist-context-duplicate');
+    if (duplicateItem) {
+        // Every selected row, dividers included, is copied as itself.
+        const count = getSelectedStepIndexes().size;
+        duplicateItem.textContent = count > 1 ? `행 ${count}개 복제` : '행 복제';
+    }
     const referenceItem = document.getElementById('checklist-context-copy-reference');
     if (referenceItem) {
         const count = expandRowSelection(currentData?.steps, getSelectedStepIndexes()).length;
@@ -2570,6 +2577,13 @@ function setupCommandPalette() {
             run: () => { void copySelectedRowReference(); }
         },
         {
+            id: 'duplicateRows',
+            label: '선택한 행 복제',
+            name: 'Duplicate Rows',
+            isAvailable: () => selectedSteps.size > 0,
+            run: () => duplicateSelectedRows()
+        },
+        {
             id: 'resetFailedToUnchecked',
             label: '실패 표시를 모두 미확인으로 되돌리기',
             name: 'Reset Failed to Unchecked',
@@ -3018,6 +3032,18 @@ function buildSelectedRowReference() {
     });
 }
 
+/** Copies the selected rows right below the last of them and selects the copies. */
+function duplicateSelectedRows() {
+    if (!currentData || !Array.isArray(currentData.steps)) return;
+    const copies = duplicateRows(currentData.steps, [...getSelectedStepIndexes()]);
+    if (copies.length === 0) return;
+    syncToEditor();
+    renderChecklist();
+    setChecklistRowSelection(copies, copies[0]);
+    EL.checklistBody?.querySelector(`tr[data-step-index="${copies[0]}"]`)?.scrollIntoView({ block: 'nearest' });
+    showStatusMessage(`행 ${copies.length}개를 복제했습니다.`);
+}
+
 async function copySelectedRowReference() {
     const reference = buildSelectedRowReference();
     if (!reference) {
@@ -3063,6 +3089,10 @@ function setupChecklistRowSelection() {
     });
 
     document.getElementById('statusbar-root')?.addEventListener('click', editRootPath);
+    document.getElementById('checklist-context-duplicate')?.addEventListener('click', () => {
+        closeChecklistContextMenu();
+        duplicateSelectedRows();
+    });
     document.getElementById('checklist-context-copy-reference')?.addEventListener('click', () => {
         closeChecklistContextMenu();
         void copySelectedRowReference();

@@ -30,6 +30,7 @@ import './surround-selection.test.mjs';
 import './home-end-keys.test.mjs';
 import './checklist-cell-navigation.test.mjs';
 import './row-reference.test.mjs';
+import './row-duplicate.test.mjs';
 import './root-path-dialog.test.mjs';
 import './note-inline.test.mjs';
 import './note-assets.test.mjs';
