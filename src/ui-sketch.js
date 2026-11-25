@@ -17,6 +17,11 @@
  *   [text]           a button; [[text]] an emphasized one
  *   {name}           a value filled in later (any name: {count}, {날짜})
  *   blank line       vertical space
+ *   \n               a line break inside a piece of text
+ *
+ * A line holding only `@group-start-name` opens a group that `@group-end-name`
+ * closes; the lines between are drawn inside a frame carrying that name. The
+ * name may be left out, and then the group is called `group`.
  *
  * Roles nest (inside quotes, with parentheses: quotes cannot hold quotes),
  * and a role is only read at the start of a word, so the `@` in `a@b.com` is
@@ -45,10 +50,19 @@ export const UI_SYNTAX_HELP = [
   ["[[버튼]]", "강조 버튼"],
   ["{변수}", "나중에 값이 들어갈 자리"],
   ["빈 줄", "세로 간격"],
+  ["\\n", "줄바꿈"],
+  ["@group-start-이름", "그룹 열기. 이름은 생략 가능(group)"],
+  ["@group-end-이름", "그룹 닫기. 여는 이름과 같아야 함"],
   ['\\) \\" \\@ \\[', "기호를 글자 그대로 쓰기"],
 ];
 
 const ROLE = /^@([A-Za-z][\w-]*)/;
+
+// A line holding only a group marker. The name after `@group-start-` runs to
+// the end of the line, so it may hold dashes, spaces and any script; without
+// one the group is simply called "group".
+const GROUP_LINE = /^\s*@group-(start|end)(?:-(.*?))?\s*$/;
+const DEFAULT_GROUP_NAME = "group";
 // A role without parentheses also stops at a column mark.
 const SHORTHAND_END = /(^|\s)(@[A-Za-z]|---?(\s|$))/;
 
@@ -67,7 +81,16 @@ export class UnclosedRoleError extends Error {
 export const UI_ERROR_MESSAGES = {
   unclosed: "닫는 괄호나 따옴표가 없습니다",
   directive: '조건(:) 뒤에는 "내용" 이나 (내용) 이 와야 합니다',
+  groupUnclosed: "@group-end 로 닫지 않았습니다",
+  groupUnopened: "여는 @group-start 가 없습니다",
 };
+
+/** A group marker line as `{ edge, name }`, or null for any other line. */
+export function parseGroupLine(line) {
+  const match = GROUP_LINE.exec(String(line ?? ""));
+  if (!match) return null;
+  return { edge: match[1], name: (match[2] || "").trim() || DEFAULT_GROUP_NAME };
+}
 
 function matchingParen(source, open) {
   let depth = 0;
@@ -126,7 +149,9 @@ export function parseUiLine(source, nested = false) {
   const nodes = [];
   let text = "";
   const flush = () => {
-    if (text.trim()) nodes.push({ type: "text", value: text.trim() });
+    // Spaces around a piece are layout, so they go; a line break is content.
+    const value = text.replace(/^[^\S\n]+|[^\S\n]+$/g, "");
+    if (value.trim()) nodes.push({ type: "text", value });
     text = "";
   };
   const atWordStart = (i) => i === 0 || /[\s(]/.test(source[i - 1]);
@@ -136,7 +161,8 @@ export function parseUiLine(source, nested = false) {
     const rest = source.slice(i);
     let match;
     if (source[i] === "\\" && i + 1 < source.length) {
-      text += source[i + 1];
+      // `\n` is the one escape that stands for something: a line break.
+      text += source[i + 1] === "n" ? "\n" : source[i + 1];
       i += 2;
     } else if (/^---(?=\s|$)/.test(rest) && (i === 0 || /\s/.test(source[i - 1]))) {
       flush();
@@ -193,7 +219,9 @@ export function parseUiLine(source, nested = false) {
  * line never hides the lines around it.
  */
 export function parseUiBlock(source) {
-  return String(source ?? "").split("\n").map((line) => {
+  const rows = String(source ?? "").split("\n").map((line) => {
+    const group = parseGroupLine(line);
+    if (group) return { type: group.edge === "start" ? "groupStart" : "groupEnd", name: group.name, raw: line };
     if (!line.trim()) return { type: "gap" };
     try {
       return { type: "line", nodes: parseUiLine(line) };
@@ -202,6 +230,60 @@ export function parseUiBlock(source) {
       throw error;
     }
   });
+  return matchGroupRows(rows);
+}
+
+/**
+ * Pairs the group markers and gives every row its `depth`. A marker with no
+ * partner, or one closing another group's name, becomes an error row so the
+ * rest of the block still draws.
+ */
+function matchGroupRows(rows) {
+  const open = [];
+  rows.forEach((row, index) => {
+    if (row.type === "groupStart") {
+      open.push(index);
+      row.depth = open.length - 1;
+      return;
+    }
+    if (row.type === "groupEnd") {
+      // The nearest open group of that name; anything opened inside it was
+      // left unclosed and is reported on its own line.
+      const at = [...open].reverse().find(start => rows[start].name === row.name);
+      if (at === undefined) {
+        rows[index] = { type: "error", raw: row.raw, reason: "groupUnopened" };
+        return;
+      }
+      while (open[open.length - 1] !== at) {
+        const stray = open.pop();
+        rows[stray] = { type: "error", raw: rows[stray].raw, reason: "groupUnclosed" };
+      }
+      open.pop();
+      rows[at].endIndex = index;
+      row.depth = open.length;
+      row.startIndex = at;
+      return;
+    }
+    row.depth = open.length;
+  });
+  open.forEach((start) => {
+    rows[start] = { type: "error", raw: rows[start].raw, reason: "groupUnclosed" };
+  });
+  // A row inside a group that turned out to be broken is drawn at the depth
+  // the remaining groups give it.
+  let depth = 0;
+  rows.forEach((row) => {
+    if (row.type === "groupStart") {
+      row.depth = depth;
+      depth += 1;
+    } else if (row.type === "groupEnd") {
+      depth = Math.max(0, depth - 1);
+      row.depth = depth;
+    } else {
+      row.depth = depth;
+    }
+  });
+  return rows;
 }
 
 /**

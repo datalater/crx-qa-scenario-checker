@@ -35,12 +35,29 @@ function renderNode(node) {
  * The block is one grid, so a column starts at the same place on every line.
  * Each line's last column runs to the right edge: a line without any `--`
  * takes the full width, and `---` inside it still reaches the far side.
+ *
+ * A group is drawn as a frame behind the rows it holds, laid out in the same
+ * grid, so the columns of its lines stay aligned with the rest of the block.
  */
 export function renderUiSketchHtml(source) {
     const rows = parseUiBlock(source);
     const columnCount = countUiColumns(rows);
+    const depth = rows.reduce((most, row) => Math.max(most, row.depth || 0), 0);
+    // Frames come first so the lines are drawn over them.
+    const frames = rows.map((row, index) => (row.type === 'groupStart' && row.endIndex !== undefined
+        ? `<div class="ui-sketch__group" style="grid-row:${index + 1} / ${row.endIndex + 2};`
+            + `grid-column:1 / -1;--ui-sketch-group-depth:${row.depth}"></div>`
+        : '')).join('');
     const cells = rows.map((row, index) => {
         const gridRow = index + 1;
+        if (row.type === 'groupStart') {
+            return `<div class="ui-sketch__group-name" style="grid-row:${gridRow};grid-column:1 / -1">`
+                + `${escapeHtml(row.name)}</div>`;
+        }
+        // The closing line is the frame's bottom edge and holds nothing.
+        if (row.type === 'groupEnd') {
+            return `<div class="ui-sketch__group-foot" style="grid-row:${gridRow};grid-column:1 / -1"></div>`;
+        }
         if (row.type === 'gap') {
             return `<div class="ui-sketch__gap" style="grid-row:${gridRow};grid-column:1 / -1"></div>`;
         }
@@ -61,7 +78,8 @@ export function renderUiSketchHtml(source) {
     }).join('');
     // Every column but the last is as wide as its widest content.
     const template = `${'max-content '.repeat(columnCount - 1)}minmax(0, 1fr)`;
-    return `<div class="ui-sketch" style="grid-template-columns:${template}">${cells}</div>`;
+    return `<div class="ui-sketch" style="grid-template-columns:${template};--ui-sketch-depth:${depth}">`
+        + `${frames}${cells}</div>`;
 }
 
 // A whole-line ```ui fence and its closing ```.

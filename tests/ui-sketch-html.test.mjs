@@ -5,7 +5,7 @@ import { assert, assertDeepEqual, assertEqual, test } from './lib/test-runner.mj
 
 test('a sketch is a grid whose last column of each line runs to the edge', () => {
     const html = renderUiSketchHtml('A -- B --- C\n-- D');
-    assert(html.startsWith('<div class="ui-sketch" style="grid-template-columns:max-content minmax(0, 1fr)">'));
+    assert(html.startsWith('<div class="ui-sketch" style="grid-template-columns:max-content minmax(0, 1fr);--ui-sketch-depth:0">'));
     assert(html.includes('style="grid-row:1;grid-column:1"><span class="ui-sketch__text">A</span>'));
     assert(html.includes('style="grid-row:1;grid-column:2 / -1"><span class="ui-sketch__text">B</span><span class="ui-sketch__spacer"></span>'));
     assert(html.includes('style="grid-row:2;grid-column:1"></div>'), 'the empty first column of `-- D`');
@@ -85,4 +85,19 @@ test('directives are drawn beside the role name, apart from it', () => {
 test('an error line says what is wrong with it', () => {
     assert(renderUiSketchHtml('@a:b 내용').includes('data-message="조건(:) 뒤에는 &quot;내용&quot; 이나 (내용) 이 와야 합니다"'));
     assert(renderUiSketchHtml('@a(닫지 않음').includes('data-message="닫는 괄호나 따옴표가 없습니다"'));
+});
+
+test('a group frames the rows between its markers and names them', () => {
+    const html = renderUiSketchHtml('@a(1)\n@group-start-conflict list\n@b(2)\n@group-end-conflict list');
+    assert(html.includes('<div class="ui-sketch__group" style="grid-row:2 / 5;grid-column:1 / -1;--ui-sketch-group-depth:0">'));
+    assert(html.includes('<div class="ui-sketch__group-name" style="grid-row:2;grid-column:1 / -1">conflict list</div>'));
+    assert(html.includes('class="ui-sketch__group-foot" style="grid-row:4'));
+    assert(html.includes('--ui-sketch-depth:1'), 'the gutter makes room for one level');
+});
+
+test('a group marker without its partner is reported on its own line', () => {
+    const unclosed = renderUiSketchHtml('@group-start-a\n@b(1)');
+    assert(unclosed.includes('data-message="@group-end 로 닫지 않았습니다"'));
+    assert(unclosed.includes('@group-start-a'));
+    assert(renderUiSketchHtml('@group-end-a').includes('data-message="여는 @group-start 가 없습니다"'));
 });

@@ -8,10 +8,14 @@
   --ui-sketch-role: #a371f7;
   --ui-sketch-var: #d29922;
   --ui-sketch-directive: #39c5cf;
+  --ui-sketch-group: #6e7681;
+  /* Room on both sides for the frames of nested groups to sit in. */
+  --ui-sketch-gutter: calc((var(--ui-sketch-depth, 0) + 1) * 8px);
   /* What a role adds above its content: its name, and the line under it. */
   --ui-sketch-name-height: calc(9px * 1.3 + 1px);
   --ui-sketch-rule-height: 4px;
   display: grid;
+  padding-inline: var(--ui-sketch-gutter);
   /* Pieces of a line start at the same height, so role names line up even
      when one piece wraps onto more lines than its neighbours. */
   align-items: start;
@@ -127,6 +131,33 @@
   gap: 8px;
   padding-top: calc(var(--ui-sketch-rule-height) - 1px);
   border-top: 1px solid color-mix(in srgb, var(--ui-sketch-role) 45%, transparent);
+}
+
+/* --- Groups: a frame behind the rows between two @group markers --- */
+
+.ui-sketch__group {
+  /* The grid aligns items to the top, but a frame has to fill its rows. */
+  align-self: stretch;
+  /* Reaches into the gutter, so a nested frame sits inside its parent. */
+  margin-inline: calc((var(--ui-sketch-depth, 0) - var(--ui-sketch-group-depth, 0)) * -8px);
+  margin-block: -2px;
+  border: 1px solid color-mix(in srgb, var(--ui-sketch-group) 55%, transparent);
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.ui-sketch__group-name {
+  font-family: var(--font-code, monospace);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+  color: var(--ui-sketch-group);
+}
+
+/* The closing line is only the space above the frame's bottom edge. */
+.ui-sketch__group-foot {
+  height: 0;
 }
 
 .ui-sketch__error {

@@ -1,4 +1,4 @@
-import { EMPTY_UI_SKETCH, countUiColumns, hasSpacer, parseUiBlock, parseUiLine, splitUiColumns } from '../src/ui-sketch.js';
+import { EMPTY_UI_SKETCH, countUiColumns, hasSpacer, parseGroupLine, parseUiBlock, parseUiLine, splitUiColumns } from '../src/ui-sketch.js';
 import { assertDeepEqual, assertEqual, test } from './lib/test-runner.mjs';
 
 const text = value => ({ type: 'text', value });
@@ -177,4 +177,41 @@ test('a value may be named in any script', () => {
         { type: 'var', name: '날짜' }, { type: 'var', name: 'assignedCourses.length' }, { type: 'var', name: 'a b' }
     ]);
     assertDeepEqual(parseUiLine('{} { x}'), [text('{} { x}')]);
+});
+
+test('a group line opens and closes by name, which may be left out', () => {
+    const rows = parseUiBlock('@group-start-callout\n@a(1)\n@group-end-callout');
+    assertDeepEqual(rows.map(row => row.type), ['groupStart', 'line', 'groupEnd']);
+    assertDeepEqual(rows.map(row => row.depth), [0, 1, 0]);
+    assertEqual(rows[0].name, 'callout');
+    assertEqual(rows[0].endIndex, 2);
+    assertEqual(parseUiBlock('@group-start\n@group-end')[0].name, 'group');
+});
+
+test('a group name runs to the end of the line, dashes and spaces included', () => {
+    assertDeepEqual(parseGroupLine('@group-start-conflict-list'), { edge: 'start', name: 'conflict-list' });
+    assertDeepEqual(parseGroupLine('  @group-end-목록 상자  '), { edge: 'end', name: '목록 상자' });
+    assertEqual(parseGroupLine('@group-startle'), null);
+    assertEqual(parseGroupLine('x @group-start-a'), null, 'a marker has its line to itself');
+    assertDeepEqual(parseGroupLine('@group-start-a(b) 더'), { edge: 'start', name: 'a(b) 더' });
+});
+
+test('groups nest, and each row knows how deep it sits', () => {
+    const rows = parseUiBlock('@group-start-a\n@group-start-b\n@x(1)\n@group-end-b\n@y(2)\n@group-end-a');
+    assertDeepEqual(rows.map(row => row.depth), [0, 1, 2, 1, 1, 0]);
+    assertEqual(rows[1].endIndex, 3);
+});
+
+test('a marker with no partner, or closing another name, becomes an error', () => {
+    assertDeepEqual(parseUiBlock('@group-start-a\n@x(1)').map(row => row.type), ['error', 'line']);
+    assertEqual(parseUiBlock('@group-start-a\n@x(1)')[0].reason, 'groupUnclosed');
+    assertEqual(parseUiBlock('@group-end-a')[0].reason, 'groupUnopened');
+    const crossed = parseUiBlock('@group-start-a\n@group-start-b\n@x(1)\n@group-end-a');
+    assertDeepEqual(crossed.map(row => row.type), ['groupStart', 'error', 'line', 'groupEnd']);
+    assertEqual(crossed[1].reason, 'groupUnclosed');
+});
+
+test('a backslash-n is a line break, other escapes are the character itself', () => {
+    assertDeepEqual(parseUiLine('@d"첫 줄. \\n둘째 줄"'), [role('d', text('첫 줄. \n둘째 줄'))]);
+    assertDeepEqual(parseUiLine('\\@title \\[x\\]'), [text('@title [x]')]);
 });
