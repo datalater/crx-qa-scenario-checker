@@ -1746,7 +1746,14 @@ function handleChecklistContextColorClick(event) {
 function handleChecklistContextTypeClick(event) {
     const btn = event.target.closest('[data-divider-type]');
     if (!btn || checklistContextTarget == null) return;
-    patchChecklistDivider(checklistContextTarget.index, { type: btn.dataset.dividerType });
+    const lang = btn.dataset.dividerLang;
+    const current = parseDivider(currentData?.steps?.[checklistContextTarget.index]?.divider);
+    // "Code (Markdown)" is a code divider in markdown; plain "Code" leaves a
+    // markdown one for the default language, and keeps any other choice.
+    const patch = { type: btn.dataset.dividerType };
+    if (lang) patch.lang = lang;
+    else if (patch.type === 'code' && current?.lang === 'markdown') patch.lang = '';
+    patchChecklistDivider(checklistContextTarget.index, patch);
     closeChecklistContextMenu();
 }
 
@@ -1754,15 +1761,20 @@ function handleChecklistContextTypeClick(event) {
 function renderChecklistContextTypeMenu() {
     const menu = EL.checklistContextType?.querySelector('.context-submenu');
     if (!menu) return;
-    menu.replaceChildren(...DIVIDER_TYPE_IDS.map((type) => {
+    const item = (type, label, lang = '') => {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'context-color-item';
         btn.setAttribute('role', 'menuitemradio');
         btn.dataset.dividerType = type;
-        btn.textContent = DIVIDER_TYPES[type].label;
+        if (lang) btn.dataset.dividerLang = lang;
+        btn.textContent = label;
         return btn;
-    }));
+    };
+    const items = DIVIDER_TYPE_IDS.map(type => item(type, DIVIDER_TYPES[type].label));
+    // A shortcut to the most used code language.
+    if (DIVIDER_TYPES.code) items.push(item('code', 'Code (Markdown)', 'markdown'));
+    menu.replaceChildren(...items);
 }
 
 function markChecklistContextDividerSelection(index) {
@@ -1775,8 +1787,10 @@ function markChecklistContextDividerSelection(index) {
     });
     mark(EL.checklistContextColor?.querySelectorAll('[data-color]') || [],
         divider.color.toLowerCase(), item => (item.dataset.color || '').toLowerCase());
+    const isMarkdown = divider.type === 'code' && divider.lang === 'markdown';
     mark(EL.checklistContextType?.querySelectorAll('[data-divider-type]') || [],
-        divider.type, item => item.dataset.dividerType);
+        `${divider.type}:${isMarkdown ? 'markdown' : ''}`,
+        item => `${item.dataset.dividerType}:${item.dataset.dividerLang || ''}`);
 }
 
 async function handleTreeContextRename() {
