@@ -186,14 +186,29 @@ test('a group line opens and closes by name, which may be left out', () => {
     assertEqual(rows[0].name, 'callout');
     assertEqual(rows[0].endIndex, 2);
     assertEqual(parseUiBlock('@group-start\n@group-end')[0].name, 'group');
+    assertEqual(Object.hasOwn(rows[0], 'directives'), false, 'none written, none stored');
 });
 
-test('a group name runs to the end of the line, dashes and spaces included', () => {
-    assertDeepEqual(parseGroupLine('@group-start-conflict-list'), { edge: 'start', name: 'conflict-list' });
-    assertDeepEqual(parseGroupLine('  @group-end-목록 상자  '), { edge: 'end', name: '목록 상자' });
+const marker = (edge, name, directives = []) => ({ edge, name, directives });
+
+test('a group name runs to the first colon, dashes and spaces included', () => {
+    assertDeepEqual(parseGroupLine('@group-start-conflict-list'), marker('start', 'conflict-list'));
+    assertDeepEqual(parseGroupLine('  @group-end-목록 상자  '), marker('end', '목록 상자'));
+    assertDeepEqual(parseGroupLine('@group-start-a(b) 더'), marker('start', 'a(b) 더'));
     assertEqual(parseGroupLine('@group-startle'), null);
     assertEqual(parseGroupLine('x @group-start-a'), null, 'a marker has its line to itself');
-    assertDeepEqual(parseGroupLine('@group-start-a(b) 더'), { edge: 'start', name: 'a(b) 더' });
+});
+
+test('a group takes directives like a role, and keeps its name for the pairing', () => {
+    assertDeepEqual(parseGroupLine('@group-start-callout:에러일 때'), marker('start', 'callout', ['에러일 때']));
+    assertDeepEqual(parseGroupLine('@group-start-a : b : '), marker('start', 'a', ['b']));
+    assertDeepEqual(parseGroupLine('@group-start:조건'), marker('start', 'group', ['조건']));
+    assertDeepEqual(parseGroupLine('@group-start-a\\:b'), marker('start', 'a:b'), 'an escaped colon is part of the name');
+
+    const rows = parseUiBlock('@group-start-callout:에러일 때\n@a(1)\n@group-end-callout');
+    assertDeepEqual(rows[0].directives, ['에러일 때']);
+    assertEqual(rows[0].endIndex, 2, 'the end marker pairs by name alone');
+    assertEqual(Object.hasOwn(rows[2], 'directives'), false, 'only the opening marker carries them');
 });
 
 test('groups nest, and each row knows how deep it sits', () => {

@@ -91,6 +91,8 @@ test('a group frames the rows between its markers and names them', () => {
     const html = renderUiSketchHtml('@a(1)\n@group-start-conflict list\n@b(2)\n@group-end-conflict list');
     assert(html.includes('<div class="ui-sketch__group" style="grid-row:2 / 5;grid-column:1 / -1;--ui-sketch-group-depth:0">'));
     assert(html.includes('<div class="ui-sketch__group-name" style="grid-row:2;grid-column:1 / -1">conflict list</div>'));
+    const withDirective = renderUiSketchHtml('@group-start-callout:에러일 때\n@b(2)\n@group-end-callout');
+    assert(withDirective.includes('>callout<span class="ui-sketch__directive">에러일 때</span></div>'));
     assert(html.includes('class="ui-sketch__group-foot" style="grid-row:4'));
     assert(html.includes('--ui-sketch-depth:1'), 'the gutter makes room for one level');
 });

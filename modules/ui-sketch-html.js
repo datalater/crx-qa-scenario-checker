@@ -11,6 +11,10 @@ const escapeHtml = value => String(value)
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 
+const renderDirectives = directives => (directives || [])
+    .map(directive => `<span class="ui-sketch__directive">${escapeHtml(directive)}</span>`)
+    .join('');
+
 function renderNode(node) {
     if (node.type === 'text') return `<span class="ui-sketch__text">${escapeHtml(node.value)}</span>`;
     if (node.type === 'spacer') return '<span class="ui-sketch__spacer"></span>';
@@ -23,9 +27,7 @@ function renderNode(node) {
     if (node.children.some(child => child.type === 'role')) classes.push('is-group');
     // A directive says when or in what state the role appears; it sits beside
     // the name, set apart from it.
-    const directives = (node.directives || [])
-        .map(directive => `<span class="ui-sketch__directive">${escapeHtml(directive)}</span>`)
-        .join('');
+    const directives = renderDirectives(node.directives);
     return `<span class="${classes.join(' ')}">`
         + `<span class="ui-sketch__role-name">${escapeHtml(node.name)}${directives}</span>`
         + `<span class="ui-sketch__role-body">${node.children.map(renderNode).join('')}</span></span>`;
@@ -52,7 +54,7 @@ export function renderUiSketchHtml(source) {
         const gridRow = index + 1;
         if (row.type === 'groupStart') {
             return `<div class="ui-sketch__group-name" style="grid-row:${gridRow};grid-column:1 / -1">`
-                + `${escapeHtml(row.name)}</div>`;
+                + `${escapeHtml(row.name)}${renderDirectives(row.directives)}</div>`;
         }
         // The closing line is the frame's bottom edge and holds nothing.
         if (row.type === 'groupEnd') {

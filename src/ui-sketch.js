@@ -21,7 +21,8 @@
  *
  * A line holding only `@group-start-name` opens a group that `@group-end-name`
  * closes; the lines between are drawn inside a frame carrying that name. The
- * name may be left out, and then the group is called `group`.
+ * name may be left out, and then the group is called `group`, and it takes
+ * directives like a role does: `@group-start-callout:에러일 때`.
  *
  * Roles nest (inside quotes, with parentheses: quotes cannot hold quotes),
  * and a role is only read at the start of a word, so the `@` in `a@b.com` is
@@ -51,17 +52,17 @@ export const UI_SYNTAX_HELP = [
   ["{변수}", "나중에 값이 들어갈 자리"],
   ["빈 줄", "세로 간격"],
   ["\\n", "줄바꿈"],
-  ["@group-start-이름", "그룹 열기. 이름은 생략 가능(group)"],
+  ["@group-start-이름", "그룹 열기. 이름 생략 가능(group), :조건 도 붙일 수 있음"],
   ["@group-end-이름", "그룹 닫기. 여는 이름과 같아야 함"],
   ['\\) \\" \\@ \\[', "기호를 글자 그대로 쓰기"],
 ];
 
 const ROLE = /^@([A-Za-z][\w-]*)/;
 
-// A line holding only a group marker. The name after `@group-start-` runs to
-// the end of the line, so it may hold dashes, spaces and any script; without
-// one the group is simply called "group".
-const GROUP_LINE = /^\s*@group-(start|end)(?:-(.*?))?\s*$/;
+// A line holding only a group marker: `@group-start-name:when`. The name
+// runs to the first `:`, so it may hold dashes, spaces and any script;
+// without one the group is simply called "group".
+const GROUP_LINE = /^\s*@group-(start|end)(?=[-:\s]|$)(.*)$/;
 const DEFAULT_GROUP_NAME = "group";
 // A role without parentheses also stops at a column mark.
 const SHORTHAND_END = /(^|\s)(@[A-Za-z]|---?(\s|$))/;
@@ -85,11 +86,29 @@ export const UI_ERROR_MESSAGES = {
   groupUnopened: "여는 @group-start 가 없습니다",
 };
 
-/** A group marker line as `{ edge, name }`, or null for any other line. */
+/**
+ * A group marker line as `{ edge, name, directives }`, or null for any other
+ * line. Directives work as they do on a role, and only the name pairs a
+ * `@group-end` with its `@group-start`.
+ */
 export function parseGroupLine(line) {
   const match = GROUP_LINE.exec(String(line ?? ""));
   if (!match) return null;
-  return { edge: match[1], name: (match[2] || "").trim() || DEFAULT_GROUP_NAME };
+  const rest = match[2];
+  const parts = [""];
+  for (let i = rest.startsWith("-") ? 1 : 0; i < rest.length; i += 1) {
+    if (rest[i] === "\\" && i + 1 < rest.length) {
+      parts[parts.length - 1] += rest[i + 1];
+      i += 1;
+    } else if (rest[i] === ":") parts.push("");
+    else parts[parts.length - 1] += rest[i];
+  }
+  const [name, ...directives] = parts.map((part) => part.trim());
+  return {
+    edge: match[1],
+    name: name || DEFAULT_GROUP_NAME,
+    directives: directives.filter(Boolean)
+  };
 }
 
 function matchingParen(source, open) {
@@ -221,7 +240,12 @@ export function parseUiLine(source, nested = false) {
 export function parseUiBlock(source) {
   const rows = String(source ?? "").split("\n").map((line) => {
     const group = parseGroupLine(line);
-    if (group) return { type: group.edge === "start" ? "groupStart" : "groupEnd", name: group.name, raw: line };
+    if (group) {
+      const row = { type: group.edge === "start" ? "groupStart" : "groupEnd", name: group.name, raw: line };
+      // Only an opening marker says when its group appears.
+      if (group.edge === "start" && group.directives.length) row.directives = group.directives;
+      return row;
+    }
     if (!line.trim()) return { type: "gap" };
     try {
       return { type: "line", nodes: parseUiLine(line) };

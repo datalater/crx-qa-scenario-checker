@@ -425,7 +425,7 @@ const uiSketchTheme = EditorView.theme({
   ".cm-ui-mode:last-child": { borderRadius: "0 4px 4px 0" },
   ".cm-ui-mode.is-on": { position: "relative" },
 
-  ".cm-ui-stage": { padding: "14px 16px", overflowX: "auto" },
+  ".cm-ui-stage": { padding: "14px 8px", overflowX: "auto" },
 
   ".cm-ui-source": {
     display: "block",
