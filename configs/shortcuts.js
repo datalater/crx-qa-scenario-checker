@@ -113,6 +113,11 @@ export const SHORTCUTS = [
         bindings: [{ codes: ['Digit3', 'Numpad3'], keys: ['3'], primary: true, shift: false, alt: false }]
     },
     {
+        id: 'duplicateRows',
+        label: 'Duplicate selected rows (not while editing a cell)',
+        bindings: [{ codes: ['KeyD'], keys: ['d'], primary: true, shift: false, alt: false }]
+    },
+    {
         id: 'indent',
         label: 'Indent (JSON Editor)',
         bindings: [{ codes: ['Tab'], keys: ['tab'], shift: false }]

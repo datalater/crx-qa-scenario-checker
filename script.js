@@ -2580,6 +2580,7 @@ function setupCommandPalette() {
             id: 'duplicateRows',
             label: '선택한 행 복제',
             name: 'Duplicate Rows',
+            shortcutId: 'duplicateRows',
             isAvailable: () => selectedSteps.size > 0,
             run: () => duplicateSelectedRows()
         },
@@ -3074,6 +3075,17 @@ function setupChecklistRowSelection() {
         const cell = event.target.closest('.cell-content');
         if (cell ? cell === document.activeElement : event.target.closest('.cm-editor, input, select, button, textarea, label')) return;
         event.preventDefault();
+    });
+
+    // Cmd/Ctrl+D duplicates the selected rows. Only rows picked as rows count:
+    // inside a cell being edited, or any text field, the key does nothing.
+    document.addEventListener('keydown', (event) => {
+        if (event.defaultPrevented || !matchShortcut(event, 'duplicateRows')) return;
+        if (isTextEditingElement(document.activeElement)) return;
+        if (!checklistSearchScopeActive && !EL.checklistPane?.contains(document.activeElement)) return;
+        if (selectedSteps.size === 0) return;
+        event.preventDefault();
+        duplicateSelectedRows();
     });
 
     // Copy with rows selected and no text in hand copies the rows.
